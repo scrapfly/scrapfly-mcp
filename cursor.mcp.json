@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "scrapfly": {
+      "command": "/root/scrapfly-mcp/scrapfly-mcp",
+      "env": {
+        "SCRAPFLY_API_KEY": "APIKEY"
+      }
+    }
+  }
+}
