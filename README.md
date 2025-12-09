@@ -24,6 +24,22 @@ Click one of the buttons below to install the MCP server in your preferred IDE:
 }
 ```
 
+**Cloud config**
+
+```js
+{
+  "mcpServers": {
+    "scrapfly": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.scrapfly.io/mcp"
+      ]
+    }
+  }
+}
+```
+
 <details>
 <summary>VS Code</summary>
 
