@@ -11,10 +11,10 @@
 </p>
 
 <p align="center">
-  <a href="https://scrapfly.io/docs/mcp/getting-started">Documentation</a> •
-  <a href="https://scrapfly.io/docs/mcp/tools">Tools Reference</a> •
-  <a href="https://scrapfly.io/docs/mcp/examples">Examples</a> •
-  <a href="https://scrapfly.io/register">Get API Key</a>
+  <a href="https://scrapfly.io/mcp-cloud">🌐 Landing Page</a> •
+  <a href="https://scrapfly.io/docs/mcp/getting-started">📖 Documentation</a> •
+  <a href="https://scrapfly.io/mcp-cloud/n8n">🎮 Live Demo</a> •
+  <a href="https://scrapfly.io/register">🔑 Get API Key</a>
 </p>
 
 ---
@@ -368,6 +368,8 @@ Scrapfly MCP also works with AI frameworks and automation tools:
 
 ## 📚 Resources
 
+- 🌐 [MCP Cloud Landing Page](https://scrapfly.io/mcp-cloud) — Product overview & features
+- 🎮 [Live n8n Demo](https://scrapfly.io/mcp-cloud/n8n) — Try it in your browser
 - 📖 [Full Documentation](https://scrapfly.io/docs/mcp/getting-started)
 - 🛠️ [Tools Reference](https://scrapfly.io/docs/mcp/tools)
 - 💡 [Examples & Use Cases](https://scrapfly.io/docs/mcp/examples)
@@ -379,7 +381,6 @@ Scrapfly MCP also works with AI frameworks and automation tools:
 ## 💬 Need Help?
 
 - 📖 [Scrapfly Documentation](https://scrapfly.io/docs)
-- 💬 [Discord Community](https://discord.gg/scrapfly)
 - 📧 [Contact Support](https://scrapfly.io/docs/support)
 - 🌐 [Model Context Protocol](https://modelcontextprotocol.io)
 
@@ -387,7 +388,7 @@ Scrapfly MCP also works with AI frameworks and automation tools:
 
 <p align="center">
   <a href="https://scrapfly.io">
-    <img src="https://scrapfly.io/images/scrapfly-logo-n.svg" alt="Scrapfly" width="100"/>
+    <img src="https://avatars.githubusercontent.com/u/54183743?s=400&u=5279c1aaea18805aa5cc4fec1053ac2a2cfaac5d&v=4" alt="Scrapfly" width="50"/>
   </a>
   <br/>
   <strong>Made with ❤️ by <a href="https://scrapfly.io">Scrapfly</a></strong>
