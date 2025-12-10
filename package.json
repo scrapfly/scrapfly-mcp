@@ -1,0 +1,17 @@
+{
+  "name": "scrapfly-mcp",
+  "mcpName": "io.scrapfly.mcp/mcp",
+  "version": "1.0.0",
+  "description": "Scrape any website, extract structured data, and collect web content at scale with AI agents",
+  "keywords": [
+    "scrapfly",
+    "scrapfly-mcp"
+  ],
+  "homepage": "https://github.com/scrapfly/scrapfly-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scrapfly/scrapfly-mcp.git"
+  },
+  "license": "ISC",
+  "author": "scrapfly"
+}

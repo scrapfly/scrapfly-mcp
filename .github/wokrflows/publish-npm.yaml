@@ -1,0 +1,33 @@
+name: Publish to NPM
+
+on:
+  push:
+    tags:
+      - 'v*' # This will run the workflow when you push a tag with a version format, like v1.0.0
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install
+      - run: npm run build
+
+      - name: Publish to NPM
+        run: |
+          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > .npmrc
+          if grep -qE "_authToken=.{1,}" .npmrc; then
+            npm publish
+          else
+            echo "Failed to create .npmrc file" && exit 1
+          fi
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_AUTOMATION_TOKEN }}

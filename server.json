@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "name": "io.scrapfly.mcp/mcp",
+  "description": "Scrape any website, extract structured data, and collect web content at scale with AI agents",
+  "repository": {
+    "url": "https://github.com/scrapfly/scrapfly-mcp",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "scrapfly-mcp",
+      "version": "1.0.0"
+    }
+  ]
+}
