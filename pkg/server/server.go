@@ -11,17 +11,23 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// ContextKey is a type for context keys used in this package
+type ContextKey string
+
+// APIKeyContextKey is the context key for storing the API key from query parameters
+const APIKeyContextKey ContextKey = "apiKey"
+
 const ServerVersion = "1.1.0"
 
 func init() {
 	log.SetFlags(log.Lmicroseconds | log.Lmsgprefix | log.LstdFlags)
 }
 
-type StreamableServerFunction func(mcpHandler *mcp.StreamableHTTPHandler, httpAddr *string)
+type StreamableServerFunction func(handler http.Handler, httpAddr *string)
 type StdioServerFunction func(server *mcp.Server, t *mcp.LoggingTransport)
 
-func DefaultStreamableServerFunction(mcpHandler *mcp.StreamableHTTPHandler, httpAddr *string) {
-	log.Fatal(http.ListenAndServe(*httpAddr, mcpHandler))
+func DefaultStreamableServerFunction(handler http.Handler, httpAddr *string) {
+	log.Fatal(http.ListenAndServe(*httpAddr, handler))
 }
 
 func DefaultStdioServerFunction(server *mcp.Server, t *mcp.LoggingTransport) {
@@ -120,9 +126,21 @@ func (s *ScrapflyMCPServer) ServeStreamable() {
 	s.started = true
 	log.Printf("[SCRAPFLY-MCP] Starting streamable server on %s\n", s.httpAddr)
 	s.server.AddReceivingMiddleware(s.loggingMiddleware())
-	s.streamableServerFunction(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+	mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		return s.server
-	}, s.streamableHTTPOptions), &s.httpAddr)
+	}, s.streamableHTTPOptions)
+
+	// Wrap the handler to extract apiKey from query parameters and inject into context
+	wrappedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiKey := r.URL.Query().Get("apiKey")
+		if apiKey != "" {
+			ctx := context.WithValue(r.Context(), APIKeyContextKey, apiKey)
+			r = r.WithContext(ctx)
+		}
+		mcpHandler.ServeHTTP(w, r)
+	})
+
+	s.streamableServerFunction(wrappedHandler, &s.httpAddr)
 }
 
 func newServer(toolProviders ...provider.ToolProvider) *mcp.Server {

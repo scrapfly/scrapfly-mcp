@@ -18,5 +18,7 @@ COPY --from=builder /app/scrapfly-mcp .
 
 EXPOSE 8080
 
+ENV SCRAPFLY_API_KEY="your-api-key"
+
 CMD ["./scrapfly-mcp", "-http", ":8080"]
 

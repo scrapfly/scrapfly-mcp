@@ -1,6 +1,17 @@
 runtime: "container"
 startCommand:
   type: "http"
+  configSchema:
+    type: "object"
+    required:
+      - "apiKey"
+    properties:
+      apiKey:
+        type: "string"
+        title: "Scrapfly API Key"
+        description: "Your Scrapfly API key from https://scrapfly.io/dashboard"
+  exampleConfig:
+    apiKey: "scp-live-xxxx"
 build:
   dockerfile: "Dockerfile"
   dockerBuildPath: "."
