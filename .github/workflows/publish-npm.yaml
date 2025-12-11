@@ -21,14 +21,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Update NPM
+        run: npm install -g npm@latest
 
       - name: Publish to NPM
-        run: |
-          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > .npmrc
-          if grep -qE "_authToken=.{1,}" .npmrc; then
-            npm publish
-          else
-            echo "Failed to create .npmrc file" && exit 1
-          fi
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_AUTOMATION_TOKEN }}
+        run: npm publish
