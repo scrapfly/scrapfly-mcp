@@ -348,6 +348,55 @@ Scrapfly MCP supports multiple authentication methods:
 
 ---
 
+## 🖥️ Self-Hosted / Local Deployment
+
+You can run the Scrapfly MCP server locally or self-host it.
+
+### CLI Arguments
+
+| Flag | Description |
+|------|-------------|
+| `-http <address>` | Start HTTP server at the specified address (e.g., `:8080`). Takes precedence over `PORT` env var. |
+| `-apikey <key>` | Use this API key instead of the `SCRAPFLY_API_KEY` environment variable. |
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `PORT` | HTTP port to listen on. Used if `-http` flag is not set. |
+| `SCRAPFLY_API_KEY` | Default Scrapfly API key. Can also be passed via query parameter `?apiKey=xxx` at runtime. |
+
+### Examples
+
+```bash
+# Start HTTP server on port 8080
+./scrapfly-mcp -http :8080
+
+# Start HTTP server using PORT env var
+PORT=8080 ./scrapfly-mcp
+
+# Start with API key
+./scrapfly-mcp -http :8080 -apikey scp-live-xxxx
+
+# Start in stdio mode (for local MCP clients)
+./scrapfly-mcp
+```
+
+### Docker
+
+```bash
+# Build
+docker build -t scrapfly-mcp .
+
+# Run (Smithery compatible - uses PORT env var)
+docker run -p 8080:8080 scrapfly-mcp
+
+# Run with custom port
+docker run -e PORT=9000 -p 9000:9000 scrapfly-mcp
+```
+
+---
+
 ## 🤝 Framework Integrations
 
 Scrapfly MCP also works with AI frameworks and automation tools:
