@@ -37,8 +37,17 @@ func main() {
 	toolProvider := provider.NewToolProvider("scrapfly", scrapflyToolProvider)
 
 	server := server.NewScrapflyMCPServer(toolProvider)
-	if *httpAddr != "" {
-		server.WithHttpAddr(*httpAddr)
+
+	// Determine HTTP address: -http flag takes precedence, then PORT env var
+	addr := *httpAddr
+	if addr == "" {
+		if port := os.Getenv("PORT"); port != "" {
+			addr = ":" + port
+		}
+	}
+
+	if addr != "" {
+		server.WithHttpAddr(addr)
 		server.ServeStreamable()
 	} else {
 		server.ServeStdio()

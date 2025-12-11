@@ -18,5 +18,5 @@ COPY --from=builder /app/scrapfly-mcp .
 
 ENV PORT=8080
 
-CMD ["sh", "-c", "./scrapfly-mcp -http :${PORT}"]
+CMD ["./scrapfly-mcp"]
 
