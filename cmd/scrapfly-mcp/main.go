@@ -2,9 +2,9 @@ package main
 
 import (
 	"flag"
-	"log"
 	"os"
 
+	"github.com/scrapfly/go-scrapfly"
 	"github.com/scrapfly/scrapfly-mcp/pkg/provider"
 	scrapflyprovider "github.com/scrapfly/scrapfly-mcp/pkg/provider/scrapfly"
 	"github.com/scrapfly/scrapfly-mcp/pkg/server"
@@ -22,11 +22,15 @@ func main() {
 	if apikey == "" {
 		apikey = os.Getenv("SCRAPFLY_API_KEY")
 	}
-	if apikey == "" {
-		log.Fatal("apikey must be set. Either as an argument or as an environment variable.")
+
+	// API key is optional at startup - it can be provided via query parameters
+	// at runtime (for Smithery/HTTP mode)
+	var defaultClient *scrapfly.Client
+	if apikey != "" {
+		defaultClient = scrapflyprovider.MakeDefaultScrapflyClient(apikey)
 	}
 
-	scrapflyToolProvider := scrapflyprovider.NewScrapflyToolProvider(scrapflyprovider.MakeDefaultScrapflyClient(apikey),
+	scrapflyToolProvider := scrapflyprovider.NewScrapflyToolProvider(defaultClient,
 		scrapflyprovider.GetDefaultScrapflyClient,
 		nil)
 
