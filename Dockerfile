@@ -16,7 +16,7 @@ WORKDIR /app
 
 COPY --from=builder /app/scrapfly-mcp .
 
-EXPOSE 8080
+ENV PORT=8080
 
-CMD ["./scrapfly-mcp", "-http", ":8080"]
+CMD ["sh", "-c", "./scrapfly-mcp -http :${PORT}"]
 

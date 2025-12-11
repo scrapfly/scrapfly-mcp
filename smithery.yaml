@@ -10,6 +10,8 @@ startCommand:
         description: "Your Scrapfly API key from https://scrapfly.io/dashboard"
     required:
       - "apiKey"
+  exampleConfig:
+    apiKey: "scp-live-xxxx"
 build:
   dockerfile: "Dockerfile"
   dockerBuildPath: "."

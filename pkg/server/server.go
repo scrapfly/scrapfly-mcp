@@ -119,6 +119,25 @@ func (s *ScrapflyMCPServer) ServeStdio() {
 	s.stdioServerFunction(s.server, &mcp.LoggingTransport{Transport: &mcp.StdioTransport{}, Writer: os.Stderr})
 }
 
+// corsMiddleware adds CORS headers required by Smithery
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, *")
+		w.Header().Set("Access-Control-Expose-Headers", "mcp-session-id, mcp-protocol-version")
+
+		// Handle preflight requests
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *ScrapflyMCPServer) ServeStreamable() {
 	if !s.canChangeConfig("serve streamable") {
 		return
@@ -131,7 +150,7 @@ func (s *ScrapflyMCPServer) ServeStreamable() {
 	}, s.streamableHTTPOptions)
 
 	// Wrap the handler to extract apiKey from query parameters and inject into context
-	wrappedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	apiKeyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiKey := r.URL.Query().Get("apiKey")
 		if apiKey != "" {
 			ctx := context.WithValue(r.Context(), APIKeyContextKey, apiKey)
@@ -140,7 +159,13 @@ func (s *ScrapflyMCPServer) ServeStreamable() {
 		mcpHandler.ServeHTTP(w, r)
 	})
 
-	s.streamableServerFunction(wrappedHandler, &s.httpAddr)
+	// Create a mux to handle /mcp endpoint
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", corsMiddleware(apiKeyHandler))
+	// Also handle root for backwards compatibility
+	mux.Handle("/", corsMiddleware(apiKeyHandler))
+
+	s.streamableServerFunction(mux, &s.httpAddr)
 }
 
 func newServer(toolProviders ...provider.ToolProvider) *mcp.Server {
