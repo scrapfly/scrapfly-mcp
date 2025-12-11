@@ -19,6 +19,8 @@
 
 ---
 
+<a href="https://smithery.ai/server/@scrapfly/scrapfly-mcp"><img alt="Smithery Badge" src="https://smithery.ai/badge/@scrapfly/scrapfly-mcp"></a>
+
 ## What is Scrapfly MCP?
 
 The **Scrapfly MCP Server** connects your AI assistants to live web data through the [Model Context Protocol](https://modelcontextprotocol.io). Transform your AI from being limited by training data to having real-time access to **any website**.
