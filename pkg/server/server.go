@@ -138,11 +138,15 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// APIKeyMiddleware wraps a StreamableHTTPHandler to extract apiKey from query parameters
-// and inject it into the request context
+// APIKeyMiddleware wraps a StreamableHTTPHandler to extract API key from query parameters
+// and inject it into the request context. Supports both "key" (cloud compatible) and "apiKey" params.
 func APIKeyMiddleware(mcpHandler *mcp.StreamableHTTPHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		apiKey := r.URL.Query().Get("apiKey")
+		// Try "key" first (cloud compatible), then fall back to "apiKey"
+		apiKey := r.URL.Query().Get("key")
+		if apiKey == "" {
+			apiKey = r.URL.Query().Get("apiKey")
+		}
 		if apiKey != "" {
 			ctx := context.WithValue(r.Context(), APIKeyContextKey, apiKey)
 			r = r.WithContext(ctx)
@@ -162,7 +166,10 @@ func (s *ScrapflyMCPServer) ServeStreamable() {
 		return s.server
 	}, s.streamableHTTPOptions)
 
-	s.streamableServerFunction(mcpHandler, &s.httpAddr)
+	// Wrap with APIKeyMiddleware and CORS middleware
+	handler := corsMiddleware(APIKeyMiddleware(mcpHandler))
+	http.Handle("/mcp", handler)
+	log.Fatal(http.ListenAndServe(s.httpAddr, nil))
 }
 
 func newServer(toolProviders ...provider.ToolProvider) *mcp.Server {
