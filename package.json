@@ -1,7 +1,7 @@
 {
   "name": "scrapfly-mcp",
   "mcpName": "io.scrapfly.mcp/mcp",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Scrape any website, extract structured data, and collect web content at scale with AI agents",
   "keywords": [
     "scrapfly",
