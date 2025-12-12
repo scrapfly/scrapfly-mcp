@@ -21,4 +21,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Publish to NPM
-        run: npm publish --access public --provenance
+        run: |
+          rm -f ~/.npmrc
+          npm config set //registry.npmjs.org/:_authToken ''
+          npm publish --access public --provenance
