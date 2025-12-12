@@ -23,11 +23,11 @@ func init() {
 	log.SetFlags(log.Lmicroseconds | log.Lmsgprefix | log.LstdFlags)
 }
 
-type StreamableServerFunction func(handler http.Handler, httpAddr *string)
+type StreamableServerFunction func(mcpHandler *mcp.StreamableHTTPHandler, httpAddr *string)
 type StdioServerFunction func(server *mcp.Server, t *mcp.LoggingTransport)
 
-func DefaultStreamableServerFunction(handler http.Handler, httpAddr *string) {
-	log.Fatal(http.ListenAndServe(*httpAddr, handler))
+func DefaultStreamableServerFunction(mcpHandler *mcp.StreamableHTTPHandler, httpAddr *string) {
+	log.Fatal(http.ListenAndServe(*httpAddr, mcpHandler))
 }
 
 func DefaultStdioServerFunction(server *mcp.Server, t *mcp.LoggingTransport) {
@@ -138,6 +138,19 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// APIKeyMiddleware wraps a StreamableHTTPHandler to extract apiKey from query parameters
+// and inject it into the request context
+func APIKeyMiddleware(mcpHandler *mcp.StreamableHTTPHandler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiKey := r.URL.Query().Get("apiKey")
+		if apiKey != "" {
+			ctx := context.WithValue(r.Context(), APIKeyContextKey, apiKey)
+			r = r.WithContext(ctx)
+		}
+		mcpHandler.ServeHTTP(w, r)
+	})
+}
+
 func (s *ScrapflyMCPServer) ServeStreamable() {
 	if !s.canChangeConfig("serve streamable") {
 		return
@@ -149,23 +162,7 @@ func (s *ScrapflyMCPServer) ServeStreamable() {
 		return s.server
 	}, s.streamableHTTPOptions)
 
-	// Wrap the handler to extract apiKey from query parameters and inject into context
-	apiKeyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		apiKey := r.URL.Query().Get("apiKey")
-		if apiKey != "" {
-			ctx := context.WithValue(r.Context(), APIKeyContextKey, apiKey)
-			r = r.WithContext(ctx)
-		}
-		mcpHandler.ServeHTTP(w, r)
-	})
-
-	// Create a mux to handle /mcp endpoint
-	mux := http.NewServeMux()
-	mux.Handle("/mcp", corsMiddleware(apiKeyHandler))
-	// Also handle root for backwards compatibility
-	mux.Handle("/", corsMiddleware(apiKeyHandler))
-
-	s.streamableServerFunction(mux, &s.httpAddr)
+	s.streamableServerFunction(mcpHandler, &s.httpAddr)
 }
 
 func newServer(toolProviders ...provider.ToolProvider) *mcp.Server {
