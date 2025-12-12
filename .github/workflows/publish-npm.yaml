@@ -20,7 +20,5 @@ jobs:
           node-version: 20
           registry-url: 'https://registry.npmjs.org'
 
-      - run: npm ci
-
       - name: Publish to NPM
         run: npm publish --access public --provenance
