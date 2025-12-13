@@ -11,7 +11,6 @@ import (
 	"github.com/scrapfly/scrapfly-mcp/pkg/provider/scrapfly/constants"
 	"github.com/scrapfly/scrapfly-mcp/pkg/provider/scrapfly/resources"
 	"github.com/scrapfly/scrapfly-mcp/pkg/provider/scrapfly/schemas"
-	"github.com/scrapfly/scrapfly-mcp/pkg/server"
 	"github.com/scrapfly/scrapfly-mcp/pkg/tools"
 )
 
@@ -43,15 +42,6 @@ func MakeDefaultScrapflyClient(apiKey string) *scrapfly.Client {
 	return client
 }
 func GetDefaultScrapflyClient(p *ScrapflyToolProvider, ctx context.Context) (*scrapfly.Client, error) {
-	// Check if API key is provided via context (e.g., from query parameters in HTTP mode)
-	if apiKey, ok := ctx.Value(server.APIKeyContextKey).(string); ok && apiKey != "" {
-		client, err := scrapfly.New(apiKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create client from context API key: %w", err)
-		}
-		return client, nil
-	}
-
 	// Fall back to the pre-configured client
 	if p.Client == nil {
 		return nil, fmt.Errorf("client not found")
