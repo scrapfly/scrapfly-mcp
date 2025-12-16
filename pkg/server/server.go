@@ -11,12 +11,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// ContextKey is a type for context keys used in this package
-type ContextKey string
-
-// APIKeyContextKey is the context key for storing the API key from query parameters
-const APIKeyContextKey ContextKey = "apiKey"
-
 const ServerVersion = "1.1.0"
 
 func init() {
@@ -119,41 +113,6 @@ func (s *ScrapflyMCPServer) ServeStdio() {
 	s.stdioServerFunction(s.server, &mcp.LoggingTransport{Transport: &mcp.StdioTransport{}, Writer: os.Stderr})
 }
 
-// corsMiddleware adds CORS headers required by Smithery
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, *")
-		w.Header().Set("Access-Control-Expose-Headers", "mcp-session-id, mcp-protocol-version")
-
-		// Handle preflight requests
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-// APIKeyMiddleware wraps a StreamableHTTPHandler to extract API key from query parameters
-// and inject it into the request context. Supports both "key" (cloud compatible) and "apiKey" params.
-func APIKeyMiddleware(mcpHandler *mcp.StreamableHTTPHandler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Try "key" first (cloud compatible), then fall back to "apiKey"
-		apiKey := r.URL.Query().Get("key")
-		if apiKey == "" {
-			apiKey = r.URL.Query().Get("apiKey")
-		}
-		if apiKey != "" {
-			ctx := context.WithValue(r.Context(), APIKeyContextKey, apiKey)
-			r = r.WithContext(ctx)
-		}
-		mcpHandler.ServeHTTP(w, r)
-	})
-}
 
 func (s *ScrapflyMCPServer) ServeStreamable() {
 	if !s.canChangeConfig("serve streamable") {
@@ -162,14 +121,9 @@ func (s *ScrapflyMCPServer) ServeStreamable() {
 	s.started = true
 	log.Printf("[SCRAPFLY-MCP] Starting streamable server on %s\n", s.httpAddr)
 	s.server.AddReceivingMiddleware(s.loggingMiddleware())
-	mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+	s.streamableServerFunction(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return s.server
-	}, s.streamableHTTPOptions)
-
-	// Wrap with APIKeyMiddleware and CORS middleware
-	handler := corsMiddleware(APIKeyMiddleware(mcpHandler))
-	http.Handle("/mcp", handler)
-	log.Fatal(http.ListenAndServe(s.httpAddr, nil))
+	}, s.streamableHTTPOptions), &s.httpAddr)
 }
 
 func newServer(toolProviders ...provider.ToolProvider) *mcp.Server {
