@@ -26,7 +26,16 @@ func main() {
 		apikey = os.Getenv("SCRAPFLY_API_KEY")
 	}
 
-	if apikey == "" && *httpAddr == "" {
+		// Determine HTTP address: -http flag takes precedence, then PORT env var
+	addr := *httpAddr
+	if addr == "" {
+		if port := os.Getenv("PORT"); port != "" {
+			addr = ":" + port
+		}
+	}
+
+
+	if apikey == "" && addr == "" {
 		log.Fatal("Either apikey (as an argument or as an environment variable) or httpdAddr must must be set.")
 	}
 
@@ -34,7 +43,7 @@ func main() {
 		return scrapflyprovider.MakeDefaultScrapflyClient(apikey), nil
 	}
 
-	if apikey == "" && *httpAddr != "" {
+	if apikey == "" && addr != "" {
 		clientGetter = func(p *scrapflyprovider.ScrapflyToolProvider, ctx context.Context) (*scrapfly.Client, error) {
 			return authenticableClient.GetStreamableScrapflyClient(p, ctx)
 		}
@@ -47,8 +56,11 @@ func main() {
 	toolProvider := provider.NewToolProvider("scrapfly", scrapflyToolProvider)
 
 	server := server.NewScrapflyMCPServer(toolProvider)
-	if *httpAddr != "" { // httpAddr is actually string parsed WITH port number. port only imply 0.0.0.0 eg :1123
-		server.WithHttpAddr(*httpAddr)
+
+		// Determine HTTP address: -http flag takes precedence, then PORT env var
+
+	if addr != "" { // httpAddr is actually string parsed WITH port number. port only imply 0.0.0.0 eg :1123
+		server.WithHttpAddr(addr)
 		if apikey == "" {
 			server.WithStreamableServerFunction(authenticableClient.CorsAndAuthenticatedStreamableServerFunction)
 		}
