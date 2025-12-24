@@ -7,6 +7,16 @@ import (
 	"github.com/scrapfly/go-scrapfly"
 )
 
+func MakeVisionDeficiencyTypeSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Type:        "string",
+		Title:       "Vision Deficiency Type",
+		Enum:        []any{string(scrapfly.VisionDeficiencyTypeNone), string(scrapfly.VisionDeficiencyTypeDeuteranopia), string(scrapfly.VisionDeficiencyTypeProtanopia), string(scrapfly.VisionDeficiencyTypeTritanopia), string(scrapfly.VisionDeficiencyTypeAchromatopsia), string(scrapfly.VisionDeficiencyTypeBlurredVision), string(scrapfly.VisionDeficiencyTypeReducedContrast)},
+		Default:     json.RawMessage(`"none"`),
+		Description: "The vision deficiency to use for the screenshot.",
+	}
+}
+
 func MakeScreenshotFormatSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Type:        "string",
@@ -56,6 +66,7 @@ func MustRefineScreenshotToolInputSchema[T any]() *jsonschema.Schema {
 	schema.Properties["resolution"] = MakeScreenshotResolutionSchema()
 	schema.Properties["country"] = MakeCountrySchema()
 	schema.Properties["rendering_wait"] = MakeRenderingWaitSchema()
+	schema.Properties["vision_deficiency_type"] = MakeVisionDeficiencyTypeSchema()
 	schema.Properties["options"] = MakeScreenshotOptionsSchema()
 	return schema
 }
