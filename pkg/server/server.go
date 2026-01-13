@@ -21,7 +21,13 @@ type StreamableServerFunction func(mcpHandler *mcp.StreamableHTTPHandler, httpAd
 type StdioServerFunction func(server *mcp.Server, t *mcp.LoggingTransport)
 
 func DefaultStreamableServerFunction(mcpHandler *mcp.StreamableHTTPHandler, httpAddr *string) {
-	log.Fatal(http.ListenAndServe(*httpAddr, mcpHandler))
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+	mux.Handle("/", mcpHandler)
+	log.Fatal(http.ListenAndServe(*httpAddr, mux))
 }
 
 func DefaultStdioServerFunction(server *mcp.Server, t *mcp.LoggingTransport) {
@@ -112,7 +118,6 @@ func (s *ScrapflyMCPServer) ServeStdio() {
 	log.Printf("[SCRAPFLY-MCP] Starting stdio server on %s\n", s.httpAddr)
 	s.stdioServerFunction(s.server, &mcp.LoggingTransport{Transport: &mcp.StdioTransport{}, Writer: os.Stderr})
 }
-
 
 func (s *ScrapflyMCPServer) ServeStreamable() {
 	if !s.canChangeConfig("serve streamable") {
