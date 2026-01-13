@@ -154,5 +154,9 @@ func CorsAndAuthenticatedStreamableServerFunction(mcpHandler *mcp.StreamableHTTP
 	authenticationHandler := ScrapflyAuthMiddleware(mcpHandler)
 	corsHandler := CorsMiddleware(authenticationHandler)
 	http.HandleFunc("/mcp", corsHandler.ServeHTTP)
+	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
 	log.Fatal(http.ListenAndServe(*httpAddr, nil))
 }
