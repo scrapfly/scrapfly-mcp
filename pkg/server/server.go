@@ -21,13 +21,7 @@ type StreamableServerFunction func(mcpHandler *mcp.StreamableHTTPHandler, httpAd
 type StdioServerFunction func(server *mcp.Server, t *mcp.LoggingTransport)
 
 func DefaultStreamableServerFunction(mcpHandler *mcp.StreamableHTTPHandler, httpAddr *string) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
-	mux.Handle("/", mcpHandler)
-	log.Fatal(http.ListenAndServe(*httpAddr, mux))
+	log.Fatal(http.ListenAndServe(*httpAddr, mcpHandler))
 }
 
 func DefaultStdioServerFunction(server *mcp.Server, t *mcp.LoggingTransport) {
