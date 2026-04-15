@@ -6,7 +6,7 @@ toolchain go1.24.7
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.1.0-pre.1.0.20251027202916-d256a9c1094e
-	github.com/scrapfly/go-scrapfly v0.0.0-20251224042744-c6547dad6ddc
+	github.com/scrapfly/go-scrapfly v0.3.0
 )
 
 require (
