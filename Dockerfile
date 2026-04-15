@@ -3,10 +3,14 @@ FROM golang:1.24-alpine AS builder
 WORKDIR /app
 
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,mode=0777,target=/root/.cache/go-build \
+    --mount=type=cache,mode=0777,target=/go/pkg/mod \
+    go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o scrapfly-mcp ./cmd/scrapfly-mcp
+RUN --mount=type=cache,mode=0777,target=/root/.cache/go-build \
+    --mount=type=cache,mode=0777,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o scrapfly-mcp ./cmd/scrapfly-mcp
 
 FROM alpine:latest
 
