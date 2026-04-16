@@ -187,9 +187,23 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 		Meta:        standardPermissionsMeta,
 	}, provider.CloudBrowserClose)
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "cloud_browser_screenshot",
+		Title:       "Scrapfly Cloud Browser — Screenshot",
+		Description: "Take a screenshot of the current page in an active Cloud Browser session. Returns the image. If session_id is omitted, uses the most recent session.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Cloud Browser — Screenshot",
+			DestructiveHint: &falseBool,
+			IdempotentHint:  true,
+			OpenWorldHint:   &falseBool,
+			ReadOnlyHint:    true,
+		},
+		InputSchema: schemas.MustRefineScrapingToolInputSchema[CloudBrowserScreenshotInput](),
+		Meta:        standardPermissionsMeta,
+	}, provider.CloudBrowserScreenshot)
+	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "cloud_browser_sessions",
 		Title:       "Scrapfly Cloud Browser — List Sessions",
-		Description: "List all running Cloud Browser sessions for the account.",
+		Description: "List all active Cloud Browser sessions with their tools and expiry.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser — List Sessions",
 			DestructiveHint: &falseBool,

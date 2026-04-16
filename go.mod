@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/tools v0.36.0 // indirect
 )
