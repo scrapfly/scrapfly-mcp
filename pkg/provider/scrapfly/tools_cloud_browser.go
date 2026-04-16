@@ -60,7 +60,7 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 ) (*mcp.CallToolResult, any, error) {
 	client, err := p.ClientGetter(p, ctx)
 	if err != nil {
-		return ToolErrFromError("cloud_browser_open", err), nil, err
+		return ToolErrFromError("cloud_browser_open", err), nil, nil
 	}
 
 	p.logger.Printf("Opening cloud browser for %s (enable_mcp=true)", input.URL)
@@ -77,8 +77,12 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 		EnableMCP:      true,
 	})
 	if err != nil {
-		return ToolErrFromError("cloud_browser_open", err), nil, err
+		p.logger.Printf("cloud_browser_open failed for %s: %v", input.URL, err)
+		return ToolErrFromError("cloud_browser_open", err), nil, nil
 	}
+
+	p.logger.Printf("cloud_browser_open succeeded: session_id=%s ws_url=%s mcp_endpoint=%s",
+		result.SessionID, result.WSURL, result.MCPEndpoint)
 
 	session := &browserSession{
 		SessionID:   result.SessionID,
@@ -130,14 +134,14 @@ func (p *ScrapflyToolProvider) CloudBrowserClose(
 ) (*mcp.CallToolResult, any, error) {
 	client, err := p.ClientGetter(p, ctx)
 	if err != nil {
-		return ToolErrFromError("cloud_browser_close", err), nil, err
+		return ToolErrFromError("cloud_browser_close", err), nil, nil
 	}
 
 	p.logger.Printf("Closing cloud browser session %s", input.SessionID)
 
 	// Stop the browser session
 	if err := client.CloudBrowserSessionStop(input.SessionID); err != nil {
-		return ToolErrFromError("cloud_browser_close", err), nil, err
+		return ToolErrFromError("cloud_browser_close", err), nil, nil
 	}
 
 	// Clean up dynamic tools
@@ -161,12 +165,12 @@ func (p *ScrapflyToolProvider) CloudBrowserSessions(
 ) (*mcp.CallToolResult, any, error) {
 	client, err := p.ClientGetter(p, ctx)
 	if err != nil {
-		return ToolErrFromError("cloud_browser_sessions", err), nil, err
+		return ToolErrFromError("cloud_browser_sessions", err), nil, nil
 	}
 
 	result, err := client.CloudBrowserSessions()
 	if err != nil {
-		return ToolErrFromError("cloud_browser_sessions", err), nil, err
+		return ToolErrFromError("cloud_browser_sessions", err), nil, nil
 	}
 
 	b, _ := json.MarshalIndent(result, "", "  ")
@@ -182,7 +186,7 @@ func (p *ScrapflyToolProvider) CloudBrowserNavigate(
 ) (*mcp.CallToolResult, any, error) {
 	_, err := p.ClientGetter(p, ctx)
 	if err != nil {
-		return ToolErrFromError("cloud_browser_navigate", err), nil, err
+		return ToolErrFromError("cloud_browser_navigate", err), nil, nil
 	}
 
 	val, ok := browserSessionStore.Load(input.SessionID)
