@@ -40,6 +40,7 @@ type CloudBrowserOpenInput struct {
 	BlockMedia  bool   `json:"block_media,omitempty" jsonschema:"Stub video/audio requests."`
 	Cache       bool   `json:"cache,omitempty" jsonschema:"Enable HTTP cache for static resources."`
 	Debug       bool   `json:"debug,omitempty" jsonschema:"Enable session recording for replay."`
+	Unblock     bool   `json:"unblock,omitempty" jsonschema:"Use anti-bot bypass (ASP). Only use if the site blocks normal access."`
 }
 
 type CloudBrowserCloseInput struct {
@@ -70,55 +71,87 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 		timeout = 900
 	}
 
-	result, err := client.CloudBrowserUnblock(scrapfly.UnblockConfig{
-		URL:            input.URL,
-		Country:        input.Country,
-		BrowserTimeout: timeout,
-		EnableMCP:      true,
-	})
-	if err != nil {
-		p.logger.Printf("cloud_browser_open failed for %s: %v", input.URL, err)
-		return ToolErrFromError("cloud_browser_open", err), nil, nil
-	}
-
-	p.logger.Printf("cloud_browser_open succeeded: session_id=%s ws_url=%s mcp_endpoint=%s",
-		result.SessionID, result.WSURL, result.MCPEndpoint)
-
-	session := &browserSession{
-		SessionID:   result.SessionID,
-		MCPEndpoint: result.MCPEndpoint,
-		WSURL:       result.WSURL,
-		ExpiresAt:   time.Now().Add(time.Duration(timeout) * time.Second),
-	}
-
-	// Discover WebMCP tools from Chrome's MCP endpoint
-	var discoveredTools []mcpToolInfo
-	if result.MCPEndpoint != "" {
-		discoveredTools = discoverWebMCPTools(p, result.MCPEndpoint, result.SessionID)
-		session.ToolNames = make([]string, len(discoveredTools))
-		for i, t := range discoveredTools {
-			session.ToolNames[i] = t.NamespacedName
+	if input.Unblock {
+		// Anti-bot bypass path: POST /unblock → navigates, bypasses protection,
+		// returns session with cookies pre-loaded.
+		p.logger.Printf("cloud_browser_open (unblock mode) for %s", input.URL)
+		result, err := client.CloudBrowserUnblock(scrapfly.UnblockConfig{
+			URL:            input.URL,
+			Country:        input.Country,
+			BrowserTimeout: timeout,
+			EnableMCP:      true,
+		})
+		if err != nil {
+			p.logger.Printf("cloud_browser_open unblock failed for %s: %v", input.URL, err)
+			return ToolErrFromError("cloud_browser_open", err), nil, nil
 		}
-	}
+		p.logger.Printf("cloud_browser_open unblock succeeded: session_id=%s ws_url=%s mcp_endpoint=%s",
+			result.SessionID, result.WSURL, result.MCPEndpoint)
 
-	browserSessionStore.Store(result.SessionID, session)
+		session := &browserSession{
+			SessionID:   result.SessionID,
+			MCPEndpoint: result.MCPEndpoint,
+			WSURL:       result.WSURL,
+			ExpiresAt:   time.Now().Add(time.Duration(timeout) * time.Second),
+		}
 
-	// Build response
-	response := map[string]any{
-		"session_id":   result.SessionID,
-		"ws_url":       result.WSURL,
-		"run_id":       result.RunID,
-		"mcp_endpoint": result.MCPEndpoint,
-	}
-	if len(discoveredTools) > 0 {
-		toolList := make([]map[string]string, len(discoveredTools))
-		for i, t := range discoveredTools {
-			toolList[i] = map[string]string{
-				"tool_name":   t.NamespacedName,
-				"description": t.Description,
+		// Discover WebMCP tools from Chrome's MCP endpoint
+		var discoveredTools []mcpToolInfo
+		if result.MCPEndpoint != "" {
+			discoveredTools = discoverWebMCPTools(p, result.MCPEndpoint, result.SessionID)
+			session.ToolNames = make([]string, len(discoveredTools))
+			for i, t := range discoveredTools {
+				session.ToolNames[i] = t.NamespacedName
 			}
 		}
-		response["webmcp_tools"] = toolList
+
+		browserSessionStore.Store(result.SessionID, session)
+
+		response := map[string]any{
+			"session_id":   result.SessionID,
+			"ws_url":       result.WSURL,
+			"run_id":       result.RunID,
+			"mcp_endpoint": result.MCPEndpoint,
+			"mode":         "unblock",
+		}
+		if len(discoveredTools) > 0 {
+			toolList := make([]map[string]string, len(discoveredTools))
+			for i, t := range discoveredTools {
+				toolList[i] = map[string]string{
+					"tool_name":   t.NamespacedName,
+					"description": t.Description,
+				}
+			}
+			response["webmcp_tools"] = toolList
+		}
+		b, _ := json.MarshalIndent(response, "", "  ")
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+		}, nil, nil
+	}
+
+	// Default path: build WebSocket URL for direct CDP connection.
+	// The browser is allocated on first WebSocket connect. No ASP bypass.
+	browserConfig := &scrapfly.CloudBrowserConfig{
+		ProxyPool:   input.ProxyPool,
+		Country:     input.Country,
+		BlockImages: input.BlockImages,
+		BlockStyles: input.BlockStyles,
+		BlockMedia:  input.BlockMedia,
+		Cache:       input.Cache,
+		Debug:       input.Debug,
+		Timeout:     timeout,
+		EnableMCP:   true,
+	}
+	wsURL := client.CloudBrowser(browserConfig)
+
+	p.logger.Printf("cloud_browser_open: ws_url ready for %s (timeout=%d)", input.URL, timeout)
+
+	response := map[string]any{
+		"ws_url":     wsURL,
+		"target_url": input.URL,
+		"timeout":    timeout,
+		"mode":       "direct",
 	}
 
 	b, _ := json.MarshalIndent(response, "", "  ")

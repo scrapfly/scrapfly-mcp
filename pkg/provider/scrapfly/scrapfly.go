@@ -161,7 +161,7 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "cloud_browser_open",
 		Title:       "Scrapfly Cloud Browser — Open Session",
-		Description: "Open a Cloud Browser session with MCP enabled. Navigates to a URL and discovers WebMCP tools exposed by the page. Returns session_id, ws_url, and any discovered page tools.",
+		Description: "Open a remote Chrome browser with MCP-enabled DevTools. Returns a CDP WebSocket URL to connect with Playwright/Puppeteer. Navigate to the target URL after connecting. The browser exposes 18 Antibot tools (clickOn, fill, typeText, scroll, hover, pressKey, selectOption, etc.) via WebMCP. By default uses direct allocation (fast). Set unblock=true ONLY if the site blocks normal access (anti-bot protection).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser — Open Session",
 			DestructiveHint: &falseBool,
