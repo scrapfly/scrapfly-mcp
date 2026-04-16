@@ -19,6 +19,7 @@ type ScrapflyClientGetter func(p *ScrapflyToolProvider, ctx context.Context) (*s
 type ScrapflyToolProvider struct {
 	Client       *scrapfly.Client
 	ClientGetter ScrapflyClientGetter
+	MCPServer    *mcp.Server // set during RegisterAll(), used for dynamic tool registration (cloud browser)
 	logger       *log.Logger
 }
 
@@ -47,6 +48,10 @@ func GetDefaultScrapflyClient(p *ScrapflyToolProvider, ctx context.Context) (*sc
 		return nil, fmt.Errorf("client not found")
 	}
 	return p.Client, nil
+}
+
+func (p *ScrapflyToolProvider) SetMCPServer(server *mcp.Server) {
+	p.MCPServer = server
 }
 
 func (p *ScrapflyToolProvider) ToolSet() tools.HandledToolSet {
@@ -151,6 +156,64 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 		InputSchema: schemas.MustRefineScreenshotToolInputSchema[ScreenshotToolInput](),
 		Meta:        standardPermissionsMeta,
 	}, provider.Screenshot)
+
+	// Cloud Browser tools
+	tools.AddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "cloud_browser_open",
+		Title:       "Scrapfly Cloud Browser — Open Session",
+		Description: "Open a Cloud Browser session with MCP enabled. Navigates to a URL and discovers WebMCP tools exposed by the page. Returns session_id, ws_url, and any discovered page tools.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Cloud Browser — Open Session",
+			DestructiveHint: &falseBool,
+			IdempotentHint:  false,
+			OpenWorldHint:   &trueBool,
+			ReadOnlyHint:    false,
+		},
+		InputSchema: schemas.MustRefineScrapingToolInputSchema[CloudBrowserOpenInput](),
+		Meta:        standardPermissionsMeta,
+	}, provider.CloudBrowserOpen)
+	tools.AddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "cloud_browser_close",
+		Title:       "Scrapfly Cloud Browser — Close Session",
+		Description: "Close a Cloud Browser session and release resources. Removes any dynamically registered WebMCP tools.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Cloud Browser — Close Session",
+			DestructiveHint: &trueBool,
+			IdempotentHint:  true,
+			OpenWorldHint:   &falseBool,
+			ReadOnlyHint:    false,
+		},
+		InputSchema: schemas.MustRefineScrapingToolInputSchema[CloudBrowserCloseInput](),
+		Meta:        standardPermissionsMeta,
+	}, provider.CloudBrowserClose)
+	tools.AddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "cloud_browser_sessions",
+		Title:       "Scrapfly Cloud Browser — List Sessions",
+		Description: "List all running Cloud Browser sessions for the account.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Cloud Browser — List Sessions",
+			DestructiveHint: &falseBool,
+			IdempotentHint:  true,
+			OpenWorldHint:   &falseBool,
+			ReadOnlyHint:    true,
+		},
+		Meta: standardPermissionsMeta,
+	}, provider.CloudBrowserSessions)
+	tools.AddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "cloud_browser_navigate",
+		Title:       "Scrapfly Cloud Browser — Navigate",
+		Description: "Navigate an active Cloud Browser session to a new URL. Re-discovers WebMCP tools on the new page.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Cloud Browser — Navigate",
+			DestructiveHint: &falseBool,
+			IdempotentHint:  false,
+			OpenWorldHint:   &trueBool,
+			ReadOnlyHint:    false,
+		},
+		InputSchema: schemas.MustRefineScrapingToolInputSchema[CloudBrowserNavigateInput](),
+		Meta:        standardPermissionsMeta,
+	}, provider.CloudBrowserNavigate)
+
 	return HandledTools
 }
 

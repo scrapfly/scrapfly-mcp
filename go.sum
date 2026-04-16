@@ -11,8 +11,8 @@ github.com/google/jsonschema-go v0.4.2 h1:tmrUohrwoLZZS/P3x7ex0WAVknEkBZM46iALbc
 github.com/google/jsonschema-go v0.4.2/go.mod h1:r5quNTdLOYEz95Ru18zA0ydNbBuYoo9tgaYcxEYhJVE=
 github.com/modelcontextprotocol/go-sdk v1.1.0-pre.1.0.20251027202916-d256a9c1094e h1:FReVnW9PMAFNfjIIqr2HjF+WzJ2c8d5fx5pCpv8QEpo=
 github.com/modelcontextprotocol/go-sdk v1.1.0-pre.1.0.20251027202916-d256a9c1094e/go.mod h1:6fM3LCm3yV7pAs8isnKLn07oKtB0MP9LHd3DfAcKw10=
-github.com/scrapfly/go-scrapfly v0.3.0 h1:p8zCLtAjcHV267t5NRFv0BEtcwRJD52NyCP8yXOh+8k=
-github.com/scrapfly/go-scrapfly v0.3.0/go.mod h1:sAga58Z/RVV1xYzE7kedqosCOH+gmWvjieYMFrsGG50=
+github.com/scrapfly/go-scrapfly v0.3.2 h1:GhWwZuF8nb1Y51NQl67newrmNJk4rjGJD3VXywKWcZY=
+github.com/scrapfly/go-scrapfly v0.3.2/go.mod h1:sAga58Z/RVV1xYzE7kedqosCOH+gmWvjieYMFrsGG50=
 github.com/yosida95/uritemplate/v3 v3.0.2 h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=
 github.com/yosida95/uritemplate/v3 v3.0.2/go.mod h1:ILOh0sOhIJR3+L/8afwt/kE++YT040gmv5BQTMR2HP4=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=

@@ -1,12 +1,10 @@
 module github.com/scrapfly/scrapfly-mcp
 
-go 1.24.4
-
-toolchain go1.24.7
+go 1.26.0
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.1.0-pre.1.0.20251027202916-d256a9c1094e
-	github.com/scrapfly/go-scrapfly v0.3.0
+	github.com/scrapfly/go-scrapfly v0.3.2
 )
 
 require (

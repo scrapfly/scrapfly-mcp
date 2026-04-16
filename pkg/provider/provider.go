@@ -24,7 +24,17 @@ func (p *ToolProvider) Name() string {
 	return p.name
 }
 
+// ServerAware is an optional interface that providers can implement to receive
+// a reference to the MCP server. Used for dynamic tool registration at runtime.
+type ServerAware interface {
+	SetMCPServer(server *mcp.Server)
+}
+
 func (p *ToolProvider) RegisterAll(server *mcp.Server) (toolNames []string, promptNames []string, resourceNames []string) {
+	// If the provider implements ServerAware, inject the server reference
+	if sa, ok := p.toolProvider.(ServerAware); ok {
+		sa.SetMCPServer(server)
+	}
 	toolNames = p.RegisterTools(server)
 	promptNames = p.RegisterPrompts(server)
 	resourceNames = p.RegisterResources(server)
