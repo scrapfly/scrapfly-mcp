@@ -1,5 +1,9 @@
 name: Publish to NPM
 
+# Tag-driven release. The `make release VERSION=x.y.z NEXT_VERSION=x.y.z+1`
+# target (see Makefile, mirrors sdk/python + sdk/rust) bumps package.json,
+# commits, tags v$VERSION, and pushes. This workflow reacts to the tag push
+# and publishes the tarball to npm. No commits are made by CI.
 on:
   push:
     tags:
@@ -17,8 +21,27 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify tag matches package.json
+        id: version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "tag=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::tag v$TAG_VERSION does not match package.json version $PKG_VERSION. Use 'make release VERSION=$TAG_VERSION NEXT_VERSION=…' instead of tagging by hand."
+            exit 1
+          fi
+          echo "Releasing version: $TAG_VERSION"
+
+      - name: Check version not already published
+        run: |
+          if npm view scrapfly-mcp@${{ steps.version.outputs.tag }} version 2>/dev/null; then
+            echo "::error::scrapfly-mcp@${{ steps.version.outputs.tag }} already published to npm. Bump the tag via 'make release VERSION=<next> NEXT_VERSION=<next+1>'."
+            exit 1
+          fi
 
       - name: Publish to NPM
         run: npm publish --access public --provenance
