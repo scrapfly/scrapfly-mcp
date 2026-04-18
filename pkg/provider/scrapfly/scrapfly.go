@@ -159,9 +159,24 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 
 	// Cloud Browser tools
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "check_if_blocked",
+		Title:       "Antibot Block Detector",
+		Description: "Analyze scrape result to detect antibot blocking. Zero cost — pure local heuristic, no API call. Use after any scrape to verify the response is not a block page. Supports: Cloudflare, DataDome, PerimeterX, Akamai, Kasada, Imperva, AWS WAF, Vercel, Anubis, F5 Shape.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Antibot Block Detector",
+			DestructiveHint: &falseBool,
+			IdempotentHint:  true,
+			OpenWorldHint:   &falseBool,
+			ReadOnlyHint:    true,
+		},
+		InputSchema: schemas.MustRefineScrapingToolInputSchema[CheckIfBlockedInput](),
+		Meta:        standardPermissionsMeta,
+	}, provider.CheckIfBlocked)
+
+	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "cloud_browser_open",
 		Title:       "Scrapfly Cloud Browser — Open Session",
-		Description: "Open a remote Chrome browser with MCP-enabled DevTools. Returns a CDP WebSocket URL to connect with Playwright/Puppeteer. Navigate to the target URL after connecting. The browser exposes 18 Antibot tools (clickOn, fill, typeText, scroll, hover, pressKey, selectOption, etc.) via WebMCP. By default uses direct allocation (fast). Set unblock=true ONLY if the site blocks normal access (anti-bot protection).",
+		Description: "Open a browser on a URL. After opening, use click/fill/hover/press_key/scroll for interaction, take_snapshot for page content, take_screenshot for visual capture. Use list_webmcp_tools to discover page-specific actions. If the page shows a challenge/captcha, close the session and use browser_unblock instead.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser — Open Session",
 			DestructiveHint: &falseBool,
@@ -189,7 +204,7 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "cloud_browser_screenshot",
 		Title:       "Scrapfly Cloud Browser — Screenshot",
-		Description: "Take a screenshot of the current page in an active Cloud Browser session. Returns the image. If session_id is omitted, uses the most recent session.",
+		Description: "Take a screenshot of the current browser page. Use this instead of the screenshot tool when a cloud_browser_open session is active. Returns a PNG image of what the browser currently shows.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser — Screenshot",
 			DestructiveHint: &falseBool,
@@ -200,6 +215,36 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 		InputSchema: schemas.MustRefineScrapingToolInputSchema[CloudBrowserScreenshotInput](),
 		Meta:        standardPermissionsMeta,
 	}, provider.CloudBrowserScreenshot)
+	tools.AddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "cloud_browser_eval",
+		Title:       "Scrapfly Cloud Browser — Evaluate JavaScript",
+		Description: "Execute JavaScript in the browser page. Only for data extraction or reading state — do NOT use for clicking, filling forms, or page interaction (use click, fill, type_text, hover, press_key instead).",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Cloud Browser — Evaluate JavaScript",
+			DestructiveHint: &falseBool,
+			IdempotentHint:  false,
+			OpenWorldHint:   &trueBool,
+			ReadOnlyHint:    false,
+		},
+		InputSchema: schemas.MustRefineScrapingToolInputSchema[CloudBrowserEvalInput](),
+		Meta:        standardPermissionsMeta,
+	}, provider.CloudBrowserEval)
+	// cloud_browser_snapshot removed — snapshot is automatically included in
+	// cloud_browser_open, cloud_browser_navigate, and after fill/clickOn responses.
+	tools.AddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "cloud_browser_performance",
+		Title:       "Scrapfly Cloud Browser — PageSpeed Lab Run",
+		Description: "PageSpeed Insights-style lab run: cold-cache reload with mobile throttling (Moto G4 + slow 4G + 4× CPU) by default, or desktop wired. Returns Core Web Vitals (LCP, FCP, CLS, TTFB, INP), Speed Index, Total Blocking Time, Time To Interactive, resource waterfall with render-blocking detection, diagnostics (DOM nodes, main-thread ms, total byte weight), Lighthouse-style performance score (0-100), and Good/Needs-Improvement/Poor ratings per PSI thresholds. Use after cloud_browser_open. Inputs: preset ('mobile'|'desktop'), timeout_ms (max 30000).",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Cloud Browser — Performance Metrics",
+			DestructiveHint: &falseBool,
+			IdempotentHint:  true,
+			OpenWorldHint:   &falseBool,
+			ReadOnlyHint:    true,
+		},
+		InputSchema: schemas.MustRefineScrapingToolInputSchema[CloudBrowserPerformanceInput](),
+		Meta:        standardPermissionsMeta,
+	}, provider.CloudBrowserPerformance)
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "cloud_browser_sessions",
 		Title:       "Scrapfly Cloud Browser — List Sessions",
@@ -214,9 +259,37 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 		Meta: standardPermissionsMeta,
 	}, provider.CloudBrowserSessions)
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "cloud_browser_downloads",
+		Title:       "Scrapfly Cloud Browser — Downloads",
+		Description: "List and retrieve files downloaded during the browser session. Returns metadata (filenames, sizes) and optionally the file content as base64.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Cloud Browser — Downloads",
+			DestructiveHint: &falseBool,
+			IdempotentHint:  true,
+			OpenWorldHint:   &falseBool,
+			ReadOnlyHint:    true,
+		},
+		InputSchema: schemas.MustRefineScrapingToolInputSchema[CloudBrowserDownloadsInput](),
+		Meta:        standardPermissionsMeta,
+	}, provider.CloudBrowserDownloads)
+	tools.AddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "browser_unblock",
+		Title:       "Open Browser with Anti-Bot Bypass",
+		Description: "Open a browser on a URL that is protected by anti-bot (Cloudflare, DataDome, etc.). Bypasses the protection automatically and returns a connected browser session with page content. Use this when cloud_browser_open returns a challenge/captcha page.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Open Browser with Anti-Bot Bypass",
+			DestructiveHint: &falseBool,
+			IdempotentHint:  false,
+			OpenWorldHint:   &trueBool,
+			ReadOnlyHint:    false,
+		},
+		InputSchema: schemas.MustRefineScrapingToolInputSchema[BrowserUnblockInput](),
+		Meta:        standardPermissionsMeta,
+	}, provider.BrowserUnblock)
+	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "cloud_browser_navigate",
 		Title:       "Scrapfly Cloud Browser — Navigate",
-		Description: "Navigate an active Cloud Browser session to a new URL. Re-discovers WebMCP tools on the new page.",
+		Description: "Navigate an active Cloud Browser session to a new URL.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser — Navigate",
 			DestructiveHint: &falseBool,
@@ -227,6 +300,11 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 		InputSchema: schemas.MustRefineScrapingToolInputSchema[CloudBrowserNavigateInput](),
 		Meta:        standardPermissionsMeta,
 	}, provider.CloudBrowserNavigate)
+
+	// Static browser interaction tools (click, fill, hover, etc.) + WebMCP meta-tools
+	for name, ht := range browserInteractionTools(provider) {
+		HandledTools[name] = ht
+	}
 
 	return HandledTools
 }

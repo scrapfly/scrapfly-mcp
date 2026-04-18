@@ -1,164 +1,81 @@
 package scrapflyprovider
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	scrapfly "github.com/scrapfly/go-scrapfly"
+	"github.com/scrapfly/scrapfly-mcp/pkg/provider/scrapfly/browser"
 )
 
-// browserSession tracks a live Cloud Browser session with an active CDP WebSocket.
-type browserSession struct {
-	SessionID       string
-	MCPEndpoint     string
-	WSURL           string
-	ToolNames       []string        // namespaced tool names registered on the MCP server
-	ExpiresAt       time.Time       // browser timeout
-	cdpConn         *websocket.Conn // live CDP WebSocket connection
-	cdpMu           sync.Mutex      // protects cdpConn writes
-	cdpID           atomic.Int64    // CDP message ID counter
-	cdpPageSessionID string         // flattened session ID for page-level CDP commands
+// antibotToolOverride holds a schema override and optional description for antibot tools
+// whose schemas Chrome returns as empty.
+type antibotToolOverride struct {
+	schema      any
+	description string
 }
-
-// cdpSessionID is the flattened session ID for page-level CDP commands.
-// Set after Target.attachToTarget. Empty means browser-level.
-// stored directly on browserSession
-
-// sendCDP sends a CDP command and waits for the response with matching ID.
-// If the session has a cdpSessionID, commands are scoped to that page session.
-func (s *browserSession) sendCDP(method string, params any) (json.RawMessage, error) {
-	id := s.cdpID.Add(1)
-	msg := map[string]any{"id": id, "method": method}
-	if params != nil {
-		msg["params"] = params
-	}
-	if s.cdpPageSessionID != "" {
-		msg["sessionId"] = s.cdpPageSessionID
-	}
-
-	s.cdpMu.Lock()
-	err := s.cdpConn.WriteJSON(msg)
-	s.cdpMu.Unlock()
-	if err != nil {
-		return nil, fmt.Errorf("CDP write: %w", err)
-	}
-
-	// Read until we get the response with our ID (skip events)
-	for i := 0; i < 100; i++ {
-		_, raw, err := s.cdpConn.ReadMessage()
-		if err != nil {
-			return nil, fmt.Errorf("CDP read: %w", err)
-		}
-		var resp struct {
-			ID     int64           `json:"id"`
-			Result json.RawMessage `json:"result"`
-			Error  *struct {
-				Code    int    `json:"code"`
-				Message string `json:"message"`
-			} `json:"error"`
-			Method string `json:"method"` // for events
-		}
-		json.Unmarshal(raw, &resp)
-		if resp.ID == id {
-			if resp.Error != nil {
-				return nil, fmt.Errorf("CDP error %d: %s", resp.Error.Code, resp.Error.Message)
-			}
-			return resp.Result, nil
-		}
-		// It's an event — skip it
-	}
-	return nil, fmt.Errorf("CDP response timeout: no response for ID %d after 100 messages", id)
-}
-
-// sendCDPCollectEvents sends a CDP command and collects events until the response arrives.
-func (s *browserSession) sendCDPCollectEvents(method string, params any, eventName string) (json.RawMessage, []json.RawMessage, error) {
-	id := s.cdpID.Add(1)
-	msg := map[string]any{"id": id, "method": method}
-	if params != nil {
-		msg["params"] = params
-	}
-	if s.cdpPageSessionID != "" {
-		msg["sessionId"] = s.cdpPageSessionID
-	}
-
-	s.cdpMu.Lock()
-	err := s.cdpConn.WriteJSON(msg)
-	s.cdpMu.Unlock()
-	if err != nil {
-		return nil, nil, fmt.Errorf("CDP write: %w", err)
-	}
-
-	var events []json.RawMessage
-	for i := 0; i < 100; i++ {
-		_, raw, err := s.cdpConn.ReadMessage()
-		if err != nil {
-			return nil, events, fmt.Errorf("CDP read: %w", err)
-		}
-		var resp struct {
-			ID     int64           `json:"id"`
-			Result json.RawMessage `json:"result"`
-			Error  *struct {
-				Code    int    `json:"code"`
-				Message string `json:"message"`
-			} `json:"error"`
-			Method string          `json:"method"`
-			Params json.RawMessage `json:"params"`
-		}
-		json.Unmarshal(raw, &resp)
-		if resp.ID == id {
-			if resp.Error != nil {
-				return nil, events, fmt.Errorf("CDP error %d: %s", resp.Error.Code, resp.Error.Message)
-			}
-			return resp.Result, events, nil
-		}
-		if resp.Method == eventName {
-			events = append(events, resp.Params)
-		}
-	}
-	return nil, events, fmt.Errorf("CDP timeout for ID %d", id)
-}
-
-// browserSessionStore is a per-provider in-memory store of active browser sessions.
-// Thread-safe via sync.Map. Keyed by session_id.
-var browserSessionStore sync.Map
 
 // ── Tool inputs ─────────────────────────────────────────────────────────────
 
 type CloudBrowserOpenInput struct {
 	URL         string `json:"url" jsonschema:"Target URL to open in the cloud browser."`
-	Country     string `json:"country,omitempty" jsonschema:"Proxy country code (ISO 3166-1 alpha-2)."`
+	Country     string `json:"country,omitempty" jsonschema:"Proxy country. ISO 3166-1 alpha-2: 'US', 'DE'. Comma-separated for multiple: 'fr,us,es,de'. Prefix '-' to exclude: '-ru'."`
 	ProxyPool   string `json:"proxy_pool,omitempty" jsonschema:"Proxy pool: datacenter or residential."`
 	Timeout     int    `json:"timeout,omitempty" jsonschema:"Session timeout in seconds (default 900, max 1800)."`
-	BlockImages bool   `json:"block_images,omitempty" jsonschema:"Stub image requests to save bandwidth."`
-	BlockStyles bool   `json:"block_styles,omitempty" jsonschema:"Stub stylesheet requests."`
-	BlockMedia  bool   `json:"block_media,omitempty" jsonschema:"Stub video/audio requests."`
-	Cache       bool   `json:"cache,omitempty" jsonschema:"Enable HTTP cache for static resources."`
-	Debug       bool   `json:"debug,omitempty" jsonschema:"Enable session recording for replay."`
-	Unblock     bool   `json:"unblock,omitempty" jsonschema:"Use anti-bot bypass (ASP). Only use if the site blocks normal access."`
+	BlockImages       bool   `json:"block_images,omitempty" jsonschema:"Stub image requests with empty responses."`
+	BlockStyles       bool   `json:"block_styles,omitempty" jsonschema:"Stub stylesheet requests with empty responses."`
+	BlockFonts        bool   `json:"block_fonts,omitempty" jsonschema:"Stub font requests with empty responses."`
+	BlockMedia        bool   `json:"block_media,omitempty" jsonschema:"Stub video/audio requests with empty responses."`
+	Blacklist         bool   `json:"blacklist,omitempty" jsonschema:"Stub known analytics, tracking, and telemetry URLs with empty responses."`
+	Cache             bool   `json:"cache,omitempty" jsonschema:"Cache static resources (CSS, JS, fonts, images)."`
+	OptimizeBandwidth bool   `json:"optimize_bandwidth,omitempty" jsonschema:"Enable all bandwidth optimizations (block images, styles, fonts, media, trackers + cache). Shortcut for setting all stub and cache options to true."`
+	Debug             bool   `json:"debug,omitempty" jsonschema:"Enable session recording for replay."`
 }
 
 type CloudBrowserScreenshotInput struct {
 	SessionID string `json:"session_id,omitempty" jsonschema:"Browser session ID. If omitted, uses the most recent session."`
+	FullPage  bool   `json:"full_page,omitempty" jsonschema:"Capture the full scrollable page, not just the viewport. Default: false."`
+	Selector  string `json:"selector,omitempty" jsonschema:"CSS selector of an element to screenshot. If provided, only that element is captured."`
+}
+
+type CloudBrowserEvalInput struct {
+	Expression string `json:"expression" jsonschema:"JavaScript expression to evaluate in the browser page."`
+	SessionID  string `json:"session_id,omitempty" jsonschema:"Browser session ID. If omitted, uses the most recent session."`
+}
+
+type CloudBrowserSnapshotInput struct {
+	SessionID string `json:"session_id,omitempty" jsonschema:"Browser session ID. If omitted, uses the most recent session."`
+}
+
+type CloudBrowserPerformanceInput struct {
+	SessionID string `json:"session_id,omitempty" jsonschema:"Browser session ID. If omitted, uses the most recent session."`
+	Preset    string `json:"preset,omitempty" jsonschema:"Throttling preset: 'mobile' (default, Moto G4 + slow 4G + 4x CPU) or 'desktop' (1350x940 wired, no CPU throttle). Matches PSI mobile/desktop views."`
+	TimeoutMs int    `json:"timeout_ms,omitempty" jsonschema:"Total budget for the lab run in ms (default 30000, max 45000)."`
 }
 
 type CloudBrowserCloseInput struct {
 	SessionID string `json:"session_id" jsonschema:"Cloud Browser session ID to terminate."`
 }
 
+type CloudBrowserDownloadsInput struct {
+	SessionID string `json:"session_id,omitempty" jsonschema:"Browser session ID. If omitted, uses the most recent session."`
+	Filename  string `json:"filename,omitempty" jsonschema:"Retrieve a specific file by name. If omitted, lists all downloads."`
+}
+
 type CloudBrowserNavigateInput struct {
 	SessionID string `json:"session_id" jsonschema:"Active Cloud Browser session ID."`
 	URL       string `json:"url" jsonschema:"URL to navigate to."`
+}
+
+type BrowserUnblockInput struct {
+	URL     string `json:"url" jsonschema:"Target URL to open with anti-bot bypass."`
+	Country string `json:"country,omitempty" jsonschema:"Proxy country. ISO 3166-1 alpha-2: 'US', 'DE'. Comma-separated for multiple: 'fr,us,es,de'. Prefix '-' to exclude: '-ru'."`
+	Timeout int    `json:"timeout,omitempty" jsonschema:"Session timeout in seconds (default 900, max 1800)."`
 }
 
 // ── Tool handlers ───────────────────────────────────────────────────────────
@@ -175,77 +92,41 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 
 	p.logger.Printf("Opening cloud browser for %s (enable_mcp=true)", input.URL)
 
+	// Close any existing sessions + release from pool before allocating a new one
+	browser.Store.Range(func(key, value any) bool {
+		s := value.(*browser.Session)
+		sid := key.(string)
+		s.Close()
+		if stopErr := client.CloudBrowserSessionStop(sid); stopErr != nil {
+			p.logger.Printf("cloud_browser_open: releasing old session %s failed (non-fatal): %v", sid, stopErr)
+		}
+		return true
+	})
+
 	timeout := input.Timeout
 	if timeout == 0 {
 		timeout = 900
 	}
 
-	if input.Unblock {
-		// Anti-bot bypass path: POST /unblock → navigates, bypasses protection,
-		// returns session with cookies pre-loaded.
-		p.logger.Printf("cloud_browser_open (unblock mode) for %s", input.URL)
-		result, err := client.CloudBrowserUnblock(scrapfly.UnblockConfig{
-			URL:            input.URL,
-			Country:        input.Country,
-			BrowserTimeout: timeout,
-			EnableMCP:      true,
-		})
-		if err != nil {
-			p.logger.Printf("cloud_browser_open unblock failed for %s: %v", input.URL, err)
-			return ToolErrFromError("cloud_browser_open", err), nil, nil
-		}
-		p.logger.Printf("cloud_browser_open unblock succeeded: session_id=%s ws_url=%s mcp_endpoint=%s",
-			result.SessionID, result.WSURL, result.MCPEndpoint)
-
-		session := &browserSession{
-			SessionID:   result.SessionID,
-			MCPEndpoint: result.MCPEndpoint,
-			WSURL:       result.WSURL,
-			ExpiresAt:   time.Now().Add(time.Duration(timeout) * time.Second),
-		}
-
-		// Discover WebMCP tools from Chrome's MCP endpoint
-		var discoveredTools []mcpToolInfo
-		if result.MCPEndpoint != "" {
-			discoveredTools = discoverWebMCPTools(p, result.MCPEndpoint, result.SessionID)
-			session.ToolNames = make([]string, len(discoveredTools))
-			for i, t := range discoveredTools {
-				session.ToolNames[i] = t.NamespacedName
-			}
-		}
-
-		browserSessionStore.Store(result.SessionID, session)
-
-		response := map[string]any{
-			"session_id":   result.SessionID,
-			"ws_url":       result.WSURL,
-			"run_id":       result.RunID,
-			"mcp_endpoint": result.MCPEndpoint,
-			"mode":         "unblock",
-		}
-		if len(discoveredTools) > 0 {
-			toolList := make([]map[string]string, len(discoveredTools))
-			for i, t := range discoveredTools {
-				toolList[i] = map[string]string{
-					"tool_name":   t.NamespacedName,
-					"description": t.Description,
-				}
-			}
-			response["webmcp_tools"] = toolList
-		}
-		b, _ := json.MarshalIndent(response, "", "  ")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
-		}, nil, nil
+	// Expand optimize_bandwidth shortcut
+	if input.OptimizeBandwidth {
+		input.BlockImages = true
+		input.BlockStyles = true
+		input.BlockFonts = true
+		input.BlockMedia = true
+		input.Blacklist = true
+		input.Cache = true
 	}
 
-	// Default path: connect to browser via WebSocket CDP, navigate, discover WebMCP tools.
+	// Connect to browser via WebSocket CDP, navigate, discover WebMCP tools.
 	browserConfig := &scrapfly.CloudBrowserConfig{
 		ProxyPool:   input.ProxyPool,
 		Country:     input.Country,
 		BlockImages: input.BlockImages,
 		BlockStyles: input.BlockStyles,
+		BlockFonts:  input.BlockFonts,
 		BlockMedia:  input.BlockMedia,
+		Blacklist:   input.Blacklist,
 		Cache:       input.Cache,
 		Debug:       input.Debug,
 		Timeout:     timeout,
@@ -254,22 +135,29 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 	wsURL := client.CloudBrowser(browserConfig)
 	p.logger.Printf("cloud_browser_open: connecting to %s", wsURL)
 
-	// Connect via WebSocket CDP
-	dialer := websocket.Dialer{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+	// Connect via WebSocket CDP (15s timeout for allocation)
+	dialer := websocket.Dialer{
+		TLSClientConfig:  &tls.Config{InsecureSkipVerify: true},
+		HandshakeTimeout: 15 * time.Second,
+	}
 	conn, _, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		p.logger.Printf("cloud_browser_open: WebSocket connect failed: %v", err)
 		return ToolErrFromError("cloud_browser_open", fmt.Errorf("browser connection failed: %w", err)), nil, nil
 	}
 
-	session := &browserSession{
+	p.logger.Printf("cloud_browser_open: connected (local=%s remote=%s)", conn.LocalAddr(), conn.RemoteAddr())
+	session := &browser.Session{
 		WSURL:     wsURL,
 		ExpiresAt: time.Now().Add(time.Duration(timeout) * time.Second),
-		cdpConn:   conn,
+		CdpConn:   conn,
 	}
 
+	// Start the CDP multiplexer — must be before any SendCDP calls
+	session.StartReader()
+
 	// Get browser targets to find the page
-	targetsResult, err := session.sendCDP("Target.getTargets", nil)
+	targetsResult, err := session.SendCDP("Target.getTargets", nil)
 	if err != nil {
 		conn.Close()
 		return ToolErrFromError("cloud_browser_open", fmt.Errorf("get targets failed: %w", err)), nil, nil
@@ -295,7 +183,7 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 	}
 
 	// Attach to the page target
-	attachResult, err := session.sendCDP("Target.attachToTarget", map[string]any{
+	attachResult, err := session.SendCDP("Target.attachToTarget", map[string]any{
 		"targetId": pageTargetID,
 		"flatten":  true,
 	})
@@ -308,93 +196,63 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 	}
 	json.Unmarshal(attachResult, &attach)
 	session.SessionID = attach.SessionId
-	session.cdpPageSessionID = attach.SessionId
+	session.CdpPageSessionID = attach.SessionId
 	p.logger.Printf("cloud_browser_open: attached to page target %s, sessionId=%s", pageTargetID, attach.SessionId)
 
+	// Enable WebMCP + Accessibility before navigation so the domain is active
+	// when page JavaScript registers tools via navigator.modelContext.registerTool().
+	// Register persistent event handlers to store/remove tools on the PageState.
+	session.OnEvent("WebMCP.toolsAdded", func(method string, params json.RawMessage) bool {
+		var event struct {
+			Tools []browser.WebMCPToolInfo `json:"tools"`
+		}
+		if json.Unmarshal(params, &event) == nil {
+			session.Page.AddWebMCPTools(event.Tools)
+			p.logger.Printf("[WebMCP] toolsAdded: %d tools", len(event.Tools))
+		}
+		return true // keep listening
+	})
+	session.OnEvent("WebMCP.toolsRemoved", func(method string, params json.RawMessage) bool {
+		var event struct {
+			Tools []struct{ Name string `json:"name"` } `json:"tools"`
+		}
+		if json.Unmarshal(params, &event) == nil {
+			names := make([]string, len(event.Tools))
+			for i, t := range event.Tools {
+				names[i] = t.Name
+			}
+			session.Page.RemoveWebMCPTools(names)
+			p.logger.Printf("[WebMCP] toolsRemoved: %d tools", len(names))
+		}
+		return true
+	})
+	session.SendCDP("WebMCP.enable", nil)
+	session.SendCDP("Accessibility.enable", nil)
+
 	// Navigate to the target URL
-	_, err = session.sendCDP("Page.navigate", map[string]any{
+	_, err = session.SendCDP("Page.navigate", map[string]any{
 		"url": input.URL,
 	})
 	if err != nil {
 		p.logger.Printf("cloud_browser_open: navigate failed (non-fatal): %v", err)
 	}
-	// Wait for page load
-	time.Sleep(3 * time.Second)
 
-	// Enable WebMCP to discover Scrapium's Antibot tools
-	_, toolEvents, err := session.sendCDPCollectEvents("WebMCP.enable", nil, "WebMCP.toolsAdded")
-	if err != nil {
-		p.logger.Printf("cloud_browser_open: WebMCP.enable failed: %v", err)
-	}
+	// Wait for page load + JS execution
+	time.Sleep(2 * time.Second)
 
-	// Parse discovered tools from toolsAdded events
-	var discoveredTools []mcpToolInfo
-	shortID := pageTargetID
-	if len(shortID) > 8 {
-		shortID = shortID[:8]
-	}
-	for _, eventParams := range toolEvents {
-		var event struct {
-			Tools []struct {
-				Name        string          `json:"name"`
-				Description string          `json:"description"`
-				InputSchema json.RawMessage `json:"inputSchema"`
-			} `json:"tools"`
+	// Store session — static tools (click, fill, etc.) use browser.FindSession("") to locate it
+	browser.Store.Store(pageTargetID, session)
+	p.logger.Printf("cloud_browser_open: session %s stored for %s", pageTargetID, input.URL)
+
+	// Auto-cleanup: close the session when the timeout expires.
+	cleanupTimer := time.AfterFunc(time.Until(session.ExpiresAt), func() {
+		if val, ok := browser.Store.Load(pageTargetID); ok {
+			s := val.(*browser.Session)
+			s.Close()
+			p.logger.Printf("Auto-closed expired browser session %s", pageTargetID)
 		}
-		json.Unmarshal(eventParams, &event)
-		for _, t := range event.Tools {
-			namespacedName := fmt.Sprintf("webmcp_%s_%s", shortID, t.Name)
-			discoveredTools = append(discoveredTools, mcpToolInfo{
-				OriginalName:   t.Name,
-				NamespacedName: namespacedName,
-				Description:    t.Description,
-				InputSchema:    t.InputSchema,
-			})
-		}
-	}
-
-	// Register discovered WebMCP tools + CDP DevTools tools on the MCP server
-	if p.MCPServer != nil {
-		var allToolNames []string
-
-		// 1. Register WebMCP page tools (from Scrapium Antibot)
-		for _, t := range discoveredTools {
-			tool := &mcp.Tool{
-				Name:        t.NamespacedName,
-				Title:       fmt.Sprintf("[Browser] %s", t.OriginalName),
-				Description: t.Description,
-				Annotations: &mcp.ToolAnnotations{
-					Title:           fmt.Sprintf("[Browser] %s", t.OriginalName),
-					DestructiveHint: &falseBool,
-					OpenWorldHint:   &trueBool,
-				},
-				Meta: standardPermissionsMeta,
-			}
-			if len(t.InputSchema) > 0 {
-				var schema any
-				if err := json.Unmarshal(t.InputSchema, &schema); err == nil {
-					tool.InputSchema = schema
-				}
-			}
-			if tool.InputSchema == nil {
-				tool.InputSchema = map[string]any{"type": "object", "properties": map[string]any{}}
-			}
-			origName := t.OriginalName
-			sid := pageTargetID
-			p.MCPServer.AddTool(tool, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				return proxyWebMCPToolCallCDP(p, sid, origName, req.Params.Arguments)
-			})
-			allToolNames = append(allToolNames, t.NamespacedName)
-		}
-
-		// 2. Register CDP DevTools tools (screenshot, evaluate_script, snapshot, get_page_content)
-		registerCDPTools(p, pageTargetID, shortID, &allToolNames)
-
-		session.ToolNames = allToolNames
-	}
-
-	p.logger.Printf("cloud_browser_open: %d WebMCP + CDP tools registered for %s", len(session.ToolNames), input.URL)
-	browserSessionStore.Store(pageTargetID, session)
+	})
+	session.CancelCleanup = func() { cleanupTimer.Stop() }
 
 	// Build response
 	response := map[string]any{
@@ -403,21 +261,22 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 		"url":        input.URL,
 		"mode":       "direct",
 	}
-	if len(discoveredTools) > 0 {
-		toolList := make([]map[string]string, len(discoveredTools))
-		for i, t := range discoveredTools {
-			toolList[i] = map[string]string{
-				"tool_name":   t.NamespacedName,
-				"description": t.Description,
-			}
-		}
-		response["browser_tools"] = toolList
-		response["instructions"] = fmt.Sprintf("Browser connected to %s with %d tools available. Call them directly by name.", input.URL, len(discoveredTools))
-	}
+	response["instructions"] = fmt.Sprintf(
+		"[BROWSER MODE ACTIVE on %s] "+
+			"FIRST: check the page snapshot below — if the page title or content looks like a challenge/captcha/block page (e.g. 'Just a moment', 'Verify you are human', 'Access denied'), close this session with cloud_browser_close and retry with cloud_browser_open(url, unblock=true). "+
+			"Use click/fill/type_text/hover/press_key/scroll for interaction. "+
+			"Use list_webmcp_tools to discover page-specific actions, then call_webmcp_tool to execute them. "+
+			"Use take_snapshot for page content, take_screenshot for visual capture. "+
+			"NEVER use standalone screenshot/web_scrape/web_get_page during browser session. "+
+			"KEEP THE SESSION OPEN across follow-up turns — the user may ask more questions about this page. "+
+			"Only call cloud_browser_close when the user explicitly asks to close, navigates to an unrelated site, or says they are done.",
+		input.URL)
 
+	// Refresh page state and include snapshot in response
+	session.Page.Refresh(session)
 	b, _ := json.MarshalIndent(response, "", "  ")
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+		Content: []mcp.Content{&mcp.TextContent{Text: string(b) + "\n\n" + session.Page.Snapshot()}},
 	}, nil, nil
 }
 
@@ -433,18 +292,17 @@ func (p *ScrapflyToolProvider) CloudBrowserClose(
 
 	p.logger.Printf("Closing cloud browser session %s", input.SessionID)
 
-	// Stop the browser session
-	if err := client.CloudBrowserSessionStop(input.SessionID); err != nil {
-		return ToolErrFromError("cloud_browser_close", err), nil, nil
+	// Close WebSocket and clean up session
+	if val, ok := browser.Store.Load(input.SessionID); ok {
+		session := val.(*browser.Session)
+		session.SendCDP("WebMCP.disable", nil)
+		session.Close() // closes WebSocket, removes from Store, cancels cleanup timer
+		p.logger.Printf("Closed session %s", input.SessionID)
 	}
 
-	// Clean up dynamic tools
-	if val, ok := browserSessionStore.LoadAndDelete(input.SessionID); ok {
-		session := val.(*browserSession)
-		if p.MCPServer != nil && len(session.ToolNames) > 0 {
-			p.MCPServer.RemoveTools(session.ToolNames...)
-			p.logger.Printf("Removed %d WebMCP tools for session %s", len(session.ToolNames), input.SessionID)
-		}
+	// Best-effort: also call the API stop endpoint
+	if err := client.CloudBrowserSessionStop(input.SessionID); err != nil {
+		p.logger.Printf("cloud_browser_close: API stop call failed (non-fatal, WebSocket already closed): %v", err)
 	}
 
 	return &mcp.CallToolResult{
@@ -457,14 +315,13 @@ func (p *ScrapflyToolProvider) CloudBrowserSessions(
 	req *mcp.CallToolRequest,
 	input struct{},
 ) (*mcp.CallToolResult, any, error) {
-	// List local active CDP sessions
 	var sessions []map[string]any
-	browserSessionStore.Range(func(key, value any) bool {
-		s := value.(*browserSession)
+	browser.Store.Range(func(key, value any) bool {
+		s := value.(*browser.Session)
 		sessions = append(sessions, map[string]any{
 			"session_id": key,
 			"ws_url":     s.WSURL,
-			"tools":      len(s.ToolNames),
+			"page_url":   s.Page.URL,
 			"expires_at": s.ExpiresAt.Format(time.RFC3339),
 			"active":     time.Now().Before(s.ExpiresAt),
 		})
@@ -481,29 +338,44 @@ func (p *ScrapflyToolProvider) CloudBrowserScreenshot(
 	req *mcp.CallToolRequest,
 	input CloudBrowserScreenshotInput,
 ) (*mcp.CallToolResult, any, error) {
-	// Find the session
-	var session *browserSession
-	if input.SessionID != "" {
-		val, ok := browserSessionStore.Load(input.SessionID)
-		if !ok {
-			return ToolErrf("cloud_browser_screenshot: session %s not found", input.SessionID), nil, nil
-		}
-		session = val.(*browserSession)
-	} else {
-		// Use the most recent session
-		browserSessionStore.Range(func(key, value any) bool {
-			session = value.(*browserSession)
-			return false // stop at first
-		})
-		if session == nil {
-			return ToolErrf("cloud_browser_screenshot: no active browser session"), nil, nil
-		}
+	session, err := browser.FindSession(input.SessionID)
+	if err != nil {
+		return ToolErrf("cloud_browser_screenshot: %v", err), nil, nil
 	}
 
 	// CDP Page.captureScreenshot
-	result, err := session.sendCDP("Page.captureScreenshot", map[string]any{
-		"format": "png",
-	})
+	params := map[string]any{
+		"format":           "png",
+		"optimizeForSpeed": true,
+	}
+	if input.FullPage {
+		params["captureBeyondViewport"] = true
+	}
+
+	// Element screenshot: get bounding box via JS, then set clip
+	if input.Selector != "" {
+		boxResult, boxErr := session.SendCDP("Runtime.evaluate", map[string]any{
+			"expression": fmt.Sprintf(`JSON.stringify((function() {
+				var el = document.querySelector(%q);
+				if (!el) return null;
+				var r = el.getBoundingClientRect();
+				return {x: r.x, y: r.y, width: r.width, height: r.height};
+			})())`, input.Selector),
+			"returnByValue": true,
+		})
+		if boxErr == nil {
+			var evalRes struct{ Result struct{ Value string `json:"value"` } `json:"result"` }
+			json.Unmarshal(boxResult, &evalRes)
+			var box struct{ X, Y, Width, Height float64 }
+			if json.Unmarshal([]byte(evalRes.Result.Value), &box) == nil && box.Width > 0 {
+				params["clip"] = map[string]any{
+					"x": box.X, "y": box.Y, "width": box.Width, "height": box.Height, "scale": 1,
+				}
+			}
+		}
+	}
+
+	result, err := session.SendCDP("Page.captureScreenshot", params)
 	if err != nil {
 		return ToolErrf("cloud_browser_screenshot: %v", err), nil, nil
 	}
@@ -517,12 +389,129 @@ func (p *ScrapflyToolProvider) CloudBrowserScreenshot(
 		return ToolErrf("cloud_browser_screenshot: empty screenshot data"), nil, nil
 	}
 
-	// CDP returns base64 string, ImageContent.Data is []byte (base64-encoded)
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.ImageContent{
 			Data:     []byte(screenshot.Data),
 			MIMEType: "image/png",
 		}},
+	}, nil, nil
+}
+
+func (p *ScrapflyToolProvider) CloudBrowserEval(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input CloudBrowserEvalInput,
+) (*mcp.CallToolResult, any, error) {
+	session, err := browser.FindSession(input.SessionID)
+	if err != nil {
+		return ToolErrf("cloud_browser_eval: %v", err), nil, nil
+	}
+	result, err := session.SendCDP("Runtime.evaluate", map[string]any{
+		"expression":    input.Expression,
+		"returnByValue": true,
+	})
+	if err != nil {
+		return ToolErrf("cloud_browser_eval: %v", err), nil, nil
+	}
+	var evalResult struct {
+		Result struct {
+			Type  string `json:"type"`
+			Value any    `json:"value"`
+		} `json:"result"`
+		ExceptionDetails *struct {
+			Text string `json:"text"`
+		} `json:"exceptionDetails"`
+	}
+	json.Unmarshal(result, &evalResult)
+	if evalResult.ExceptionDetails != nil {
+		return ToolErrf("cloud_browser_eval error: %s", evalResult.ExceptionDetails.Text), nil, nil
+	}
+	b, _ := json.MarshalIndent(evalResult.Result.Value, "", "  ")
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+	}, nil, nil
+}
+
+func (p *ScrapflyToolProvider) CloudBrowserSnapshot(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input CloudBrowserSnapshotInput,
+) (*mcp.CallToolResult, any, error) {
+	session, err := browser.FindSession(input.SessionID)
+	if err != nil {
+		return ToolErrf("cloud_browser_snapshot: %v", err), nil, nil
+	}
+	session.Page.Refresh(session)
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: session.Page.Snapshot()}},
+	}, nil, nil
+}
+
+func (p *ScrapflyToolProvider) CloudBrowserPerformance(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input CloudBrowserPerformanceInput,
+) (*mcp.CallToolResult, any, error) {
+	session, err := browser.FindSession(input.SessionID)
+	if err != nil {
+		return ToolErrf("cloud_browser_performance: %v", err), nil, nil
+	}
+	report, err := browser.CollectPSI(session, browser.PSIOptions{
+		Preset:    browser.Preset(input.Preset),
+		TimeoutMs: input.TimeoutMs,
+	})
+	if err != nil {
+		return ToolErrf("cloud_browser_performance: %v", err), nil, nil
+	}
+	p.logger.Printf("[PSI] %s — %s", session.SessionID, browser.SummarizeReport(report))
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: browser.FormatReport(report)}},
+	}, nil, nil
+}
+
+func (p *ScrapflyToolProvider) CloudBrowserDownloads(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input CloudBrowserDownloadsInput,
+) (*mcp.CallToolResult, any, error) {
+	session, err := browser.FindSession(input.SessionID)
+	if err != nil {
+		return ToolErrf("cloud_browser_downloads: %v", err), nil, nil
+	}
+
+	if input.Filename != "" {
+		// Retrieve a specific file
+		data, err := session.GetDownload(input.Filename)
+		if err != nil {
+			return ToolErrf("cloud_browser_downloads: %v", err), nil, nil
+		}
+		// Return as a resource/blob for the client to download
+		result := map[string]any{
+			"filename": input.Filename,
+			"data":     data,
+			"encoding": "base64",
+		}
+		b, _ := json.MarshalIndent(result, "", "  ")
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+		}, nil, nil
+	}
+
+	// List all downloads
+	downloads, err := session.ListDownloads()
+	if err != nil {
+		return ToolErrf("cloud_browser_downloads: %v", err), nil, nil
+	}
+	if len(downloads) == 0 {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "No files downloaded yet."}},
+		}, nil, nil
+	}
+
+	result := map[string]any{"downloads": downloads}
+	b, _ := json.MarshalIndent(result, "", "  ")
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
 	}, nil, nil
 }
 
@@ -536,530 +525,241 @@ func (p *ScrapflyToolProvider) CloudBrowserNavigate(
 		return ToolErrFromError("cloud_browser_navigate", err), nil, nil
 	}
 
-	val, ok := browserSessionStore.Load(input.SessionID)
-	if !ok {
-		return ToolErrf("cloud_browser_navigate: session %s not found", input.SessionID), nil, nil
-	}
-	session := val.(*browserSession)
-
-	if session.MCPEndpoint == "" {
-		return ToolErrf("cloud_browser_navigate: session %s has no MCP endpoint", input.SessionID), nil, nil
+	session, err2 := browser.FindSession(input.SessionID)
+	if err2 != nil {
+		return ToolErrf("cloud_browser_navigate: %v", err2), nil, nil
 	}
 
 	p.logger.Printf("Navigating session %s to %s", input.SessionID, input.URL)
 
-	// Navigate via Chrome's MCP endpoint (call the built-in navigate tool if available)
-	// Fall back to returning the ws_url for CDP-based navigation
+	// Navigate via CDP
+	_, err2 = session.SendCDP("Page.navigate", map[string]any{"url": input.URL})
+	if err2 != nil {
+		return ToolErrf("cloud_browser_navigate: navigation failed: %v", err2), nil, nil
+	}
+
+	// Wait for page load + JS execution
+	time.Sleep(2 * time.Second)
+
+	// Clear old page tools + re-enable WebMCP on the new page
+	// (toolsAdded event handler from cloud_browser_open will repopulate)
+	session.Page.ClearWebMCPTools()
+	session.SendCDP("WebMCP.disable", nil)
+	session.SendCDP("WebMCP.enable", nil)
+
+	// Refresh page state and include snapshot
+	session.Page.Refresh(session)
 	navigateResult := map[string]any{
 		"session_id": input.SessionID,
 		"url":        input.URL,
-		"ws_url":     session.WSURL,
+		"status":     "navigated",
 	}
-
-	// Remove old WebMCP tools
-	if p.MCPServer != nil && len(session.ToolNames) > 0 {
-		p.MCPServer.RemoveTools(session.ToolNames...)
-	}
-
-	// Re-discover tools on the new page (with a short delay for page load)
-	time.Sleep(2 * time.Second)
-	discoveredTools := discoverWebMCPTools(p, session.MCPEndpoint, session.SessionID)
-	session.ToolNames = make([]string, len(discoveredTools))
-	for i, t := range discoveredTools {
-		session.ToolNames[i] = t.NamespacedName
-	}
-	browserSessionStore.Store(input.SessionID, session)
-
-	if len(discoveredTools) > 0 {
-		toolList := make([]map[string]string, len(discoveredTools))
-		for i, t := range discoveredTools {
-			toolList[i] = map[string]string{
-				"tool_name":   t.NamespacedName,
-				"description": t.Description,
-			}
-		}
-		navigateResult["webmcp_tools"] = toolList
-	}
-
+	navigateResult["instructions"] = "Use list_webmcp_tools to discover page-specific actions on the new page."
 	b, _ := json.MarshalIndent(navigateResult, "", "  ")
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+		Content: []mcp.Content{&mcp.TextContent{Text: string(b) + "\n\n" + session.Page.Snapshot()}},
 	}, nil, nil
 }
 
-// ── WebMCP tool discovery + dynamic registration ────────────────────────────
-
-type mcpToolInfo struct {
-	OriginalName   string
-	NamespacedName string
-	Description    string
-	InputSchema    json.RawMessage
-}
-
-// discoverWebMCPTools calls Chrome's MCP endpoint to list available tools,
-// then registers each as a dynamic tool on the Scrapfly MCP server.
-func discoverWebMCPTools(p *ScrapflyToolProvider, mcpEndpoint, sessionID string) []mcpToolInfo {
-	if mcpEndpoint == "" || p.MCPServer == nil {
-		return nil
-	}
-
-	// Build MCP tools/list JSON-RPC request
-	rpcReq := map[string]any{
-		"jsonrpc": "2.0",
-		"id":      1,
-		"method":  "tools/list",
-	}
-	body, _ := json.Marshal(rpcReq)
-
-	httpReq, err := http.NewRequest(http.MethodPost, mcpEndpoint, bytes.NewReader(body))
+func (p *ScrapflyToolProvider) BrowserUnblock(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input BrowserUnblockInput,
+) (*mcp.CallToolResult, any, error) {
+	client, err := p.ClientGetter(p, ctx)
 	if err != nil {
-		p.logger.Printf("Failed to create MCP tools/list request: %v", err)
-		return nil
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		p.logger.Printf("MCP tools/list request failed: %v", err)
-		return nil
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		p.logger.Printf("Failed to read MCP tools/list response: %v", err)
-		return nil
+		return ToolErrFromError("browser_unblock", err), nil, nil
 	}
 
-	// Parse JSON-RPC response
-	var rpcResp struct {
-		Result struct {
-			Tools []struct {
-				Name        string          `json:"name"`
-				Description string          `json:"description"`
-				InputSchema json.RawMessage `json:"inputSchema"`
-			} `json:"tools"`
-		} `json:"result"`
-		Error *struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(respBody, &rpcResp); err != nil {
-		p.logger.Printf("Failed to parse MCP tools/list response: %v", err)
-		return nil
-	}
-	if rpcResp.Error != nil {
-		p.logger.Printf("MCP tools/list returned error: %s", rpcResp.Error.Message)
-		return nil
+	timeout := input.Timeout
+	if timeout == 0 {
+		timeout = 900
 	}
 
-	// Generate short session prefix (first 8 chars)
-	shortID := sessionID
-	if len(shortID) > 8 {
-		shortID = shortID[:8]
-	}
-	shortID = strings.ReplaceAll(shortID, "-", "")
+	p.logger.Printf("[browser_unblock] START url=%s country=%s timeout=%d", input.URL, input.Country, timeout)
 
-	var tools []mcpToolInfo
-	for _, t := range rpcResp.Result.Tools {
-		namespacedName := fmt.Sprintf("webmcp_%s_%s", shortID, t.Name)
-
-		info := mcpToolInfo{
-			OriginalName:   t.Name,
-			NamespacedName: namespacedName,
-			Description:    t.Description,
-			InputSchema:    t.InputSchema,
+	// Step 0: Close any existing browser session AND release from pool.
+	// Must call API stop endpoint to free the pool slot, not just close WebSocket.
+	sessionCount := 0
+	browser.Store.Range(func(key, value any) bool {
+		s := value.(*browser.Session)
+		sid := key.(string)
+		p.logger.Printf("[browser_unblock] Step 0: closing + releasing session %s", sid)
+		s.Close()
+		if err := client.CloudBrowserSessionStop(sid); err != nil {
+			p.logger.Printf("[browser_unblock] Step 0: stop API call for %s failed (non-fatal): %v", sid, err)
+		} else {
+			p.logger.Printf("[browser_unblock] Step 0: session %s released from pool", sid)
 		}
-		tools = append(tools, info)
+		sessionCount++
+		return true
+	})
+	p.logger.Printf("[browser_unblock] Step 0: closed %d existing sessions", sessionCount)
+	// Give the pool a moment to reclaim the slot
+	time.Sleep(1 * time.Second)
 
-		// Build the MCP tool definition
-		mcpTool := &mcp.Tool{
-			Name:        namespacedName,
-			Title:       fmt.Sprintf("[WebMCP] %s", t.Name),
-			Description: fmt.Sprintf("WebMCP page tool from browser session %s. %s", shortID, t.Description),
-			Annotations: &mcp.ToolAnnotations{
-				Title:           fmt.Sprintf("[WebMCP] %s", t.Name),
-				DestructiveHint: &falseBool,
-				IdempotentHint:  false,
-				OpenWorldHint:   &trueBool,
-				ReadOnlyHint:    false,
-			},
-			Meta: standardPermissionsMeta,
+	// Step 1: Call unblock API
+	p.logger.Printf("[browser_unblock] Step 1: calling unblock API for %s", input.URL)
+	result, err := client.CloudBrowserUnblock(scrapfly.UnblockConfig{
+		URL:            input.URL,
+		Country:        input.Country,
+		BrowserTimeout: timeout,
+		EnableMCP:      true,
+	})
+	if err != nil {
+		p.logger.Printf("[browser_unblock] Step 1 FAILED: %v", err)
+		return ToolErrFromError("browser_unblock", err), nil, nil
+	}
+	p.logger.Printf("[browser_unblock] Step 1 OK: session_id=%s ws_url=%s", result.SessionID, result.WSURL)
+
+	// Step 2: Connect to the unblock browser via internal service (bypass Traefik).
+	// Use the same internal cloud-browser service as cloud_browser_open.
+	browserConfig := &scrapfly.CloudBrowserConfig{
+		Session: result.SessionID,
+		Timeout: timeout,
+	}
+	internalWSURL := client.CloudBrowser(browserConfig)
+	p.logger.Printf("[browser_unblock] Step 2: connecting CDP WebSocket to %s (internal, bypassing proxy)", internalWSURL)
+	dialer := websocket.Dialer{
+		TLSClientConfig:  &tls.Config{InsecureSkipVerify: true},
+		HandshakeTimeout: 15 * time.Second,
+	}
+	conn, _, err := dialer.Dial(internalWSURL, nil)
+	if err != nil {
+		p.logger.Printf("[browser_unblock] Step 2 FAILED: %v", err)
+		return ToolErrFromError("browser_unblock", fmt.Errorf("browser connection failed: %w", err)), nil, nil
+	}
+	p.logger.Printf("[browser_unblock] Step 2 OK: WebSocket connected (local=%s remote=%s)", conn.LocalAddr(), conn.RemoteAddr())
+
+	session := &browser.Session{
+		SessionID: result.SessionID,
+		WSURL:     result.WSURL,
+		ExpiresAt: time.Now().Add(time.Duration(timeout) * time.Second),
+		CdpConn:   conn,
+	}
+	session.StartReader()
+
+	// Step 3: Attach to page target
+	p.logger.Printf("[browser_unblock] Step 3: finding page target")
+	targetsResult, err := session.SendCDP("Target.getTargets", nil)
+	if err != nil {
+		p.logger.Printf("[browser_unblock] Step 3 FAILED: getTargets: %v", err)
+		conn.Close()
+		return ToolErrFromError("browser_unblock", fmt.Errorf("get targets failed: %w", err)), nil, nil
+	}
+	var targets struct {
+		TargetInfos []struct {
+			TargetID string `json:"targetId"`
+			Type     string `json:"type"`
+		} `json:"targetInfos"`
+	}
+	json.Unmarshal(targetsResult, &targets)
+	var pageTargetID string
+	for _, t := range targets.TargetInfos {
+		if t.Type == "page" {
+			pageTargetID = t.TargetID
+			break
 		}
+	}
+	if pageTargetID == "" {
+		p.logger.Printf("[browser_unblock] Step 3 FAILED: no page target found in %d targets", len(targets.TargetInfos))
+		conn.Close()
+		return ToolErrFromError("browser_unblock", fmt.Errorf("no page target found")), nil, nil
+	}
+	p.logger.Printf("[browser_unblock] Step 3 OK: page target %s", pageTargetID)
 
-		// Parse inputSchema into the tool if available
-		if len(t.InputSchema) > 0 {
-			var schema any
-			if err := json.Unmarshal(t.InputSchema, &schema); err == nil {
-				mcpTool.InputSchema = schema
+	attachResult, err := session.SendCDP("Target.attachToTarget", map[string]any{
+		"targetId": pageTargetID,
+		"flatten":  true,
+	})
+	if err != nil {
+		conn.Close()
+		return ToolErrFromError("browser_unblock", fmt.Errorf("attach failed: %w", err)), nil, nil
+	}
+	var attach struct {
+		SessionId string `json:"sessionId"`
+	}
+	json.Unmarshal(attachResult, &attach)
+	session.CdpPageSessionID = attach.SessionId
+	p.logger.Printf("[browser_unblock] Step 3 OK: attached sessionId=%s", attach.SessionId)
+
+	// Step 4: Enable WebMCP + Accessibility
+	p.logger.Printf("[browser_unblock] Step 4: enabling WebMCP + Accessibility")
+	session.OnEvent("WebMCP.toolsAdded", func(method string, params json.RawMessage) bool {
+		var event struct {
+			Tools []browser.WebMCPToolInfo `json:"tools"`
+		}
+		if json.Unmarshal(params, &event) == nil {
+			session.Page.AddWebMCPTools(event.Tools)
+			p.logger.Printf("[WebMCP] toolsAdded: %d tools", len(event.Tools))
+		}
+		return true
+	})
+	session.OnEvent("WebMCP.toolsRemoved", func(method string, params json.RawMessage) bool {
+		var event struct {
+			Tools []struct{ Name string `json:"name"` } `json:"tools"`
+		}
+		if json.Unmarshal(params, &event) == nil {
+			names := make([]string, len(event.Tools))
+			for i, t := range event.Tools {
+				names[i] = t.Name
 			}
+			session.Page.RemoveWebMCPTools(names)
 		}
-
-		// Create a proxy handler closure for this tool
-		originalName := t.Name
-		sid := sessionID
-		handler := func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return proxyWebMCPToolCall(p, sid, originalName, req.Params.Arguments)
-		}
-
-		p.MCPServer.AddTool(mcpTool, handler)
-		p.logger.Printf("Registered WebMCP tool: %s (proxies to %s on session %s)", namespacedName, originalName, shortID)
-	}
-
-	return tools
-}
-
-// registerCDPTools adds Chrome DevTools Protocol tools (screenshot, JS eval, snapshot, etc.)
-// that are NOT exposed via WebMCP but are essential for browser automation.
-func registerCDPTools(p *ScrapflyToolProvider, sessionID, shortID string, toolNames *[]string) {
-	prefix := fmt.Sprintf("browser_%s", shortID)
-
-	emptySchema := map[string]any{"type": "object", "properties": map[string]any{}}
-
-	// take_screenshot — CDP Page.captureScreenshot
-	screenshotName := prefix + "_take_screenshot"
-	p.MCPServer.AddTool(&mcp.Tool{
-		Name:        screenshotName,
-		Title:       "[Browser] Take Screenshot",
-		Description: "Take a screenshot of the current page in the browser. Returns a PNG image.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
-		InputSchema: emptySchema,
-		Meta:        standardPermissionsMeta,
-	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		val, ok := browserSessionStore.Load(sessionID)
-		if !ok {
-			return ToolErrf("take_screenshot: session not found"), nil
-		}
-		s := val.(*browserSession)
-		result, err := s.sendCDP("Page.captureScreenshot", map[string]any{"format": "png"})
-		if err != nil {
-			return ToolErrf("take_screenshot: %v", err), nil
-		}
-		var ss struct{ Data string `json:"data"` }
-		json.Unmarshal(result, &ss)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.ImageContent{Data: []byte(ss.Data), MIMEType: "image/png"}},
-		}, nil
+		return true
 	})
-	*toolNames = append(*toolNames, screenshotName)
+	session.SendCDP("WebMCP.enable", nil)
+	session.SendCDP("Accessibility.enable", nil)
 
-	// evaluate_script — CDP Runtime.evaluate
-	evalName := prefix + "_evaluate_script"
-	p.MCPServer.AddTool(&mcp.Tool{
-		Name:        evalName,
-		Title:       "[Browser] Evaluate JavaScript",
-		Description: "Execute JavaScript code in the browser page and return the result. Use for reading page content, DOM queries, or any JS logic.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false},
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"expression": map[string]any{
-					"type":        "string",
-					"description": "JavaScript expression to evaluate in the page context.",
-				},
-			},
-			"required": []string{"expression"},
-		},
-		Meta: standardPermissionsMeta,
-	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		val, ok := browserSessionStore.Load(sessionID)
-		if !ok {
-			return ToolErrf("evaluate_script: session not found"), nil
-		}
-		s := val.(*browserSession)
-		var args struct {
-			Expression string `json:"expression"`
-		}
-		json.Unmarshal(req.Params.Arguments, &args)
-		if args.Expression == "" {
-			return ToolErrf("evaluate_script: expression is required"), nil
-		}
-		result, err := s.sendCDP("Runtime.evaluate", map[string]any{
-			"expression":    args.Expression,
-			"returnByValue": true,
-		})
-		if err != nil {
-			return ToolErrf("evaluate_script: %v", err), nil
-		}
-		var evalResult struct {
-			Result struct {
-				Type  string `json:"type"`
-				Value any    `json:"value"`
-			} `json:"result"`
-			ExceptionDetails *struct {
-				Text string `json:"text"`
-			} `json:"exceptionDetails"`
-		}
-		json.Unmarshal(result, &evalResult)
-		if evalResult.ExceptionDetails != nil {
-			return ToolErrf("evaluate_script error: %s", evalResult.ExceptionDetails.Text), nil
-		}
-		b, _ := json.MarshalIndent(evalResult.Result.Value, "", "  ")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
-		}, nil
-	})
-	*toolNames = append(*toolNames, evalName)
-
-	// take_snapshot — get page text content via DOM snapshot
-	snapName := prefix + "_take_snapshot"
-	p.MCPServer.AddTool(&mcp.Tool{
-		Name:        snapName,
-		Title:       "[Browser] Page Content Snapshot",
-		Description: "Get the text content of the current page. Useful for reading page content without a screenshot. Returns the document title and body text.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
-		InputSchema: emptySchema,
-		Meta:        standardPermissionsMeta,
-	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		val, ok := browserSessionStore.Load(sessionID)
-		if !ok {
-			return ToolErrf("take_snapshot: session not found"), nil
-		}
-		s := val.(*browserSession)
-		result, err := s.sendCDP("Runtime.evaluate", map[string]any{
-			"expression":    `JSON.stringify({title: document.title, url: location.href, text: document.body?.innerText?.substring(0, 50000) || ''})`,
-			"returnByValue": true,
-		})
-		if err != nil {
-			return ToolErrf("take_snapshot: %v", err), nil
-		}
-		var evalResult struct {
-			Result struct {
-				Value string `json:"value"`
-			} `json:"result"`
-		}
-		json.Unmarshal(result, &evalResult)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: evalResult.Result.Value}},
-		}, nil
-	})
-	*toolNames = append(*toolNames, snapName)
-
-	// get_page_url — quick way to check current URL
-	urlName := prefix + "_get_page_url"
-	p.MCPServer.AddTool(&mcp.Tool{
-		Name:        urlName,
-		Title:       "[Browser] Get Current URL",
-		Description: "Get the current page URL and title from the browser.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
-		InputSchema: emptySchema,
-		Meta:        standardPermissionsMeta,
-	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		val, ok := browserSessionStore.Load(sessionID)
-		if !ok {
-			return ToolErrf("get_page_url: session not found"), nil
-		}
-		s := val.(*browserSession)
-		result, err := s.sendCDP("Runtime.evaluate", map[string]any{
-			"expression":    `JSON.stringify({url: location.href, title: document.title})`,
-			"returnByValue": true,
-		})
-		if err != nil {
-			return ToolErrf("get_page_url: %v", err), nil
-		}
-		var evalResult struct {
-			Result struct{ Value string `json:"value"` } `json:"result"`
-		}
-		json.Unmarshal(result, &evalResult)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: evalResult.Result.Value}},
-		}, nil
-	})
-	*toolNames = append(*toolNames, urlName)
-
-	// get_performance_metrics — CDP Performance.getMetrics + Navigation Timing
-	perfName := prefix + "_get_performance_metrics"
-	p.MCPServer.AddTool(&mcp.Tool{
-		Name:        perfName,
-		Title:       "[Browser] Get Performance Metrics",
-		Description: "Get detailed performance metrics of the current page including load times, DOM size, JS heap, layout count, and Web Vitals. Use this to analyze page performance.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
-		InputSchema: emptySchema,
-		Meta:        standardPermissionsMeta,
-	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		val, ok := browserSessionStore.Load(sessionID)
-		if !ok {
-			return ToolErrf("get_performance_metrics: session not found"), nil
-		}
-		s := val.(*browserSession)
-
-		// Enable and get CDP Performance metrics
-		s.sendCDP("Performance.enable", nil)
-		cdpMetrics, err := s.sendCDP("Performance.getMetrics", nil)
-		if err != nil {
-			return ToolErrf("get_performance_metrics CDP: %v", err), nil
-		}
-
-		// Get Navigation Timing + Web Vitals via JS
-		navTiming, _ := s.sendCDP("Runtime.evaluate", map[string]any{
-			"expression": `JSON.stringify({
-				navigation: (() => {
-					const t = performance.getEntriesByType('navigation')[0];
-					if (!t) return null;
-					return {
-						url: t.name,
-						duration_ms: Math.round(t.duration),
-						dns_ms: Math.round(t.domainLookupEnd - t.domainLookupStart),
-						connect_ms: Math.round(t.connectEnd - t.connectStart),
-						ttfb_ms: Math.round(t.responseStart - t.requestStart),
-						download_ms: Math.round(t.responseEnd - t.responseStart),
-						dom_interactive_ms: Math.round(t.domInteractive - t.startTime),
-						dom_complete_ms: Math.round(t.domComplete - t.startTime),
-						load_event_ms: Math.round(t.loadEventEnd - t.startTime),
-						transfer_size_kb: Math.round(t.transferSize / 1024),
-					};
-				})(),
-				resources: {
-					count: performance.getEntriesByType('resource').length,
-					total_transfer_kb: Math.round(performance.getEntriesByType('resource').reduce((s,r) => s + (r.transferSize||0), 0) / 1024),
-				},
-				paint: performance.getEntriesByType('paint').map(p => ({name: p.name, time_ms: Math.round(p.startTime)})),
-				memory: performance.memory ? {
-					used_mb: Math.round(performance.memory.usedJSHeapSize / 1048576),
-					total_mb: Math.round(performance.memory.totalJSHeapSize / 1048576),
-					limit_mb: Math.round(performance.memory.jsHeapSizeLimit / 1048576),
-				} : null,
-			})`,
-			"returnByValue": true,
-		})
-
-		// Combine CDP metrics + JS timing
-		var combined strings.Builder
-		combined.WriteString("=== CDP Performance Metrics ===\n")
-		combined.Write(cdpMetrics)
-		combined.WriteString("\n\n=== Navigation Timing & Web Vitals ===\n")
-		if navTiming != nil {
-			var evalResult struct {
-				Result struct{ Value string `json:"value"` } `json:"result"`
-			}
-			json.Unmarshal(navTiming, &evalResult)
-			// Pretty-print the JSON
-			var parsed any
-			if json.Unmarshal([]byte(evalResult.Result.Value), &parsed) == nil {
-				pretty, _ := json.MarshalIndent(parsed, "", "  ")
-				combined.Write(pretty)
-			} else {
-				combined.WriteString(evalResult.Result.Value)
-			}
-		}
-
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: combined.String()}},
-		}, nil
-	})
-	*toolNames = append(*toolNames, perfName)
-
-	p.logger.Printf("Registered %d CDP DevTools tools for session %s", 5, shortID)
-}
-
-// proxyWebMCPToolCallCDP forwards a WebMCP tool call through the CDP WebSocket connection.
-func proxyWebMCPToolCallCDP(p *ScrapflyToolProvider, sessionID, toolName string, arguments json.RawMessage) (*mcp.CallToolResult, error) {
-	val, ok := browserSessionStore.Load(sessionID)
-	if !ok {
-		return ToolErrf("browser tool %s: session %s not found or expired", toolName, sessionID), nil
-	}
-	session := val.(*browserSession)
-
-	if time.Now().After(session.ExpiresAt) {
-		browserSessionStore.Delete(sessionID)
-		return ToolErrf("browser tool %s: session %s has expired", toolName, sessionID), nil
-	}
-
-	// Build WebMCP.callTool CDP command
-	params := map[string]any{"name": toolName}
-	if len(arguments) > 0 {
-		var args any
-		json.Unmarshal(arguments, &args)
-		params["arguments"] = args
-	}
-
-	result, err := session.sendCDP("WebMCP.callTool", params)
+	// Navigate to the target URL — the browser starts on a blank tab with cookies pre-loaded
+	p.logger.Printf("[browser_unblock] Step 4: navigating to %s", input.URL)
+	_, err = session.SendCDP("Page.navigate", map[string]any{"url": input.URL})
 	if err != nil {
-		return ToolErrf("browser tool %s: %v", toolName, err), nil
+		p.logger.Printf("[browser_unblock] Step 4: navigate failed (non-fatal): %v", err)
 	}
 
-	// Parse the result
-	var callResult struct {
-		Success bool   `json:"success"`
-		Result  string `json:"result"`
-		Error   string `json:"error"`
-	}
-	json.Unmarshal(result, &callResult)
+	// Wait for page load + JS execution
+	p.logger.Printf("[browser_unblock] Step 4 OK: waiting for page load")
+	time.Sleep(2 * time.Second)
 
-	if !callResult.Success && callResult.Error != "" {
-		return ToolErrf("browser tool %s failed: %s", toolName, callResult.Error), nil
-	}
+	// Step 5: Store session + auto-cleanup
+	p.logger.Printf("[browser_unblock] Step 5: storing session %s", result.SessionID)
+	browser.Store.Store(result.SessionID, session)
+	cleanupTimer := time.AfterFunc(time.Until(session.ExpiresAt), func() {
+		if val, ok := browser.Store.Load(result.SessionID); ok {
+			s := val.(*browser.Session)
+			s.Close()
+			p.logger.Printf("Auto-closed expired browser session %s", result.SessionID)
+		}
+	})
+	session.CancelCleanup = func() { cleanupTimer.Stop() }
 
+	// Step 6: Build response with snapshot
+	p.logger.Printf("[browser_unblock] Step 6: refreshing page state and building response")
+	session.Page.Refresh(session)
+	p.logger.Printf("[browser_unblock] DONE: session=%s url=%s title=%s", result.SessionID, session.Page.URL, session.Page.Title)
+	response := map[string]any{
+		"session_id": result.SessionID,
+		"status":     "connected",
+		"url":        input.URL,
+		"mode":       "unblock",
+	}
+	response["instructions"] = fmt.Sprintf(
+		"[BROWSER MODE ACTIVE on %s — anti-bot bypassed] "+
+			"The page is already loaded — do NOT navigate to the same URL again. "+
+			"Use click/fill/type_text/hover/press_key/scroll for interaction. "+
+			"Use list_webmcp_tools to discover page-specific actions. "+
+			"Do NOT call browser_unblock or cloud_browser_open again while this session is active. "+
+			"KEEP THE SESSION OPEN across follow-up turns — the user may ask more questions about this page. "+
+			"Only call cloud_browser_close when the user explicitly asks to close, navigates to an unrelated site, or says they are done.",
+		input.URL)
+
+	b, _ := json.MarshalIndent(response, "", "  ")
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: callResult.Result}},
-	}, nil
+		Content: []mcp.Content{&mcp.TextContent{Text: string(b) + "\n\n" + session.Page.Snapshot()}},
+	}, nil, nil
 }
 
-// proxyWebMCPToolCall forwards a tool call to Chrome's MCP endpoint (HTTP).
-func proxyWebMCPToolCall(p *ScrapflyToolProvider, sessionID, toolName string, arguments json.RawMessage) (*mcp.CallToolResult, error) {
-	val, ok := browserSessionStore.Load(sessionID)
-	if !ok {
-		return ToolErrf("webmcp proxy: session %s not found or expired", sessionID), nil
-	}
-	session := val.(*browserSession)
-
-	if time.Now().After(session.ExpiresAt) {
-		browserSessionStore.Delete(sessionID)
-		return ToolErrf("webmcp proxy: session %s has expired", sessionID), nil
-	}
-
-	// Build MCP tools/call JSON-RPC request
-	rpcReq := map[string]any{
-		"jsonrpc": "2.0",
-		"id":      1,
-		"method":  "tools/call",
-		"params": map[string]any{
-			"name":      toolName,
-			"arguments": arguments,
-		},
-	}
-	body, _ := json.Marshal(rpcReq)
-
-	httpReq, err := http.NewRequest(http.MethodPost, session.MCPEndpoint, bytes.NewReader(body))
-	if err != nil {
-		return ToolErrf("webmcp proxy: failed to create request: %v", err), nil
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		return ToolErrf("webmcp proxy: request failed: %v", err), nil
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return ToolErrf("webmcp proxy: failed to read response: %v", err), nil
-	}
-
-	// Parse JSON-RPC response and extract the result
-	var rpcResp struct {
-		Result *mcp.CallToolResult `json:"result"`
-		Error  *struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(respBody, &rpcResp); err != nil {
-		// Return raw response as text if we can't parse it
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: string(respBody)}},
-		}, nil
-	}
-	if rpcResp.Error != nil {
-		return ToolErrf("webmcp %s: %s", toolName, rpcResp.Error.Message), nil
-	}
-	if rpcResp.Result != nil {
-		return rpcResp.Result, nil
-	}
-
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: string(respBody)}},
-	}, nil
-}
+// proxyWebMCPToolCallCDP dispatches WebMCP tool calls via CDP.
+// - Antibot tools (fill, clickOn, etc.) use WebMCP.callTool (Scrapium's custom handler)
+// - Page-registered tools (searchProducts, etc.) use WebMCP.invokeTool + toolResponded event

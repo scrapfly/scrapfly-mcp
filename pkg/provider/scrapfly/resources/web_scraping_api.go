@@ -71,6 +71,7 @@ paths:
         - $ref: '#/components/parameters/Geolocation'
         - $ref: '#/components/parameters/AutoScroll'
         - $ref: '#/components/parameters/RenderingStage'
+        - $ref: '#/components/parameters/BrowserBrand'
         # Cache
         - $ref: '#/components/parameters/Cache'
         - $ref: '#/components/parameters/CacheTtl'
@@ -312,6 +313,7 @@ components:
     Geolocation: { name: "geolocation", in: "query", description: "(Requires ` + "`" + `render_js=true` + "`" + `) Spoofs the browser's geolocation. Format: ` + "`" + `latitude,longitude` + "`" + `.", schema: { type: "string", example: "48.8566,2.3522" }, tags: ["Headless Browser / Javascript Rendering"] }
     AutoScroll: { name: "auto_scroll", in: "query", description: "(Requires ` + "`" + `render_js=true` + "`" + `) If true, automatically scrolls to the bottom of the page to trigger lazy-loaded content.", schema: { type: "boolean", default: false }, tags: ["Headless Browser / Javascript Rendering"] }
     RenderingStage: { name: "rendering_stage", in: "query", description: "(Requires ` + "`" + `render_js=true` + "`" + `) The page loading stage to wait for before returning.", schema: { type: "string", default: "complete", enum: ["complete", "domcontentloaded"] }, tags: ["Headless Browser / Javascript Rendering"] }
+    BrowserBrand: { name: "browser_brand", in: "query", description: "(Requires ` + "`" + `render_js=true` + "`" + `) Chromium-based browser brand for fingerprint generation. Invalid values are silently dropped.", schema: { type: "string", enum: ["chrome", "edge", "brave", "opera"], default: "chrome" }, tags: ["Headless Browser / Javascript Rendering"] }
     # Cache
     Cache: { name: "cache", in: "query", description: "Enables the cache layer. Returns a cached result if available and not expired. Cannot be used with ` + "`" + `session` + "`" + `.", schema: { type: "boolean", default: false }, tags: ["Cache"] }
     CacheTtl: { name: "cache_ttl", in: "query", description: "(Requires ` + "`" + `cache=true` + "`" + `) Cache Time-To-Live in seconds. Max is 604800 (7 days).", schema: { type: "integer", default: 86400 }, tags: ["Cache"] }
