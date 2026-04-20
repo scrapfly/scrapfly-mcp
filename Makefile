@@ -35,10 +35,17 @@ generate-docs: ## Generate Go documentation
 
 bump: ## make bump VERSION=x.y.z — update package.json version, commit, push
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make bump VERSION=x.y.z"; exit 2; fi
-	npm version $(VERSION) --no-git-tag-version
-	git add package.json
-	git commit -m "bump version to $(VERSION)"
-	git push
+	@# Idempotent: skip `npm version` if package.json already at target — it
+	@# errors "Version not changed" otherwise and aborts `make release`.
+	@current=$$(node -p "require('./package.json').version"); \
+	if [ "$$current" = "$(VERSION)" ]; then \
+		echo "bump: package.json already at $(VERSION), skipping npm version"; \
+	else \
+		npm version $(VERSION) --no-git-tag-version; \
+		git add package.json; \
+		git commit -m "bump version to $(VERSION)"; \
+		git push; \
+	fi
 
 release: ## make release VERSION=x.y.z NEXT_VERSION=x.y.z+1 — tag + publish to npm
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make release VERSION=x.y.z NEXT_VERSION=x.y.z+1"; exit 2; fi
@@ -47,10 +54,20 @@ release: ## make release VERSION=x.y.z NEXT_VERSION=x.y.z+1 — tag + publish to
 	git pull origin main
 	$(MAKE) test
 	$(MAKE) build
-	npm version $(VERSION) --no-git-tag-version
-	git add package.json
-	-git commit -m "Release $(VERSION)"
-	-git push origin main
+	@# Idempotent: skip `npm version` if package.json already at target (the
+	@# previous `make bump` may have already advanced it). Plain `npm version`
+	@# errors "Version not changed" and aborts the whole release otherwise.
+	@current=$$(node -p "require('./package.json').version"); \
+	if [ "$$current" = "$(VERSION)" ]; then \
+		echo "release: package.json already at $(VERSION), skipping npm version"; \
+	else \
+		npm version $(VERSION) --no-git-tag-version; \
+		git add package.json; \
+		git commit -m "Release $(VERSION)"; \
+		git push origin main; \
+	fi
 	git tag -a v$(VERSION) -m "Version $(VERSION)"
-	git push --tags
+	@# Push ONLY the new tag. `--tags` sweeps up every stale local tag (see
+	@# cli Makefile note) and can push non-FF on moving tags like `latest`.
+	git push origin v$(VERSION)
 	$(MAKE) bump VERSION=$(NEXT_VERSION)
