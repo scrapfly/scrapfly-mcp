@@ -6,7 +6,7 @@ require (
 	github.com/chromedp/cdproto v0.0.0-20260405000525-47a8ff65b46a
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/modelcontextprotocol/go-sdk v1.5.0
-	github.com/scrapfly/go-scrapfly v0.3.2
+	github.com/scrapfly/go-scrapfly v0.3.3
 )
 
 require (
@@ -14,6 +14,8 @@ require (
 	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
+	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
+	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 )
