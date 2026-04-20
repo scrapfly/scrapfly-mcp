@@ -1123,6 +1123,12 @@
                             "description": "Words per minute for typing. Default: 60. See typeText for timing details.",
                             "optional": true,
                             "type": "number"
+                        },
+                        {
+                            "name": "paste",
+                            "description": "Simulate paste instead of keystroke typing. When true, writes the text\nto the system clipboard then fires Ctrl+V (Cmd+V on macOS) with real\nkeyboard events (kFromDebugger = isTrusted true) so the browser treats\nit as genuine user input and dispatches paste + input events with the\nexpected clipboardData. Much faster than typing for long strings;\nuseful for passwords, tokens, or pre-filled data.\nDefault: false.",
+                            "optional": true,
+                            "type": "boolean"
                         }
                     ],
                     "returns": [
@@ -32856,6 +32862,21 @@
                     "description": "Enables the WebMCP domain, allowing events to be sent. Enabling the domain will trigger a toolsAdded event for\nall currently registered tools."
                 },
                 {
+                    "name": "disable",
+                    "description": "Disables the WebMCP domain."
+                },
+                {
+                    "name": "cancelInvocation",
+                    "description": "Cancels a pending tool invocation. The tool's AbortSignal is fired, and a\ntoolResponded event with status \"error\" will be emitted for the invocationId.",
+                    "parameters": [
+                        {
+                            "name": "invocationId",
+                            "description": "The invocation ID returned by invokeTool.",
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
                     "name": "invokeTool",
                     "description": "Invokes a tool by name with JSON-encoded input arguments.\nReturns an invocationId; the result arrives asynchronously via toolResponded event.",
                     "parameters": [
@@ -32880,42 +32901,6 @@
                         {
                             "name": "invocationId",
                             "description": "Unique ID for this invocation, used to correlate with toolResponded.",
-                            "type": "string"
-                        }
-                    ]
-                },
-                {
-                    "name": "callTool",
-                    "description": "Invokes a tool by name with the given JSON arguments (synchronous convenience).",
-                    "parameters": [
-                        {
-                            "name": "name",
-                            "description": "Name of the tool to invoke.",
-                            "type": "string"
-                        },
-                        {
-                            "name": "arguments",
-                            "description": "JSON-encoded input arguments for the tool.",
-                            "optional": true,
-                            "type": "string"
-                        }
-                    ],
-                    "returns": [
-                        {
-                            "name": "success",
-                            "description": "Whether the tool executed successfully.",
-                            "type": "boolean"
-                        },
-                        {
-                            "name": "result",
-                            "description": "JSON-encoded result from the tool, if any.",
-                            "optional": true,
-                            "type": "string"
-                        },
-                        {
-                            "name": "errorMessage",
-                            "description": "Error message if the tool failed.",
-                            "optional": true,
                             "type": "string"
                         }
                     ]
