@@ -78,7 +78,7 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{ // alias
 		Name:        "info_account",
 		Title:       "Scrapfly Account Informations",
-		Description: "Get subscription, usage, limits. Use for quotas/billing/concurrency. Avoid for content scraping.",
+		Description: "Return the caller's Scrapfly account state: subscription plan, API-credit usage, concurrency limits, quotas. Call when the user asks about their account / billing / quota / remaining credits / plan. Not for scraping content.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Account Informations",
 			DestructiveHint: &falseBool,
@@ -91,7 +91,7 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "web_scrape",
 		Title:       "Scrapfly Advanced Scraping Tool",
-		Description: "Scrape a URL with full control. Use tool scraping_instruction_enhanced before using this tool. Prefer web_get_page for quick fetch",
+		Description: "One-shot fetch of a URL with full control (headers, JS rendering, country, proxy pool, anti-scraping options). Stateless — returns the response body and metadata, no persistent session. This is the right tool whenever the task is \"get the content/bytes at this URL\": downloading a file, fetching an HTML page, calling a JSON endpoint, grabbing a sitemap. Only switch to `cloud_browser_open` when the task requires multi-step interaction with a page (clicking, form filling, navigating between pages, logging in). Use `scraping_instruction_enhanced` first if you're uncertain which options to set. Prefer `web_get_page` for the common quick-fetch path.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Advanced Scraping Tool",
 			DestructiveHint: &falseBool,
@@ -105,7 +105,7 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "web_get_page",
 		Title:       "Scrapfly Quick Page Fetch Tool",
-		Description: "Quick page fetch with sane defaults. Use tool scraping_instruction_enhanced before using this tool. Use when you just need the content fast.",
+		Description: "One-shot fetch of a URL with sane defaults. Stateless. Right choice for simple \"get me the page / the JSON / the file at X\" asks — including plain file downloads where the URL already points at the asset. Falls back to `web_scrape` when you need to tune headers/JS-rendering/proxy; to `cloud_browser_open` when the task needs interaction with the page.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Quick Page Fetch Tool",
 			DestructiveHint: &falseBool,
@@ -132,7 +132,7 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "scraping_instruction_enhanced",
 		Title:       "Scrapfly Scraping tools instructions // enhanced prompt",
-		Description: "Return critical instructions for scraping tools",
+		Description: "Return a concise cheat-sheet of Scrapfly's scraping options (ASP, render_js, country, proxy pool, session) and when to use each. Call this before your first `web_scrape` / `web_get_page` on an unfamiliar target so the chosen options are right the first time.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Scraping tools instructions // enhanced prompt",
 			DestructiveHint: &falseBool,
@@ -145,7 +145,7 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "screenshot",
 		Title:       "Scrapfly Screenshot Tool",
-		Description: "Screenshot a URL.",
+		Description: "One-shot PNG screenshot of a URL. Stateless — loads the page, renders, returns the image. Inputs: `url` (required, must be http:// or https://), `capture` (optional — either 'fullpage' or a CSS selector such as `img[alt='Logo']`). There is NO `selector` parameter — use `capture` for element-cropped shots.\n\nWhen to use this vs `cloud_browser_open` + `cloud_browser_screenshot`:\n  • Use `screenshot` only for truly stateless captures (\"give me a screenshot of <url>\") where the user does not need to see a live browser panel and will not follow up with more actions on the same page.\n  • Prefer `cloud_browser_open` + `cloud_browser_screenshot` whenever the user asks to \"go to\", \"open\", or \"visit\" a site, or mentions seeing a logo/element/feature on the page — even if the request looks like a single-screenshot task. That path opens the live browser panel the user watches, and the screenshot is element-cropped via CDP with proper scroll-into-view handling. The LLM-facing conversation UI is built around seeing the browser session.\n  • If a session is already active, never fall back to this one-shot tool; continue inside the session with `cloud_browser_screenshot` / `take_screenshot`.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Screenshot Tool",
 			DestructiveHint: &falseBool,
@@ -161,7 +161,7 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "check_if_blocked",
 		Title:       "Antibot Block Detector",
-		Description: "Analyze scrape result to detect antibot blocking. Zero cost — pure local heuristic, no API call. Use after any scrape to verify the response is not a block page. Supports: Cloudflare, DataDome, PerimeterX, Akamai, Kasada, Imperva, AWS WAF, Vercel, Anubis, F5 Shape.",
+		Description: "Given a scrape result (URL + status + headers + body), decide if it is actually a block page. Runs the Scrapfly classification API which detects the major anti-bot products (Cloudflare, DataDome, PerimeterX, Akamai, Kasada, Imperva, AWS WAF, F5 Shape, and more). Returns `is_blocked` and, when known, the matching `antibot` vendor. Costs 1 API credit per call. Run after a `web_scrape` / `web_get_page` whenever the response looks suspicious — a 200 with empty/tiny body, unexpected challenge markup — before feeding the content back to the user. If blocked, retry via `browser_unblock`.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Antibot Block Detector",
 			DestructiveHint: &falseBool,
@@ -176,7 +176,14 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "cloud_browser_open",
 		Title:       "Scrapfly Cloud Browser — Open Session",
-		Description: "Open a browser on a URL. After opening, use click/fill/hover/press_key/scroll for interaction, take_snapshot for page content, take_screenshot for visual capture. Use list_webmcp_tools to discover page-specific actions. If the page shows a challenge/captcha, close the session and use browser_unblock instead.",
+		Description: "Start a stateful real-browser session at a URL. Use this when the task requires *interaction* with a page — the user said \"open\", \"go to\", \"navigate to\", \"log in\", or the work needs clicking, form filling, or multi-step navigation. Returns the initial accessibility snapshot plus the page's registered WebMCP tools.\n\n" +
+			"Do NOT use this for a plain \"download <url>\" or \"fetch <url>\" where the URL already points at the asset and no interaction is needed — use `web_get_page` (simple) or `web_scrape` (with options) instead. Those are cheaper and faster.\n\n" +
+			"Once a session is open, the FULL set of CDP-backed interaction tools is available and operates on this session implicitly (no session_id in the calls):\n" +
+			"  • Reading: `take_snapshot` (accessibility tree + uids), `take_screenshot` (PNG), `get_page_url`, `evaluate_script` (read-only JS).\n" +
+			"  • Input: `click`, `fill`, `type_text`, `hover`, `press_key`, `scroll`, `drag`, `select_option`.\n" +
+			"  • Page-author API: `list_webmcp_tools`, `call_webmcp_tool` — prefer these when the page exposes a matching tool; they are the author's declared programmatic API and survive DOM refactors.\n" +
+			"  • Navigation in the same session: `cloud_browser_navigate`. Session management: `cloud_browser_sessions`, `cloud_browser_close` (only on explicit user request), `cloud_browser_downloads`, `cloud_browser_performance`.\n\n" +
+			"If the opened page shows a challenge/captcha, close and retry with `browser_unblock`.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser — Open Session",
 			DestructiveHint: &falseBool,
@@ -190,7 +197,7 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "cloud_browser_close",
 		Title:       "Scrapfly Cloud Browser — Close Session",
-		Description: "Close a Cloud Browser session and release resources. Removes any dynamically registered WebMCP tools.",
+		Description: "Close the cloud-browser session and release its resources. Call this ONLY when the user explicitly asks to end / close / stop / \"we're done\". When a task finishes normally, leave the session open — the user has a dedicated UI control for closing and may keep going in a follow-up turn.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser — Close Session",
 			DestructiveHint: &trueBool,
@@ -204,7 +211,7 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "cloud_browser_screenshot",
 		Title:       "Scrapfly Cloud Browser — Screenshot",
-		Description: "Take a screenshot of the current browser page. Use this instead of the screenshot tool when a cloud_browser_open session is active. Returns a PNG image of what the browser currently shows.",
+		Description: "PNG of the active cloud-browser session. Optional `selector` is a CSS selector (e.g. `img[alt='Scrapfly Logo']`, `#header`, `.logo img`) — NOT a uid from `take_snapshot`. Without `selector`, captures the full viewport (or full page if `full_page: true`). For element-level shots where you only have a uid, prefer `take_screenshot` after `scroll`-ing the element into view; `take_screenshot` is the newer flat-API equivalent and is preferred in general.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser — Screenshot",
 			DestructiveHint: &falseBool,
@@ -218,7 +225,7 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "cloud_browser_eval",
 		Title:       "Scrapfly Cloud Browser — Evaluate JavaScript",
-		Description: "Execute JavaScript in the browser page. Only for data extraction or reading state — do NOT use for clicking, filling forms, or page interaction (use click, fill, type_text, hover, press_key instead).",
+		Description: "Run JavaScript in the active cloud-browser session and return its value. Equivalent to `evaluate_script`; prefer `evaluate_script` in new code. Reads only — do NOT use for clicking/filling.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser — Evaluate JavaScript",
 			DestructiveHint: &falseBool,
@@ -248,7 +255,7 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "cloud_browser_sessions",
 		Title:       "Scrapfly Cloud Browser — List Sessions",
-		Description: "List all active Cloud Browser sessions with their tools and expiry.",
+		Description: "List active cloud-browser sessions for this user with their URLs, registered WebMCP tools, and expiry. Useful when you lost track of what's open, or to decide between reusing an existing session and opening a fresh one.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser — List Sessions",
 			DestructiveHint: &falseBool,
@@ -261,7 +268,7 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "cloud_browser_downloads",
 		Title:       "Scrapfly Cloud Browser — Downloads",
-		Description: "List and retrieve files downloaded during the browser session. Returns metadata (filenames, sizes) and optionally the file content as base64.",
+		Description: "Inspect files that have been downloaded during the current browser session (e.g. after clicking a link that triggered a download, or submitting a form that returned an attachment). Without `filename`, returns metadata for every captured download. With `filename`, returns the file's bytes base64-encoded. Only relevant when a download was triggered inside the session — for fetching a file whose URL you already know, use `web_get_page` / `web_scrape` instead.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser — Downloads",
 			DestructiveHint: &falseBool,
@@ -275,7 +282,7 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "browser_unblock",
 		Title:       "Open Browser with Anti-Bot Bypass",
-		Description: "Open a browser on a URL that is protected by anti-bot (Cloudflare, DataDome, etc.). Bypasses the protection automatically and returns a connected browser session with page content. Use this when cloud_browser_open returns a challenge/captcha page.",
+		Description: "Same as `cloud_browser_open` but runs the URL through Scrapfly's anti-bot bypass first (Cloudflare, DataDome, PerimeterX, Akamai, etc.). Use when a plain `cloud_browser_open` landed on a challenge/captcha page, or when you already know the target is anti-bot protected. On success you get a stateful browser session with the same full action set available (`take_snapshot`, `click`, `fill`, `call_webmcp_tool`, …) — pick the right follow-up exactly as you would after `cloud_browser_open`.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Open Browser with Anti-Bot Bypass",
 			DestructiveHint: &falseBool,
@@ -289,7 +296,7 @@ func standardTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.AddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "cloud_browser_navigate",
 		Title:       "Scrapfly Cloud Browser — Navigate",
-		Description: "Navigate an active Cloud Browser session to a new URL.",
+		Description: "Navigate the active cloud-browser session to a new URL. Re-uses the same browser (cookies, storage, session state preserved) and refreshes the WebMCP tool list because page-registered tools are scoped to the current document. Returns a fresh snapshot. Use this instead of opening a new session when you want to stay signed in or keep context across URLs.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser — Navigate",
 			DestructiveHint: &falseBool,

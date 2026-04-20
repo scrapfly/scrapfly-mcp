@@ -79,5 +79,12 @@ func (p *ScrapflyToolProvider) Screenshot(
 		Data:     screenshotResult.Image,
 		MIMEType: fmt.Sprintf("image/%s", screenshotResult.Metadata.ExtensionName),
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{content}}, nil, err
+	// TextContent sidecar: ADK's mcptoolset errors on image-only
+	// responses. Provide a short summary so the LLM has something
+	// textual to reason over; UI clients still receive the image.
+	summary := &mcp.TextContent{
+		Text: fmt.Sprintf("Screenshot of %s captured (%s, %d bytes).",
+			config.URL, screenshotResult.Metadata.ExtensionName, len(screenshotResult.Image)),
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{summary, content}}, nil, err
 }

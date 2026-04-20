@@ -389,11 +389,22 @@ func (p *ScrapflyToolProvider) CloudBrowserScreenshot(
 		return ToolErrf("cloud_browser_screenshot: empty screenshot data"), nil, nil
 	}
 
+	// Return a TextContent sidecar alongside the image. ADK's
+	// mcptoolset drops image-only results and errors with "no text
+	// content in tool response"; the text makes the call succeed for
+	// the LLM while UI clients still receive the PNG.
+	textSummary := fmt.Sprintf("Screenshot captured (PNG, %d bytes base64).", len(screenshot.Data))
+	if input.Selector != "" {
+		textSummary = fmt.Sprintf("Screenshot of %q captured (PNG, %d bytes base64).", input.Selector, len(screenshot.Data))
+	}
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.ImageContent{
-			Data:     []byte(screenshot.Data),
-			MIMEType: "image/png",
-		}},
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: textSummary},
+			&mcp.ImageContent{
+				Data:     []byte(screenshot.Data),
+				MIMEType: "image/png",
+			},
+		},
 	}, nil, nil
 }
 
