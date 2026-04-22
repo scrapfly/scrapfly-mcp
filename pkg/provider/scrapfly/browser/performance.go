@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/chromedp/cdproto/cdp"
@@ -279,7 +280,11 @@ func CollectPSI(s *Session, opts PSIOptions) (*PSIReport, error) {
 	loadFired := make(chan struct{}, 1)
 	domLoaded := make(chan struct{}, 1)
 
-	registerCollectors(s, &mu, &timelineEvents, &finalMetrics, netByID, &screencastFrames, loadFired, domLoaded)
+	stopCollectors := registerCollectors(s, &mu, &timelineEvents, &finalMetrics, netByID, &screencastFrames, loadFired, domLoaded)
+	// The collectors live on the caller-owned session (a long-lived cloud
+	// browser). Without this cleanup they accumulate across repeated
+	// CollectPSI calls and every CDP event fans out to every stale copy.
+	defer stopCollectors()
 
 	// 4. Capture current URL, then blank the viewport so the screencast has a
 	//    clean "before" baseline. Without this step, the first screencast frame
@@ -420,6 +425,13 @@ func clearEmulation(s *Session) {
 
 // ── Event collectors ───────────────────────────────────────────────────────
 
+// registerCollectors wires the PSI event collectors onto s and returns a
+// cleanup func. The cleanup flips a shared atomic flag that makes every
+// registered handler return false on its next invocation, which the CDP
+// dispatcher treats as a deregistration signal (see Session.dispatch in
+// cdp.go). Callers MUST defer the returned cleanup; otherwise handlers
+// persist for the session lifetime and accumulate across repeated
+// CollectPSI calls on a reused session.
 func registerCollectors(
 	s *Session,
 	mu *sync.Mutex,
@@ -429,22 +441,35 @@ func registerCollectors(
 	screencastFrames *[]screenFrame,
 	loadFired chan<- struct{},
 	domLoaded chan<- struct{},
-) {
-	s.OnEvent("PerformanceTimeline.timelineEventAdded", func(_ string, params json.RawMessage) bool {
+) (cleanup func()) {
+	var stopped atomic.Bool
+
+	// keep wraps a long-lived handler: once stopped flips true, the next
+	// event drops the handler via the `return false` contract.
+	keep := func(fn func(string, json.RawMessage)) EventHandler {
+		return func(method string, params json.RawMessage) bool {
+			if stopped.Load() {
+				return false
+			}
+			fn(method, params)
+			return true
+		}
+	}
+
+	s.OnEvent("PerformanceTimeline.timelineEventAdded", keep(func(_ string, params json.RawMessage) {
 		var evt performancetimeline.EventTimelineEventAdded
 		if err := json.Unmarshal(params, &evt); err != nil || evt.Event == nil {
-			return true
+			return
 		}
 		mu.Lock()
 		*timeline = append(*timeline, *evt.Event)
 		mu.Unlock()
-		return true
-	})
+	}))
 
-	s.OnEvent("Performance.metrics", func(_ string, params json.RawMessage) bool {
+	s.OnEvent("Performance.metrics", keep(func(_ string, params json.RawMessage) {
 		var evt performance.EventMetrics
 		if err := json.Unmarshal(params, &evt); err != nil {
-			return true
+			return
 		}
 		mu.Lock()
 		*finalMetrics = (*finalMetrics)[:0]
@@ -454,13 +479,12 @@ func registerCollectors(
 			}
 		}
 		mu.Unlock()
-		return true
-	})
+	}))
 
-	s.OnEvent("Network.requestWillBeSent", func(_ string, params json.RawMessage) bool {
+	s.OnEvent("Network.requestWillBeSent", keep(func(_ string, params json.RawMessage) {
 		var evt network.EventRequestWillBeSent
 		if err := json.Unmarshal(params, &evt); err != nil {
-			return true
+			return
 		}
 		mu.Lock()
 		netByID[string(evt.RequestID)] = &netReq{
@@ -471,19 +495,18 @@ func registerCollectors(
 			priority:  string(evt.Request.InitialPriority),
 		}
 		mu.Unlock()
-		return true
-	})
+	}))
 
-	s.OnEvent("Network.responseReceived", func(_ string, params json.RawMessage) bool {
+	s.OnEvent("Network.responseReceived", keep(func(_ string, params json.RawMessage) {
 		var evt network.EventResponseReceived
 		if err := json.Unmarshal(params, &evt); err != nil {
-			return true
+			return
 		}
 		mu.Lock()
 		defer mu.Unlock()
 		r, ok := netByID[string(evt.RequestID)]
 		if !ok {
-			return true
+			return
 		}
 		if evt.Response != nil {
 			// TTFB = responseReceived.timestamp - requestWillBeSent.timestamp.
@@ -495,37 +518,34 @@ func registerCollectors(
 				r.ttfbMs = float64(evt.Response.Timing.ReceiveHeadersEnd)
 			}
 		}
-		return true
-	})
+	}))
 
-	s.OnEvent("Network.loadingFinished", func(_ string, params json.RawMessage) bool {
+	s.OnEvent("Network.loadingFinished", keep(func(_ string, params json.RawMessage) {
 		var evt network.EventLoadingFinished
 		if err := json.Unmarshal(params, &evt); err != nil {
-			return true
+			return
 		}
 		mu.Lock()
 		defer mu.Unlock()
 		r, ok := netByID[string(evt.RequestID)]
 		if !ok {
-			return true
+			return
 		}
 		r.endMs = cdpMonoMs(evt.Timestamp)
 		r.transferBytes = int64(evt.EncodedDataLength)
-		return true
-	})
+	}))
 
-	s.OnEvent("Network.loadingFailed", func(_ string, params json.RawMessage) bool {
+	s.OnEvent("Network.loadingFailed", keep(func(_ string, params json.RawMessage) {
 		var evt network.EventLoadingFailed
 		if err := json.Unmarshal(params, &evt); err != nil {
-			return true
+			return
 		}
 		mu.Lock()
 		defer mu.Unlock()
 		if r, ok := netByID[string(evt.RequestID)]; ok {
 			r.endMs = cdpMonoMs(evt.Timestamp)
 		}
-		return true
-	})
+	}))
 
 	s.OnEvent("Page.loadEventFired", func(_ string, params json.RawMessage) bool {
 		var evt page.EventLoadEventFired
@@ -547,22 +567,22 @@ func registerCollectors(
 		return false
 	})
 
-	s.OnEvent("Page.screencastFrame", func(_ string, params json.RawMessage) bool {
+	s.OnEvent("Page.screencastFrame", keep(func(_ string, params json.RawMessage) {
 		// Typed: page.EventScreencastFrame.
 		var evt page.EventScreencastFrame
 		if err := json.Unmarshal(params, &evt); err != nil {
-			return true
+			return
 		}
 		// Must ack so Chrome keeps sending.
 		if evt.SessionID != 0 {
 			s.SendCDPFireAndForget("Page.screencastFrameAck", map[string]any{"sessionId": evt.SessionID})
 		}
 		if evt.Metadata == nil || evt.Data == "" {
-			return true
+			return
 		}
 		raw, err := base64.StdEncoding.DecodeString(evt.Data)
 		if err != nil {
-			return true
+			return
 		}
 		mu.Lock()
 		*screencastFrames = append(*screencastFrames, screenFrame{
@@ -570,8 +590,9 @@ func registerCollectors(
 			data:        raw,
 		})
 		mu.Unlock()
-		return true
-	})
+	}))
+
+	return func() { stopped.Store(true) }
 }
 
 // waitForQuietLoad blocks until the page is ready for metric computation.

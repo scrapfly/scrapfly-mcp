@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -224,13 +225,25 @@ func (s *Session) sendAndWait(msg map[string]any, id int64) (json.RawMessage, er
 		return nil, fmt.Errorf("CDP write: %w", err)
 	}
 
-	resp := <-req.ch
-	if resp.Error != nil {
-		log.Printf("[CDP RESP] id=%d ERROR %d: %s", id, resp.Error.Code, resp.Error.Message)
-		return nil, fmt.Errorf("CDP error %d: %s", resp.Error.Code, resp.Error.Message)
+	// If the reader goroutine has already exited (connection died
+	// between when we registered into s.pending and when it would have
+	// delivered the response), a bare `<-req.ch` blocks forever and
+	// leaks this goroutine. readerDone is closed by the reader on exit;
+	// racing on it gives us a definitive failure path.
+	select {
+	case resp := <-req.ch:
+		if resp.Error != nil {
+			log.Printf("[CDP RESP] id=%d ERROR %d: %s", id, resp.Error.Code, resp.Error.Message)
+			return nil, fmt.Errorf("CDP error %d: %s", resp.Error.Code, resp.Error.Message)
+		}
+		log.Printf("[CDP RESP] id=%d OK len=%d", id, len(resp.Result))
+		return resp.Result, nil
+	case <-s.readerDone:
+		s.pendingMu.Lock()
+		delete(s.pending, id)
+		s.pendingMu.Unlock()
+		return nil, fmt.Errorf("CDP reader exited before response for id=%d", id)
 	}
-	log.Printf("[CDP RESP] id=%d OK len=%d", id, len(resp.Result))
-	return resp.Result, nil
 }
 
 // SendCDP sends a CDP command scoped to the page session and waits for the response.
@@ -273,13 +286,23 @@ func (s *Session) SendCDPCollectEvents(method string, params any, eventName stri
 	var eventsMu sync.Mutex
 	done := make(chan struct{})
 
-	// Register temporary event handler
+	// Register a self-unregistering handler. The previous impl captured
+	// a slice index and tried to splice it out after the RPC returned,
+	// which was racy: any concurrent unregister that shrank the slice
+	// between registration and removal would cause us to delete the
+	// wrong handler. Now we rely on the dispatcher's documented contract
+	// — a handler returning false is removed — and flip `stopped` when
+	// the RPC is done. Stale copies self-destruct on the next event.
+	var stopped atomic.Bool
 	s.handlersMu.Lock()
-	handlerIdx := len(s.eventHandlers[eventName])
 	s.eventHandlers[eventName] = append(s.eventHandlers[eventName], func(m string, p json.RawMessage) bool {
+		if stopped.Load() {
+			return false
+		}
 		select {
 		case <-done:
-			return false // stop after response
+			stopped.Store(true)
+			return false
 		default:
 			eventsMu.Lock()
 			events = append(events, p)
@@ -293,16 +316,10 @@ func (s *Session) SendCDPCollectEvents(method string, params any, eventName stri
 	// Send the command
 	result, err := s.sendAndWait(msg, id)
 
-	// Stop collecting
+	// Signal the collector to stop. It unregisters itself on the next
+	// dispatched event via the `return false` contract.
 	close(done)
-
-	// Remove the temporary handler
-	s.handlersMu.Lock()
-	handlers := s.eventHandlers[eventName]
-	if handlerIdx < len(handlers) {
-		s.eventHandlers[eventName] = append(handlers[:handlerIdx], handlers[handlerIdx+1:]...)
-	}
-	s.handlersMu.Unlock()
+	stopped.Store(true)
 
 	return result, events, err
 }

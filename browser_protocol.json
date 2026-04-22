@@ -24511,17 +24511,23 @@
                             "description": "When false, skip rendering iframe content (faster). Default true.",
                             "optional": true,
                             "type": "boolean"
+                        },
+                        {
+                            "name": "format",
+                            "description": "Output format for text content: \"html\" (default) or \"markdown\".\n\"markdown\" converts the rendered HTML to GitHub-flavored Markdown\nin the browser process (using the Gumbo HTML5 parser). Relative URLs\nin links and images are resolved against the main frame URL.\nIgnored for binary content types.",
+                            "optional": true,
+                            "type": "string"
                         }
                     ],
                     "returns": [
                         {
                             "name": "content",
-                            "description": "The page content. For text types this is rendered HTML with iframes inlined.\nFor binary types this is base64-encoded raw body bytes.",
+                            "description": "The page content. For text types this is rendered HTML (or markdown\nif format=\"markdown\") with iframes inlined.\nFor binary types this is base64-encoded raw body bytes.",
                             "type": "string"
                         },
                         {
                             "name": "type",
-                            "description": "\"text\" for text-serializable content, \"binary\" for non-text (base64-encoded).",
+                            "description": "\"text\" for HTML, \"markdown\" for converted Markdown, \"binary\" for non-text.",
                             "type": "string"
                         }
                     ]
