@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/scrapfly/scrapfly-mcp/pkg/provider/scrapfly/browser"
@@ -339,6 +340,246 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 	// duplicate-registration risk.
 
 	addWebMCPMetaTools(ts, logger)
+
+	// ── browser-use parity tools ───────────────────────────────────────────
+	// Convenience tools that close the gap with browser-use's action set.
+	// All gated by browser.FindSession("") so they error cleanly when no
+	// session is open — same contract as the rest of this file.
+
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
+		Name:        "scroll_to_text",
+		Title:       "Scroll until text is visible",
+		Description: "Scroll the active page until the first element whose textContent contains the given substring is in the viewport. Case-insensitive substring match. No-op if the text is already visible. Cheap to call before any click on content that may be below the fold (long articles, lazy-loaded lists, paginated tables). Returns the matched element's tag and a 80-char text excerpt, or an error if not found.",
+		Annotations: &mcp.ToolAnnotations{Title: "Scroll until text is visible", DestructiveHint: &falseBool},
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"text": map[string]any{"type": "string", "description": "Substring to search for in element textContent"},
+			},
+			"required": []string{"text"},
+		},
+		Meta: standardPermissionsMeta,
+	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
+		session, err := browser.FindSession("")
+		if err != nil {
+			return ToolErrf("scroll_to_text: no active browser session"), nil, nil
+		}
+		var args struct {
+			Text string `json:"text"`
+		}
+		json.Unmarshal(req.Params.Arguments, &args)
+		if args.Text == "" {
+			return ToolErrf("scroll_to_text: text is required"), nil, nil
+		}
+		// Walk visible elements, find first that contains the text,
+		// scroll into view + return tag/excerpt. Single CDP roundtrip.
+		js := fmt.Sprintf(`(() => {
+  const needle = %q.toLowerCase();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  let node;
+  while ((node = walker.nextNode())) {
+    const txt = (node.innerText || node.textContent || '').toLowerCase();
+    if (txt.includes(needle)) {
+      node.scrollIntoView({block:'center', behavior:'instant'});
+      const own = (node.innerText || node.textContent || '').trim().slice(0, 80);
+      return JSON.stringify({tag: node.tagName.toLowerCase(), excerpt: own});
+    }
+  }
+  return JSON.stringify({error: 'not found'});
+})()`, args.Text)
+		evalResult, err := session.SendCDP("Runtime.evaluate", map[string]any{
+			"expression": js, "returnByValue": true,
+		})
+		if err != nil {
+			return ToolErrFromError("scroll_to_text", err), nil, nil
+		}
+		var rv struct {
+			Result struct{ Value string `json:"value"` } `json:"result"`
+		}
+		json.Unmarshal(evalResult, &rv)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: rv.Result.Value}},
+		}, nil, nil
+	})
+
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
+		Name:        "dropdown_options",
+		Title:       "List options of a <select> element",
+		Description: "Return all <option> entries (value, label, selected) of a native HTML <select> element by uid. Use before select_option to discover available choices when the snapshot's `options=\"a|b|c\"` enrichment is truncated or missing.",
+		Annotations: &mcp.ToolAnnotations{Title: "List dropdown options", DestructiveHint: &falseBool, ReadOnlyHint: true},
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"uid": map[string]any{"type": "string", "description": "axNodeId from take_snapshot, must point at a <select> element"},
+			},
+			"required": []string{"uid"},
+		},
+		Meta: standardPermissionsMeta,
+	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
+		var args struct {
+			UID string `json:"uid"`
+		}
+		json.Unmarshal(req.Params.Arguments, &args)
+		if args.UID == "" {
+			return ToolErrf("dropdown_options: uid is required"), nil, nil
+		}
+		// We can't address an element by axNodeId from JS-land. The
+		// PageState.Refresh enrichment (previous commit) ALREADY ships
+		// `options="..."` inline on every <select> in the snapshot;
+		// this tool's job is just to remind the model where to look
+		// when it forgot to read the snapshot or the enrichment was
+		// truncated. Cheap, idempotent, no CDP cost.
+		hint := `For native <select> dropdowns, the snapshot already includes options="..." inline ` +
+			`alongside the combobox node. If the snapshot enrichment was truncated or missing, ` +
+			`call evaluate_script with this expression (after taking a fresh snapshot to find a ` +
+			`stable selector for the element):` + "\n\n" +
+			`  Array.from(document.querySelector('select#YOUR_ID').options).map(o => ` +
+			`({value: o.value, label: o.text, selected: o.selected}))`
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: hint}},
+		}, nil, nil
+	})
+
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
+		Name:        "wait",
+		Title:       "Pause execution",
+		Description: "Sleep for N seconds before the next action. Use sparingly — most pages can be interacted with as soon as the snapshot returns. Useful for waiting on animations to settle, on lazy-loaded carousels, or on deliberate rate-limiting between repeated form submissions. Capped at 10s server-side; longer sleeps will be clamped.",
+		Annotations: &mcp.ToolAnnotations{Title: "Wait", DestructiveHint: &falseBool, ReadOnlyHint: true, IdempotentHint: true},
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"seconds": map[string]any{"type": "number", "description": "Seconds to wait. Clamped to [0.1, 10]."},
+			},
+			"required": []string{"seconds"},
+		},
+		Meta: standardPermissionsMeta,
+	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
+		var args struct {
+			Seconds float64 `json:"seconds"`
+		}
+		json.Unmarshal(req.Params.Arguments, &args)
+		if args.Seconds < 0.1 {
+			args.Seconds = 0.1
+		}
+		if args.Seconds > 10 {
+			args.Seconds = 10
+		}
+		select {
+		case <-time.After(time.Duration(args.Seconds * float64(time.Second))):
+		case <-ctx.Done():
+			return ToolErrf("wait: cancelled"), nil, nil
+		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("waited %.2fs", args.Seconds)}},
+		}, nil, nil
+	})
+
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
+		Name:        "find_elements",
+		Title:       "CSS-selector element finder",
+		Description: "Return up to 20 elements matching a CSS selector with their tag, text excerpt (80 chars), and key attributes. Use when take_snapshot doesn't expose what you need — typically for non-interactive content selection (`<article>`, `.product-card`, `[data-id]`). Returns an empty list rather than an error when nothing matches.",
+		Annotations: &mcp.ToolAnnotations{Title: "Find elements by CSS", DestructiveHint: &falseBool, ReadOnlyHint: true},
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"selector":    map[string]any{"type": "string", "description": "CSS selector"},
+				"max_results": map[string]any{"type": "integer", "description": "Cap the result count. Default 20, max 50."},
+			},
+			"required": []string{"selector"},
+		},
+		Meta: standardPermissionsMeta,
+	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
+		session, err := browser.FindSession("")
+		if err != nil {
+			return ToolErrf("find_elements: no active browser session"), nil, nil
+		}
+		var args struct {
+			Selector   string `json:"selector"`
+			MaxResults int    `json:"max_results"`
+		}
+		json.Unmarshal(req.Params.Arguments, &args)
+		if args.Selector == "" {
+			return ToolErrf("find_elements: selector is required"), nil, nil
+		}
+		if args.MaxResults <= 0 {
+			args.MaxResults = 20
+		}
+		if args.MaxResults > 50 {
+			args.MaxResults = 50
+		}
+		js := fmt.Sprintf(`(() => {
+  const els = Array.from(document.querySelectorAll(%q)).slice(0, %d);
+  return JSON.stringify(els.map(e => {
+    const attrs = {};
+    for (const a of ['id','class','href','src','alt','title','data-id','data-test','aria-label']) {
+      const v = e.getAttribute(a);
+      if (v) attrs[a] = v.length > 80 ? v.slice(0,80)+'…' : v;
+    }
+    const text = (e.innerText || e.textContent || '').trim().slice(0, 80);
+    return {tag: e.tagName.toLowerCase(), text, attrs};
+  }));
+})()`, args.Selector, args.MaxResults)
+		evalResult, err := session.SendCDP("Runtime.evaluate", map[string]any{
+			"expression": js, "returnByValue": true,
+		})
+		if err != nil {
+			return ToolErrFromError("find_elements", err), nil, nil
+		}
+		var rv struct {
+			Result struct{ Value string `json:"value"` } `json:"result"`
+		}
+		json.Unmarshal(evalResult, &rv)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: rv.Result.Value}},
+		}, nil, nil
+	})
+
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
+		Name:        "go_back",
+		Title:       "Browser back button",
+		Description: "Navigate one step back in the browser's history (equivalent to clicking the browser's back arrow). Returns an error if there's nothing to go back to. After this call, take_snapshot to see the previous page's elements — DOM uids from prior snapshots are stale.",
+		Annotations: &mcp.ToolAnnotations{Title: "Go back", DestructiveHint: &falseBool, OpenWorldHint: &trueBool},
+		InputSchema: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{},
+		},
+		Meta: standardPermissionsMeta,
+	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
+		session, err := browser.FindSession("")
+		if err != nil {
+			return ToolErrf("go_back: no active browser session"), nil, nil
+		}
+		// CDP recipe: read history, navigate to entry currentIndex-1.
+		histResult, err := session.SendCDP("Page.getNavigationHistory", nil)
+		if err != nil {
+			return ToolErrFromError("go_back", err), nil, nil
+		}
+		var hist struct {
+			CurrentIndex int `json:"currentIndex"`
+			Entries      []struct {
+				ID  int    `json:"id"`
+				URL string `json:"url"`
+			} `json:"entries"`
+		}
+		if err := json.Unmarshal(histResult, &hist); err != nil {
+			return ToolErrFromError("go_back", err), nil, nil
+		}
+		if hist.CurrentIndex <= 0 {
+			return ToolErrf("go_back: no previous entry in history"), nil, nil
+		}
+		prev := hist.Entries[hist.CurrentIndex-1]
+		_, err = session.SendCDP("Page.navigateToHistoryEntry", map[string]any{
+			"entryId": prev.ID,
+		})
+		if err != nil {
+			return ToolErrFromError("go_back", err), nil, nil
+		}
+		// Refresh page state so the next snapshot is current.
+		session.Page.Refresh(session)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Navigated back to %s\n\n%s", prev.URL, session.Page.Snapshot())}},
+		}, nil, nil
+	})
 
 	return ts
 }
