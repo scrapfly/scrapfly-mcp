@@ -135,10 +135,15 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 	wsURL := client.CloudBrowser(browserConfig)
 	p.logger.Printf("cloud_browser_open: connecting to %s", wsURL)
 
-	// Connect via WebSocket CDP (15s timeout for allocation)
+	// Connect via WebSocket CDP. The handshake covers the full server-side
+	// allocation chain (traefik → cloud-browser → scrape-engine /browser/allocate
+	// → autoscaler → cold-start of a browser pod). On a warm prod pool that's
+	// sub-second; on a cold dev cluster (single replica, autoscaler reconcile cycle)
+	// it can take 30s+. 60s gives cold paths room without holding clients
+	// hostage if the cluster is genuinely down.
 	dialer := websocket.Dialer{
 		TLSClientConfig:  &tls.Config{InsecureSkipVerify: true},
-		HandshakeTimeout: 15 * time.Second,
+		HandshakeTimeout: 60 * time.Second,
 	}
 	conn, _, err := dialer.Dial(wsURL, nil)
 	if err != nil {

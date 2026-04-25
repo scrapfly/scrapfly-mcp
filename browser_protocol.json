@@ -704,6 +704,69 @@
                             "type": "boolean"
                         }
                     ]
+                },
+                {
+                    "id": "CaptchaType",
+                    "description": "--- Captcha detection & solving ---\n\nCaptcha challenge type surfaced by captchaDetected / captchaSolved /\ncaptchaError events. New types are added over time.",
+                    "type": "string",
+                    "enum": [
+                        "turnstile_checkbox",
+                        "turnstile",
+                        "datadome_slider",
+                        "datadome",
+                        "recaptcha",
+                        "geetest",
+                        "perimeterx_hold"
+                    ]
+                },
+                {
+                    "id": "CaptchaRecord",
+                    "description": "Per-detection record returned by getSolvedCaptchas.",
+                    "type": "object",
+                    "properties": [
+                        {
+                            "name": "detectionId",
+                            "description": "UUID assigned by captchaDetected.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "type",
+                            "$ref": "CaptchaType"
+                        },
+                        {
+                            "name": "frameUrl",
+                            "description": "URL of the frame the captcha was detected in (or a\n`perimeterx-dom:<page-url>` synth URL for DOM-probed PX detections).",
+                            "type": "string"
+                        },
+                        {
+                            "name": "status",
+                            "description": "\"solved\" | \"failed\" | \"pending\" \u2014 reflects the final state the\nbrowser reached for this detection at the time of the call.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "detectedAt",
+                            "description": "Unix-ms timestamp when captchaDetected fired for this record.",
+                            "type": "number"
+                        },
+                        {
+                            "name": "method",
+                            "description": "How the browser solved (or attempted to solve) this captcha \u2014\none of: \"slider\" | \"checkbox\" | \"managed\" | \"hold\" | \"token\" |\n\"coords\". Empty string while pending.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "resolvedAt",
+                            "description": "Unix-ms timestamp when the record transitioned to solved/failed.\nUnset while pending.",
+                            "optional": true,
+                            "type": "number"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "description": "Populated when status == \"failed\" \u2014 human-readable failure reason\n(timeout, missing API key, SDK error, etc.).",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
                 }
             ],
             "commands": [
@@ -1045,7 +1108,7 @@
                         },
                         {
                             "name": "delta",
-                            "description": "Manual scroll delta in CSS viewport pixels. x = horizontal, y = vertical.\nNegative y = scroll down, positive y = scroll up.",
+                            "description": "Manual scroll delta in CSS viewport pixels. Follows the DOM\nwindow.scrollBy(x, y) convention: positive y = scroll DOWN\n(toward the bottom of the page), positive x = scroll RIGHT.\nThe handler flips signs internally when the session is\nfingerprinted as macOS/iOS (which enable natural-scroll by\ndefault), so the external contract is consistent across all\nspoofed OSes.",
                             "optional": true,
                             "$ref": "Coordinate"
                         }
@@ -1486,8 +1549,162 @@
                     ]
                 },
                 {
+                    "name": "captchaEnable",
+                    "description": "Enables automatic captcha detection AND solving. While enabled, the\nbrowser scans the frame tree after each navigation, emits\ncaptchaDetected for recognized challenges, and then immediately drives\nthe solve (slider / checkbox interaction, or remote solver for token types)\nserialized one-at-a-time. Clients observe progress via the\ncaptchaSolvingStarted / captchaSolved / captchaError events. No-op\nif already enabled. Disable with captchaDisable."
+                },
+                {
+                    "name": "captchaDisable",
+                    "description": "Disables captcha detection. The session history of detected captchas\n(and their solve/error outcomes) is preserved \u2014 retrieve it with\ngetSolvedCaptchas. Events already in flight (from captchaEnable) may\nstill arrive."
+                },
+                {
+                    "name": "getSolvedCaptchas",
+                    "description": "Returns the full list of captchas seen this session, including ones\nthat failed and ones still pending. Preserved across captchaDisable\nso billing / telemetry can retrieve it at shutdown.",
+                    "returns": [
+                        {
+                            "name": "records",
+                            "type": "array",
+                            "items": {
+                                "$ref": "CaptchaRecord"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "solveCaptcha",
+                    "description": "Requests the browser to solve a previously detected captcha.\n\nThe remote solver API key is read from the bot profile via\nvariables.captchaSolverApiKey (not passed through CDP). Types that require\nthe remote solver (turnstile token, datadome token, recaptcha, geetest) will\nfail with captchaError if the key is missing.\n\nThe upstream proxy used by the remote solver is read from the bot profile via\nvariables.captchaProxy (http://user:pass@host:port). Chromium itself\negresses via a local soxy SOCKS5 proxy, but the remote solver needs direct\nHTTP-proxy access to the same upstream egress for IP-bound solves.\nNot passed through CDP to avoid leaking upstream creds on the wire.\n\nFor turnstile_checkbox and datadome_slider no key is needed \u2014 the\nbrowser solves these via the existing Antibot interaction primitives.",
+                    "parameters": [
+                        {
+                            "name": "detectionId",
+                            "description": "detectionId from a prior captchaDetected event. If omitted the\nbrowser picks up the most recent unsolved detection.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "timeout",
+                            "description": "Seconds to wait for the remote solve (default 120).",
+                            "optional": true,
+                            "type": "integer"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "detectionId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "type",
+                            "$ref": "CaptchaType"
+                        },
+                        {
+                            "name": "method",
+                            "type": "string"
+                        },
+                        {
+                            "name": "token",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
                     "name": "disable",
                     "description": "Disables the Antibot domain."
+                }
+            ],
+            "events": [
+                {
+                    "name": "captchaDetected",
+                    "description": "Emitted when the browser detects a captcha challenge on the page\n(Turnstile widget, DataDome slider/interstitial, reCAPTCHA, GeeTest).\nOnce captchaEnable has been called, the browser autonomously solves\nthe challenge (interaction for slider/checkbox, remote solver delegation\nfor token types) and then emits captchaSolvingStarted / captchaSolved\n(or captchaError on failure) \u2014 the client does not need to call\nsolveCaptcha. solveCaptcha remains available as an explicit escape\nhatch for manual re-trigger.",
+                    "parameters": [
+                        {
+                            "name": "detectionId",
+                            "description": "Identifier the client passes back to solveCaptcha.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "type",
+                            "$ref": "CaptchaType"
+                        },
+                        {
+                            "name": "frameUrl",
+                            "description": "URL of the frame the captcha was detected in (may be an OOPIF).",
+                            "type": "string"
+                        },
+                        {
+                            "name": "siteKey",
+                            "description": "Site key (Turnstile, reCAPTCHA, hCaptcha) or GeeTest gt value.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "captchaUrl",
+                            "description": "Challenge URL for types that need it (DataDome captcha delivery URL).",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "captchaSolvingStarted",
+                    "description": "Emitted when the browser starts solving a captcha (either via direct\ninteraction or by dispatching a job to the remote solver). Useful for UI spinners\n/ timing instrumentation on the client side.",
+                    "parameters": [
+                        {
+                            "name": "detectionId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "type",
+                            "$ref": "CaptchaType"
+                        },
+                        {
+                            "name": "method",
+                            "description": "How the browser will solve: \"slider\" | \"checkbox\" | \"token\".",
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "captchaSolved",
+                    "description": "Emitted when a captcha is solved. For interaction-based solves\n(slider, checkbox) the token field is empty; for token solves\ndelegated to a remote solver it contains the response token.",
+                    "parameters": [
+                        {
+                            "name": "detectionId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "type",
+                            "$ref": "CaptchaType"
+                        },
+                        {
+                            "name": "method",
+                            "description": "How the captcha was solved: \"slider\" | \"checkbox\" | \"token\".",
+                            "type": "string"
+                        },
+                        {
+                            "name": "token",
+                            "description": "Solution token for remote-solver-backed solves. Empty/missing for\ninteraction-based solves (slider, checkbox).",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "captchaError",
+                    "description": "Emitted when a captcha cannot be solved (timeout, missing API key,\nremote solver API error, DOM element not found, etc.).",
+                    "parameters": [
+                        {
+                            "name": "detectionId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "type",
+                            "$ref": "CaptchaType"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "type": "string"
+                        }
+                    ]
                 }
             ]
         },

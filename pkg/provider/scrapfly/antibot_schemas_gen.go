@@ -143,6 +143,7 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 				"relativePosition": coordinateSchema,
 				"clear": map[string]any{"type": "boolean", "description": "Clear existing content first by sending Ctrl+A then Backspace. Default: false."},
 				"wpm": map[string]any{"type": "number", "description": "Words per minute for typing. Default: 60. See typeText for timing details."},
+				"paste": map[string]any{"type": "boolean", "description": "Simulate paste instead of keystroke typing. When true, writes the text to the system clipboard then fires Ctrl+V (Cmd..."},
 			},
 			"required": []string{"selector", "text"},
 		},

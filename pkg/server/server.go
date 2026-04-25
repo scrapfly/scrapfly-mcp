@@ -26,6 +26,10 @@ func DefaultStreamableServerFunction(mcpHandler *mcp.StreamableHTTPHandler, http
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
+	// Browser SSE/JSON endpoints (screencast / downloads / captchas) for
+	// playground-style consumers. Safe to register unconditionally — they
+	// 404 cleanly when no Cloud Browser session is active.
+	RegisterBrowserEndpoints(mux)
 	mux.Handle("/", mcpHandler)
 	log.Fatal(http.ListenAndServe(*httpAddr, mux))
 }

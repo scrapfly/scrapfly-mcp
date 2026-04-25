@@ -223,11 +223,17 @@ func MakeExtractionModelSchema() *jsonschema.Schema {
 }
 
 func MakeProxyPoolSchema() *jsonschema.Schema {
+	// No `Default:` here. ApplyDefaults bakes the literal into every tool
+	// call where the field was not explicitly provided, which previously
+	// forced cloud_browser_open through the datacenter pool unconditionally
+	// — fine in prod, but breaks any deployment where that pool's upstream
+	// proxy credentials aren't valid (notably dev cluster). When omitted, the
+	// SDK's `if config.ProxyPool != ""` guard in CloudBrowser() simply does
+	// not append the query param, so the upstream picks its own default.
 	return &jsonschema.Schema{
 		Type:        "string",
 		Enum:        scrapfly.GetAnyEnumFor[scrapfly.ProxyPool](),
-		Default:     json.RawMessage(`"public_datacenter_pool"`),
-		Description: "The proxy pool to use. Supports public_datacenter_pool and public_residential_pool, defaults: public_datacenter_pool",
+		Description: "The proxy pool to use. Supports public_datacenter_pool and public_residential_pool. When omitted, the upstream picks its default.",
 	}
 }
 
@@ -275,13 +281,25 @@ func MakeScreenshotFlagsSchema() *jsonschema.Schema {
 func MustRefineScrapingToolInputSchema[T any]() *jsonschema.Schema {
 
 	schema := SchemaFor[T]()
-	schema.Properties["url"] = MakeUrlSchema()
-	schema.Properties["country"] = MakeCountrySchema()
-	schema.Properties["format"] = MakeFormatSchema()
-	schema.Properties["format_options"] = MakeFormatOptionsSchema()
-	schema.Properties["proxy_pool"] = MakeProxyPoolSchema()
-	schema.Properties["rendering_wait"] = MakeRenderingWaitSchema()
-	schema.Properties["extraction_model"] = MakeExtractionModelSchema()
+
+	// Refine each property in-place ONLY when the input struct actually
+	// declares it. Previously these were all unconditional, which leaked
+	// scrape-tool-only fields (extraction_model, format, etc.) into every
+	// cloud_browser_* tool's schema and confused LLMs into supplying them.
+	// Gating on `_, ok := schema.Properties[key]` keeps each tool's schema
+	// scoped to what its Go input struct actually exposes.
+	refine := func(key string, builder func() *jsonschema.Schema) {
+		if _, ok := schema.Properties[key]; ok {
+			schema.Properties[key] = builder()
+		}
+	}
+	refine("url", MakeUrlSchema)
+	refine("country", MakeCountrySchema)
+	refine("format", MakeFormatSchema)
+	refine("format_options", MakeFormatOptionsSchema)
+	refine("proxy_pool", MakeProxyPoolSchema)
+	refine("rendering_wait", MakeRenderingWaitSchema)
+	refine("extraction_model", MakeExtractionModelSchema)
 
 	// if capture_page is in the schema, its GetPageToolInput so add the property
 	if _, ok := schema.Properties["capture_page"]; ok {
