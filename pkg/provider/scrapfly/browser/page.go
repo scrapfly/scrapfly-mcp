@@ -177,6 +177,24 @@ func (p *PageState) Refresh(session *Session) {
 		"LayoutTable": true, "LayoutTableRow": true, "LayoutTableCell": true,
 	}
 
+	// Collect every backendDOMNodeId we'll annotate with compound-
+	// component metadata (input/select/textarea attributes that the
+	// AX tree alone doesn't surface — type, placeholder, min/max/step,
+	// readonly, select.options). See compoundMeta + collectCompoundMeta
+	// below.
+	candidateBackendIDs := make([]int64, 0)
+	candidateRoles := make(map[int64]string)
+	for _, node := range axTree.Nodes {
+		role := axValueString(node.Role)
+		if role == "textbox" || role == "combobox" || role == "checkbox" || role == "radio" || role == "spinbutton" || role == "slider" || role == "searchbox" {
+			if id := int64(node.BackendDOMNodeID); id > 0 {
+				candidateBackendIDs = append(candidateBackendIDs, id)
+				candidateRoles[id] = role
+			}
+		}
+	}
+	compoundByID := p.collectCompoundMeta(session, candidateBackendIDs)
+
 	var sb strings.Builder
 	for _, node := range axTree.Nodes {
 		if node.Ignored {
@@ -206,10 +224,172 @@ func (p *PageState) Refresh(session *Session) {
 				}
 			}
 		}
+		// Compound-component enrichment — adds the attributes the
+		// model actually needs to plan the next action (what kind of
+		// input is this, what values are accepted, what options exist
+		// on a <select>, …). All optional; we only emit fields that
+		// were actually present on the underlying element.
+		if meta, ok := compoundByID[int64(node.BackendDOMNodeID)]; ok {
+			if meta.Type != "" {
+				line += fmt.Sprintf(` type="%s"`, meta.Type)
+			}
+			if meta.Placeholder != "" {
+				line += fmt.Sprintf(` placeholder="%s"`, escapeQuotes(meta.Placeholder))
+			}
+			if meta.Min != "" {
+				line += fmt.Sprintf(` min="%s"`, meta.Min)
+			}
+			if meta.Max != "" {
+				line += fmt.Sprintf(` max="%s"`, meta.Max)
+			}
+			if meta.Step != "" {
+				line += fmt.Sprintf(` step="%s"`, meta.Step)
+			}
+			if meta.Pattern != "" {
+				line += fmt.Sprintf(` pattern="%s"`, escapeQuotes(meta.Pattern))
+			}
+			if meta.Readonly {
+				line += " readonly"
+			}
+			if meta.Multiple {
+				line += " multiple"
+			}
+			if len(meta.Options) > 0 {
+				line += fmt.Sprintf(` options="%s"`, strings.Join(meta.Options, "|"))
+			}
+			if meta.Files > 0 {
+				line += fmt.Sprintf(` files=%d`, meta.Files)
+				if len(meta.FilesNames) > 0 {
+					line += fmt.Sprintf(` filenames="%s"`, strings.Join(meta.FilesNames, "|"))
+				}
+			}
+		}
 		sb.WriteString(line + "\n")
 	}
 	p.AXTree = sb.String()
-	log.Printf("[Page] Refresh done: url=%s title=%s axNodes=%d", p.URL, p.Title, len(axTree.Nodes))
+	log.Printf("[Page] Refresh done: url=%s title=%s axNodes=%d compoundEnriched=%d",
+		p.URL, p.Title, len(axTree.Nodes), len(compoundByID))
+}
+
+// compoundMeta carries the per-element form-control attributes that
+// the AX tree alone doesn't surface. Populated by collectCompoundMeta
+// via per-element Runtime.callFunctionOn calls and rendered into the
+// snapshot text alongside the AX role/name.
+type compoundMeta struct {
+	Type        string   `json:"type"`
+	Placeholder string   `json:"placeholder"`
+	Min         string   `json:"min"`
+	Max         string   `json:"max"`
+	Step        string   `json:"step"`
+	Pattern     string   `json:"pattern"`
+	Readonly    bool     `json:"readonly"`
+	Multiple    bool     `json:"multiple"`
+	Files       int      `json:"files"`
+	Options     []string `json:"options"`
+	FilesNames  []string `json:"filesNames"`
+}
+
+// collectCompoundMeta runs a single Runtime.evaluate over the page
+// to collect input/select compound metadata for the given
+// backendDOMNodeIds. Returns a map keyed by backendDOMNodeId.
+//
+// The script is a single function call that walks the document for
+// every form-control element, identifies it via window.__cdp_findByBE
+// (a temp helper), and returns a JSON-friendly structure. Falls back
+// to per-element queries if the batched call fails — never errors;
+// a missing entry just means the model loses one enrichment field.
+func (p *PageState) collectCompoundMeta(session *Session, backendIDs []int64) map[int64]compoundMeta {
+	out := make(map[int64]compoundMeta)
+	if len(backendIDs) == 0 {
+		return out
+	}
+	// Use DOM.resolveNode + Runtime.callFunctionOn per id. The
+	// alternative (single Runtime.evaluate) can't address elements by
+	// backendDOMNodeId — it has to walk the DOM, which is fragile
+	// against shadow roots. Per-call is cheap (each is <2ms) and there
+	// are typically <20 form controls per page.
+	for _, bid := range backendIDs {
+		resolveResult, err := session.SendCDP("DOM.resolveNode", map[string]any{
+			"backendNodeId": bid,
+		})
+		if err != nil {
+			continue
+		}
+		var resolved struct {
+			Object struct {
+				ObjectID string `json:"objectId"`
+			} `json:"object"`
+		}
+		if err := json.Unmarshal(resolveResult, &resolved); err != nil || resolved.Object.ObjectID == "" {
+			continue
+		}
+		callResult, err := session.SendCDP("Runtime.callFunctionOn", map[string]any{
+			"objectId":      resolved.Object.ObjectID,
+			"functionDeclaration": _compoundMetaJSFn,
+			"returnByValue": true,
+			"silent":        true,
+		})
+		if err != nil {
+			continue
+		}
+		var rv struct {
+			Result struct {
+				Value compoundMeta `json:"value"`
+			} `json:"result"`
+		}
+		if err := json.Unmarshal(callResult, &rv); err != nil {
+			continue
+		}
+		out[bid] = rv.Result.Value
+	}
+	return out
+}
+
+// _compoundMetaJSFn is the JS expression Runtime.callFunctionOn runs
+// on each form-control element. Pure read; no side effects. Returns
+// a stable shape (matches the Go compoundMeta struct).
+const _compoundMetaJSFn = `function(){
+  const e = this;
+  const tag = (e.tagName || '').toLowerCase();
+  const out = { type:'', placeholder:'', min:'', max:'', step:'', pattern:'',
+                readonly:false, multiple:false, files:0, options:[], filesNames:[] };
+  if (tag === 'select') {
+    out.type = 'select';
+    out.multiple = !!e.multiple;
+    const opts = [];
+    for (const o of e.options) {
+      const v = (o.value !== '' ? o.value : o.text) || '';
+      if (v) opts.push(v.length > 40 ? v.slice(0,40)+'…' : v);
+      if (opts.length >= 50) { opts.push('…'); break; }
+    }
+    out.options = opts;
+  } else if (tag === 'input' || tag === 'textarea') {
+    out.type = (e.getAttribute('type') || tag).toLowerCase();
+    out.placeholder = e.getAttribute('placeholder') || '';
+    out.min = e.getAttribute('min') || '';
+    out.max = e.getAttribute('max') || '';
+    out.step = e.getAttribute('step') || '';
+    out.pattern = e.getAttribute('pattern') || '';
+    out.readonly = !!e.readOnly;
+    if (out.type === 'file') {
+      out.multiple = !!e.multiple;
+      try {
+        const files = e.files || [];
+        out.files = files.length;
+        for (let i = 0; i < Math.min(files.length, 5); i++) {
+          out.filesNames.push(files[i].name);
+        }
+      } catch(_) {}
+    }
+  }
+  return out;
+}`
+
+// escapeQuotes makes a string safe for embedding in `key="..."` text
+// inside the snapshot. Stripped quotes prevent the model from
+// confusing attribute boundaries; we don't need a perfect escape.
+func escapeQuotes(s string) string {
+	return strings.ReplaceAll(s, `"`, `\"`)
 }
 
 // DownloadMeta holds metadata for a downloaded file.
