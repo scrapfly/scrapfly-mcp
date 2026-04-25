@@ -274,6 +274,14 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 
 	// Refresh page state and include snapshot in response
 	session.Page.Refresh(session)
+
+	// Make the per-session interaction tools (click, fill,
+	// take_snapshot, evaluate_script, ...) visible in tools/list
+	// now that a browser is open. Fires
+	// notifications/tools/list_changed automatically so connected
+	// MCP clients refetch and the LLM sees the new surface.
+	p.mountInteractionTools()
+
 	b, _ := json.MarshalIndent(response, "", "  ")
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: string(b) + "\n\n" + session.Page.Snapshot()}},
@@ -304,6 +312,11 @@ func (p *ScrapflyToolProvider) CloudBrowserClose(
 	if err := client.CloudBrowserSessionStop(input.SessionID); err != nil {
 		p.logger.Printf("cloud_browser_close: API stop call failed (non-fatal, WebSocket already closed): %v", err)
 	}
+
+	// Hide the per-session interaction tools from tools/list now
+	// that no browser is open. Fires notifications/tools/list_changed
+	// so connected MCP clients refetch and stop offering them.
+	p.unmountInteractionTools()
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Session %s closed successfully.", input.SessionID)}},
@@ -764,6 +777,10 @@ func (p *ScrapflyToolProvider) BrowserUnblock(
 			"KEEP THE SESSION OPEN across follow-up turns — the user may ask more questions about this page. "+
 			"Only call cloud_browser_close when the user explicitly asks to close, navigates to an unrelated site, or says they are done.",
 		input.URL)
+
+	// Make the per-session interaction tools visible — same as
+	// cloud_browser_open. See mountInteractionTools docstring.
+	p.mountInteractionTools()
 
 	b, _ := json.MarshalIndent(response, "", "  ")
 	return &mcp.CallToolResult{

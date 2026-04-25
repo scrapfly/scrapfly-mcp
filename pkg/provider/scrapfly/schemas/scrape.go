@@ -3,6 +3,7 @@ package schemas
 import (
 	"encoding/json"
 	"log"
+	"reflect"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/scrapfly/go-scrapfly"
@@ -41,7 +42,60 @@ func SchemaFor[T any]() *jsonschema.Schema {
 	if err != nil {
 		log.Fatalf("Failed to make schema for %T: %v", v, err)
 	}
+	// Sanitise the whole tree: strip empty-string entries from any
+	// enum. Some go-scrapfly types declare an empty-string sentinel
+	// for "not set" (e.g. ExtractionModelNone = ""); `jsonschema.For`
+	// reflects it into the schema's Enum list, which downstream JSON
+	// Schema consumers such as Google Gemini reject ("enum[N]: cannot
+	// be empty"). Do this at the root `SchemaFor` so every tool
+	// benefits, regardless of which Make*Schema helpers touch the
+	// property afterwards.
+	stripEmptyStringEnums(schema)
 	return schema
+}
+
+// stripEmptyStringEnums walks a jsonschema.Schema tree and removes
+// any "empty-stringy" entries from Enum lists. Handles Properties,
+// Items, and nested composite schemas (AllOf/AnyOf/OneOf/Not).
+//
+// Why "stringy" (reflect-based) and not a `v.(string)` type assertion:
+// go-scrapfly enums are *typed* strings (e.g. `type ExtractionModel
+// string`), so the empty-sentinel `ExtractionModelNone = ""` arrives
+// here as `scrapfly.ExtractionModel("")` — a `v.(string)` cast on it
+// returns ok=false and the empty value sneaks through. Fall back to
+// reflect.Kind == String to catch every string-shaped value.
+func stripEmptyStringEnums(s *jsonschema.Schema) {
+	if s == nil {
+		return
+	}
+	if len(s.Enum) > 0 {
+		filtered := make([]any, 0, len(s.Enum))
+		for _, v := range s.Enum {
+			if v == nil {
+				continue
+			}
+			rv := reflect.ValueOf(v)
+			if rv.Kind() == reflect.String && rv.String() == "" {
+				continue
+			}
+			filtered = append(filtered, v)
+		}
+		s.Enum = filtered
+	}
+	for _, child := range s.Properties {
+		stripEmptyStringEnums(child)
+	}
+	stripEmptyStringEnums(s.Items)
+	for _, child := range s.AllOf {
+		stripEmptyStringEnums(child)
+	}
+	for _, child := range s.AnyOf {
+		stripEmptyStringEnums(child)
+	}
+	for _, child := range s.OneOf {
+		stripEmptyStringEnums(child)
+	}
+	stripEmptyStringEnums(s.Not)
 }
 
 func MakeCapturePageSchema() *jsonschema.Schema {
@@ -150,13 +204,22 @@ func MakeCountrySchema() *jsonschema.Schema {
 }
 
 func MakeExtractionModelSchema() *jsonschema.Schema {
-	return &jsonschema.Schema{
+	// SchemaFor's tree walk also strips empty enums for us; doing
+	// it here too keeps the override path self-contained.
+	//
+	// We deliberately do NOT set a Default of `""`: with the empty
+	// sentinel removed from Enum, jsonschema-go's
+	// ValidateDefaults=true would reject the resolved schema at
+	// registration time and tank the entire tool. "Not set" is
+	// expressed by the Go struct's `omitempty` JSON tag instead.
+	s := &jsonschema.Schema{
 		Title:       "Extraction Model",
 		Type:        "string",
 		Enum:        scrapfly.GetAnyEnumFor[scrapfly.ExtractionModel](),
-		Default:     json.RawMessage(`""`),
 		Description: "The extraction model to use for the offloaded extraction. Exclusive with extraction_template and extraction_prompt.",
 	}
+	stripEmptyStringEnums(s)
+	return s
 }
 
 func MakeProxyPoolSchema() *jsonschema.Schema {

@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/scrapfly/scrapfly-mcp/pkg/provider/scrapfly/browser"
@@ -37,7 +38,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		"required": []string{"uid", "value"},
 	}
 
-	tools.AddToolToToolset(ts, &mcp.Tool{
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
 		Name:        "click",
 		Title:       "Click on an element",
 		Description: "Click an element in the active cloud browser session. Requires a `uid` obtained from `take_snapshot` output — uids are stable for that snapshot only. Typical flow: take_snapshot → locate element by label/text → click(uid). After the click, the page may navigate or reveal new elements; take another snapshot before your next action if the DOM likely changed.",
@@ -50,7 +51,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		return r, nil, err
 	})
 
-	tools.AddToolToToolset(ts, &mcp.Tool{
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
 		Name:        "fill",
 		Title:       "Fill an input field",
 		Description: "Set the value of an input/textarea in one shot (faster than `type_text`). Prefer this for forms, search boxes, addresses. Requires `uid` from a recent `take_snapshot`. Use `type_text` instead only when the page has a live autocomplete that needs per-keystroke events.",
@@ -63,7 +64,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		return r, nil, err
 	})
 
-	tools.AddToolToToolset(ts, &mcp.Tool{
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
 		Name:        "type_text",
 		Title:       "Type text with human timing",
 		Description: "Type text character-by-character into the currently focused input (use after clicking/focusing). Slower than `fill` but fires per-keystroke events — needed for live autocompletes, search-as-you-type, or inputs that reject setValue-style writes.",
@@ -81,7 +82,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		return r, nil, err
 	})
 
-	tools.AddToolToToolset(ts, &mcp.Tool{
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
 		Name:        "hover",
 		Title:       "Hover over an element",
 		Description: "Move the mouse over an element (by `uid` from `take_snapshot`). Use when a page reveals menus, tooltips, or controls only on hover — otherwise `click` is what you want.",
@@ -94,7 +95,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		return r, nil, err
 	})
 
-	tools.AddToolToToolset(ts, &mcp.Tool{
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
 		Name:        "press_key",
 		Title:       "Press a keyboard key",
 		Description: "Send a single key to the focused element. Accepts names like Enter, Tab, Escape, ArrowDown, Backspace. Typical use: submit a form (Enter), navigate a listbox (ArrowDown), close a modal (Escape).",
@@ -112,7 +113,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		return r, nil, err
 	})
 
-	tools.AddToolToToolset(ts, &mcp.Tool{
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
 		Name:        "scroll",
 		Title:       "Scroll the page",
 		Description: "Scroll either (a) a specific element into view by `uid`, or (b) the page by a pixel delta, or (c) to bottom via selector type \"bottom\". Use (a) before clicking an off-screen element; use (c) to trigger infinite-scroll pagination; retake a snapshot afterwards since new content typically appears.",
@@ -162,7 +163,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		return r, nil, err
 	})
 
-	tools.AddToolToToolset(ts, &mcp.Tool{
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
 		Name:        "select_option",
 		Title:       "Select a dropdown option",
 		Description: "Pick an option from a native HTML `<select>` by the dropdown's `uid` and the option's `value` attribute (not its visible label). For custom dropdowns built out of divs, use `click` instead.",
@@ -182,7 +183,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		return r, nil, err
 	})
 
-	tools.AddToolToToolset(ts, &mcp.Tool{
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
 		Name:        "drag",
 		Title:       "Drag and drop",
 		Description: "Drag one element onto another (both by `uid`). Use for HTML5 drag-and-drop interfaces — reordering lists, uploading via drop zones, Trello-style boards. Rare outside those cases.",
@@ -213,7 +214,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 
 	// ── Inspection tools (CDP) ─────────────────────────────────────────────
 
-	tools.AddToolToToolset(ts, &mcp.Tool{
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
 		Name:        "get_page_url",
 		Title:       "Get current page URL",
 		Description: "Return the browser's current URL and page title. Cheap; use it to confirm a navigation landed where you expected, or to capture the final URL after redirects before reporting back to the user.",
@@ -229,7 +230,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		}, nil, nil
 	})
 
-	tools.AddToolToToolset(ts, &mcp.Tool{
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
 		Name:        "take_screenshot",
 		Title:       "Take a screenshot",
 		Description: "Capture a PNG of the current cloud-browser page. Use when the user asks for a visual, or when the page's information (charts, diagrams, styled layout) isn't well-represented by the accessibility tree. For structural/text understanding, `take_snapshot` is cheaper and more actionable.",
@@ -257,7 +258,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		}, nil, nil
 	})
 
-	tools.AddToolToToolset(ts, &mcp.Tool{
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
 		Name:        "take_snapshot",
 		Title:       "Get page content snapshot",
 		Description: "Return the current page's accessibility tree as structured text with element uids. This is your primary way to see and act on the page — read it to find links, buttons, inputs, headings, then use their uids with `click`, `fill`, `hover`, etc. Cheap — call it freely whenever you're unsure what's on the page or after an action that likely changed the DOM. Do NOT guess uids.",
@@ -274,7 +275,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		}, nil, nil
 	})
 
-	tools.AddToolToToolset(ts, &mcp.Tool{
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
 		Name:        "evaluate_script",
 		Title:       "Run JavaScript",
 		Description: "Evaluate a JS expression in the page and return its value. Use for *reading*: extract a computed value, read localStorage, inspect window state, pull structured data the snapshot doesn't expose. Do NOT use for interaction — `click`/`fill`/`type_text` are the supported paths and survive anti-bot checks. Script runs as `(() => <your expr>)()` in the main world.",
@@ -326,8 +327,33 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 	})
 
 	// ── WebMCP meta-tools ──────────────────────────────────────────────────
+	//
+	// Note: list_webmcp_tools and call_webmcp_tool are ALSO mounted by
+	// addWebMCPMetaTools into the static tool surface so the model can
+	// reach them across the dynamic mount/unmount boundary (ADK-Python
+	// caches tools/list and doesn't refetch on
+	// notifications/tools/list_changed today). Both tools error
+	// gracefully when no browser is open. We keep them in this builder
+	// too so they get re-mounted with the rest of the interaction set
+	// — server.AddTool replaces existing tools with the same name, no
+	// duplicate-registration risk.
 
-	tools.AddToolToToolset(ts, &mcp.Tool{
+	addWebMCPMetaTools(ts, logger)
+
+	return ts
+}
+
+// addWebMCPMetaTools registers list_webmcp_tools and call_webmcp_tool
+// into the given toolset. These are exposed BOTH statically (so the
+// model can reach them across the cloud_browser_open / _close
+// boundary even when the MCP client doesn't refetch tools/list — a
+// known gap in adk-python) AND dynamically as part of the
+// interactionTools set (so they appear alongside their siblings).
+// `server.AddTool` replaces by name, so double-registration is safe.
+//
+// Both handlers no-op gracefully when no browser session is open.
+func addWebMCPMetaTools(ts tools.HandledToolSet, logger *log.Logger) {
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
 		Name:        "list_webmcp_tools",
 		Title:       "List page-registered MCP tools",
 		Description: "List the WebMCP tools the current page has registered via `navigator.modelContext.registerTool()`. Returns name, description, and input schema for each. When a page exposes these, they are an author-provided programmatic API — prefer calling one via `call_webmcp_tool` over DOM scraping or UI clicks. The `cloud_browser_open` and `cloud_browser_navigate` responses already surface this list, so you rarely need to call this directly.",
@@ -355,7 +381,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		}, nil, nil
 	})
 
-	tools.AddToolToToolset(ts, &mcp.Tool{
+	tools.MustAddToolToToolset(ts, &mcp.Tool{
 		Name:        "call_webmcp_tool",
 		Title:       "Execute a page-registered MCP tool",
 		Description: "Invoke a WebMCP tool that the current page registered with `navigator.modelContext.registerTool()`. Preferred over clicking/scraping when the page exposes a matching tool — it's the author's declared API for that action and avoids DOM fragility. Input must satisfy the schema returned by `list_webmcp_tools` (also on the open/navigate response). Tool runs in the page's main world.",
@@ -394,8 +420,6 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		r, err := browser.InvokeTool(logger, session, args.ToolName, inputArgs)
 		return r, nil, err
 	})
-
-	return ts
 }
 
 // callActiveAntibot finds the active session and calls an Antibot CDP tool.
