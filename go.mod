@@ -6,7 +6,7 @@ require (
 	github.com/chromedp/cdproto v0.0.0-20260405000525-47a8ff65b46a
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/modelcontextprotocol/go-sdk v1.5.0
-	github.com/scrapfly/go-scrapfly v0.3.3
+	github.com/scrapfly/go-scrapfly v0.3.4
 )
 
 require (

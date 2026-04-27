@@ -23,8 +23,8 @@ github.com/modelcontextprotocol/go-sdk v1.5.0 h1:CHU0FIX9kpueNkxuYtfYQn1Z0slhFzB
 github.com/modelcontextprotocol/go-sdk v1.5.0/go.mod h1:gggDIhoemhWs3BGkGwd1umzEXCEMMvAnhTrnbXJKKKA=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/scrapfly/go-scrapfly v0.3.3 h1:VSJshEcWq3M9JQYd+ZF+q5F1Dzw6hVNjwTRegPl9Hng=
-github.com/scrapfly/go-scrapfly v0.3.3/go.mod h1:D45vQf6CBemOliJehxwnU2iL4EQfry2wWPwn83cGO54=
+github.com/scrapfly/go-scrapfly v0.3.4 h1:nTWupNFaBZqyh9ivadsZgaRa3pASFlqRxawVCQazjcw=
+github.com/scrapfly/go-scrapfly v0.3.4/go.mod h1:D45vQf6CBemOliJehxwnU2iL4EQfry2wWPwn83cGO54=
 github.com/segmentio/asm v1.1.3 h1:WM03sfUOENvvKexOLp+pCqgb/WDjsi7EK8gIsICtzhc=
 github.com/segmentio/asm v1.1.3/go.mod h1:Ld3L4ZXGNcSLRg4JBsZ3//1+f/TjYl0Mzen/DQy1EJg=
 github.com/segmentio/encoding v0.5.4 h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=
