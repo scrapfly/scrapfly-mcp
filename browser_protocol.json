@@ -614,6 +614,7 @@
                         "css",
                         "xpath",
                         "axNodeId",
+                        "backendNodeId",
                         "coord",
                         "role",
                         "bottom"
@@ -716,7 +717,8 @@
                         "datadome",
                         "recaptcha",
                         "geetest",
-                        "perimeterx_hold"
+                        "perimeterx_hold",
+                        "aws_waf"
                     ]
                 },
                 {
@@ -1209,6 +1211,74 @@
                 {
                     "name": "showCursor",
                     "description": "Injects a debug cursor overlay (red dot + trail) for visual testing.\nPersists across navigations \u2014 re-injected automatically on page load.",
+                    "parameters": [
+                        {
+                            "name": "keepHistory",
+                            "description": "When true, the cursor trail retains its FULL movement history at\nconstant opacity instead of the default rolling ~60-point fading\ntrail. This makes a single screenshot show the entire path the\ncursor took (approach + tremor), not just its current position \u2014\nuse it to debug movement trajectories. Default: false.",
+                            "optional": true,
+                            "type": "boolean"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "success",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "highlightTarget",
+                    "description": "Highlights a target element on the debug cursor overlay: four corner\nbrackets painted around the element's bounding box in a kind-specific\ncolor, auto-expiring after ttlMs. Use to signal what the agent is\nABOUT to interact with (focus paint before dispatch) so an operator\nreplaying the screencast can see intent, not just outcome.\n\nNo-op when showCursor hasn't been called for this session \u2014 the\npaint pipeline only runs while the cursor overlay is enabled.\n\nBounds resolution is the same Mojo path QuerySelectorBounds uses\n(no JS execution, no DOM mutation). Out-of-viewport or hidden\nelements still receive a paint when their layout box is non-empty \u2014\nthe corner brackets may sit off-screen in that case, which is the\ntruthful representation of where the element is.\n\nSelector types: same set as moveTo (css / xpath / axNodeId / coord\n/ backendNodeId). For backendNodeId, the query is the integer\nBackendNodeId as a decimal string.",
+                    "parameters": [
+                        {
+                            "name": "selector",
+                            "$ref": "Selector"
+                        },
+                        {
+                            "name": "kind",
+                            "description": "Color kind. Single ASCII character. Recognized:\n  \"C\" \u2014 click hint (amber, about-to-act)\n  \"T\" \u2014 type / fill hint (blue)\n  \"V\" \u2014 vault-resolved credential fill (teal-cyan)\n  \"H\" \u2014 hover hint (lavender)\n  \"S\" \u2014 scroll-into-view hint (purple)\n  \"O\" \u2014 outcome: success (green, post-action flash)\n  \"X\" \u2014 outcome: failure (red, post-action flash)\nUnknown values fall back to amber. Pass \"\" or omit to clear.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "ttlMs",
+                            "description": "Time in milliseconds the brackets remain visible before fading.\nDefault 1500ms. Clamped server-side to [0, 30000].",
+                            "optional": true,
+                            "type": "integer"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "success",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "previewMousePath",
+                    "description": "Paints a \"going there next\" preview line on the cursor overlay: a\nthin semi-transparent straight segment from the current tracked\ncursor position to the target element's center. Use just before\nfiring a click/move to telegraph intent \u2014 the operator sees WHERE\nthe cursor is about to travel before any motion begins.\n\nThe straight line is intentional: it represents intent, not the\nactual Bezier trajectory the human-input model will draw (which\nis randomized per-call and shouldn't be teased before it runs).\n\nNo-op when showCursor isn't enabled. Fire-and-forget \u2014 agents call\nthis in parallel with the real click/move dispatch and never await\nthe response.",
+                    "parameters": [
+                        {
+                            "name": "selector",
+                            "$ref": "Selector"
+                        },
+                        {
+                            "name": "ttlMs",
+                            "description": "Time in milliseconds the preview line remains visible before\nfading. Should be slightly longer than the expected mouse-move\nduration so the line is still visible while the cursor is in\ntransit. Default 500ms. Clamped server-side to [0, 5000].",
+                            "optional": true,
+                            "type": "integer"
+                        }
+                    ],
                     "returns": [
                         {
                             "name": "success",
@@ -1431,6 +1501,30 @@
                         {
                             "name": "reason",
                             "description": "Human-readable reason when not visible (e.g. \"zero size\", \"off viewport\").",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "isFocused",
+                    "description": "Checks whether the currently focused element matches the selector.\nOnly \"css\" and \"xpath\" selector types are supported. Searches the\nmain frame first, then iframes/OOPIFs \u2014 focus may be inside an OOPIF.\nUseful as a pre-flight check before sending keystrokes blindly to\nthe focused element: e.g. PasswordManager.prefillChoice uses this\nto confirm the password field is still focused before typing.",
+                    "parameters": [
+                        {
+                            "name": "selector",
+                            "description": "Only css and xpath selector types are supported.",
+                            "$ref": "Selector"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "focused",
+                            "description": "True iff `document.activeElement` (or the focused element in\none of the iframes) matches the selector.",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "reason",
+                            "description": "Human-readable reason when not focused (e.g. \"no active element\",\n\"focused element does not match selector\").",
                             "optional": true,
                             "type": "string"
                         }
@@ -2883,7 +2977,11 @@
                         "AutofillAndManualTextPolicyControlledFeaturesInfo",
                         "AutofillPolicyControlledFeatureInfo",
                         "ManualTextPolicyControlledFeatureInfo",
-                        "FormModelContextParameterMissingTitleAndDescription"
+                        "FormModelContextParameterMissingTitleAndDescription",
+                        "FormModelContextMissingToolName",
+                        "FormModelContextMissingToolDescription",
+                        "FormModelContextRequiredParameterMissingName",
+                        "FormModelContextParameterMissingName"
                     ]
                 },
                 {
@@ -3340,49 +3438,6 @@
                     ]
                 },
                 {
-                    "id": "AdScriptIdentifier",
-                    "description": "Metadata about the ad script that was on the stack that caused the current\nscript in the `AdAncestry` to be considered ad related.",
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "scriptId",
-                            "description": "The script's v8 identifier.",
-                            "$ref": "Runtime.ScriptId"
-                        },
-                        {
-                            "name": "debuggerId",
-                            "description": "v8's debugging id for the v8::Context.",
-                            "$ref": "Runtime.UniqueDebuggerId"
-                        },
-                        {
-                            "name": "name",
-                            "description": "The script's url (or generated name based on id if inline script).",
-                            "type": "string"
-                        }
-                    ]
-                },
-                {
-                    "id": "AdAncestry",
-                    "description": "Providence about how an ad script was determined to be such. It is an ad\nbecause its url matched a filterlist rule, or because some other ad script\nwas on the stack when this script was loaded.",
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "adAncestryChain",
-                            "description": "The ad-script in the stack when the offending script was loaded. This is\nrecursive down to the root script that was tagged due to the filterlist\nrule.",
-                            "type": "array",
-                            "items": {
-                                "$ref": "AdScriptIdentifier"
-                            }
-                        },
-                        {
-                            "name": "rootScriptFilterlistRule",
-                            "description": "The filterlist rule that caused the root (last) script in\n`adAncestry` to be ad-tagged.",
-                            "optional": true,
-                            "type": "string"
-                        }
-                    ]
-                },
-                {
                     "id": "SelectivePermissionsInterventionIssueDetails",
                     "description": "The issue warns about blocked calls to privacy sensitive APIs via the\nSelective Permissions Intervention.",
                     "type": "object",
@@ -3395,7 +3450,7 @@
                         {
                             "name": "adAncestry",
                             "description": "Why the ad script using the API is considered an ad.",
-                            "$ref": "AdAncestry"
+                            "$ref": "Network.AdAncestry"
                         },
                         {
                             "name": "stackTrace",
@@ -4798,6 +4853,24 @@
                     ]
                 },
                 {
+                    "id": "RestoredTab",
+                    "description": "A tab reopened by restoreSession.",
+                    "experimental": true,
+                    "type": "object",
+                    "properties": [
+                        {
+                            "name": "targetId",
+                            "description": "DevTools target id of the restored tab. Attach to it with\nTarget.attachToTarget, or drive it with the other Browser/Page commands.",
+                            "$ref": "Target.TargetID"
+                        },
+                        {
+                            "name": "url",
+                            "description": "URL the restored tab committed to (may still be loading).",
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
                     "id": "PrivacySandboxAPI",
                     "experimental": true,
                     "type": "string",
@@ -5175,6 +5248,44 @@
                     ]
                 },
                 {
+                    "name": "enable",
+                    "description": "Enables Browser-domain Scrapfly events for this session. Currently emits\nrestorableSessionDetected if the last run ended in a crash and a session is\navailable to restore (the CDP equivalent of Chromium showing the \"Restore\npages?\" bubble). No-op for the upstream Browser commands. [Scrapfly extension]",
+                    "experimental": true
+                },
+                {
+                    "name": "restoreSession",
+                    "description": "Reopens the previous browsing session's tabs \u2014 the programmatic equivalent\nof clicking \"Restore\" on the \"Chromium didn't shut down correctly\" bubble.\nRequires a profile with a persisted last session (a reused user-data-dir).\nRestores asynchronously; the response is sent once the browser/tabs have\nbeen created (not necessarily finished loading). [Scrapfly extension]",
+                    "experimental": true,
+                    "parameters": [
+                        {
+                            "name": "requireCrashedState",
+                            "description": "When true, only restore if the last exit was a crash; otherwise this\nis a no-op with success=false. Default false (restore regardless of how\nthe last session ended, as long as one exists).",
+                            "optional": true,
+                            "type": "boolean"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "success",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "restoredTabs",
+                            "description": "The tabs reopened by the restore, each with its DevTools target id and\nURL. Empty/absent on failure.",
+                            "optional": true,
+                            "type": "array",
+                            "items": {
+                                "$ref": "RestoredTab"
+                            }
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
                     "name": "addPrivacySandboxCoordinatorKeyConfig",
                     "description": "Configures encryption keys used with a given privacy sandbox API to talk\nto a trusted coordinator.  Since this is intended for test automation only,\ncoordinatorOrigin must be a .test domain. No existing coordinator\nconfiguration for the origin may exist.",
                     "parameters": [
@@ -5295,6 +5406,11 @@
                             "type": "string"
                         }
                     ]
+                },
+                {
+                    "name": "restorableSessionDetected",
+                    "description": "Emitted (after Browser.enable) when the previous run ended uncleanly and a\nsession is available to restore \u2014 i.e. exactly when Chromium would surface\nthe \"Chromium didn't shut down correctly / Restore pages?\" bubble in the UI.\nThe client can react by calling Browser.restoreSession. [Scrapfly extension]",
+                    "experimental": true
                 }
             ]
         },
@@ -6691,6 +6807,13 @@
                             "items": {
                                 "$ref": "CSSFunctionNode"
                             }
+                        },
+                        {
+                            "name": "originTreeScopeNodeId",
+                            "description": "The BackendNodeId of the DOM node that constitutes the origin tree scope of this rule.",
+                            "experimental": true,
+                            "optional": true,
+                            "$ref": "DOM.BackendNodeId"
                         }
                     ]
                 },
@@ -8101,10 +8224,56 @@
             ]
         },
         {
+            "domain": "CrashReportContext",
+            "description": "This domain exposes the current state of the CrashReportContext API.",
+            "experimental": true,
+            "dependencies": [
+                "Page"
+            ],
+            "types": [
+                {
+                    "id": "CrashReportContextEntry",
+                    "description": "Key-value pair in CrashReportContext.",
+                    "type": "object",
+                    "properties": [
+                        {
+                            "name": "key",
+                            "type": "string"
+                        },
+                        {
+                            "name": "value",
+                            "type": "string"
+                        },
+                        {
+                            "name": "frameId",
+                            "description": "The ID of the frame where the key-value pair was set.",
+                            "$ref": "Page.FrameId"
+                        }
+                    ]
+                }
+            ],
+            "commands": [
+                {
+                    "name": "getEntries",
+                    "description": "Returns all entries in the CrashReportContext across all frames in the page.",
+                    "returns": [
+                        {
+                            "name": "entries",
+                            "type": "array",
+                            "items": {
+                                "$ref": "CrashReportContextEntry"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
             "domain": "DOM",
             "description": "This domain exposes DOM read/write operations. Each DOM Node is represented with its mirror object\nthat has an `id`. This `id` can be used to get additional information on the Node, resolve it into\nthe JavaScript object wrapper, etc. It is important that client receives DOM events only for the\nnodes that are known to the client. Backend keeps track of the nodes that were sent to the client\nand never sends the same node twice. It is client's responsibility to collect information about\nthe nodes that were sent to the client. Note that `iframe` owner elements will return\ncorresponding document elements as their child nodes.",
             "dependencies": [
-                "Runtime"
+                "Runtime",
+                "Network"
             ],
             "types": [
                 {
@@ -8153,8 +8322,9 @@
                         "checkmark",
                         "before",
                         "after",
+                        "expand-icon",
                         "picker-icon",
-                        "interest-hint",
+                        "interest-button",
                         "marker",
                         "backdrop",
                         "column",
@@ -8460,10 +8630,10 @@
                             }
                         },
                         {
-                            "name": "isAdRelated",
+                            "name": "adProvenance",
                             "experimental": true,
                             "optional": true,
-                            "type": "boolean"
+                            "$ref": "Network.AdProvenance"
                         }
                     ]
                 },
@@ -10029,9 +10199,10 @@
                             "$ref": "DOM.NodeId"
                         },
                         {
-                            "name": "isAdRelated",
-                            "description": "If the node is ad related.",
-                            "type": "boolean"
+                            "name": "adProvenance",
+                            "description": "The provenance of the ad related node, if it is ad related.",
+                            "optional": true,
+                            "$ref": "Network.AdProvenance"
                         }
                     ]
                 },
@@ -13063,7 +13234,7 @@
             "commands": [
                 {
                     "name": "triggerAction",
-                    "description": "Runs an extension default action.\nAvailable if the client is connected using the --remote-debugging-pipe\nflag and the --enable-unsafe-extension-debugging flag is set.",
+                    "description": "Runs an extension default action.",
                     "parameters": [
                         {
                             "name": "id",
@@ -13079,7 +13250,7 @@
                 },
                 {
                     "name": "loadUnpacked",
-                    "description": "Installs an unpacked extension from the filesystem similar to\n--load-extension CLI flags. Returns extension ID once the extension\nhas been installed. Available if the client is connected using the\n--remote-debugging-pipe flag and the --enable-unsafe-extension-debugging\nflag is set.",
+                    "description": "Installs an unpacked extension from the filesystem similar to\n--load-extension CLI flags. Returns extension ID once the extension\nhas been installed.",
                     "parameters": [
                         {
                             "name": "path",
@@ -13103,7 +13274,7 @@
                 },
                 {
                     "name": "getExtensions",
-                    "description": "Gets a list of all unpacked extensions.\nAvailable if the client is connected using the --remote-debugging-pipe flag\nand the --enable-unsafe-extension-debugging flag is set.",
+                    "description": "Gets a list of all unpacked extensions.",
                     "returns": [
                         {
                             "name": "extensions",
@@ -13116,7 +13287,7 @@
                 },
                 {
                     "name": "uninstall",
-                    "description": "Uninstalls an unpacked extension (others not supported) from the profile.\nAvailable if the client is connected using the --remote-debugging-pipe flag\nand the --enable-unsafe-extension-debugging.",
+                    "description": "Uninstalls an unpacked extension (others not supported) from the profile.",
                     "parameters": [
                         {
                             "name": "id",
@@ -18224,6 +18395,12 @@
                             "description": "WebRTC packetReordering feature.",
                             "optional": true,
                             "type": "boolean"
+                        },
+                        {
+                            "name": "offline",
+                            "description": "True to emulate internet disconnection.",
+                            "optional": true,
+                            "type": "boolean"
                         }
                     ]
                 },
@@ -18424,6 +18601,71 @@
                         {
                             "name": "localNetworkAccessRequestPolicy",
                             "$ref": "LocalNetworkAccessRequestPolicy"
+                        }
+                    ]
+                },
+                {
+                    "id": "AdScriptIdentifier",
+                    "description": "Identifies the script on the stack that caused a resource or element to be\nlabeled as an ad. For resources, this indicates the context that triggered\nthe fetch. For elements, this indicates the context that caused the element\nto be appended to the DOM.",
+                    "experimental": true,
+                    "type": "object",
+                    "properties": [
+                        {
+                            "name": "scriptId",
+                            "description": "The script's V8 identifier.",
+                            "$ref": "Runtime.ScriptId"
+                        },
+                        {
+                            "name": "debuggerId",
+                            "description": "V8's debugging ID for the v8::Context.",
+                            "$ref": "Runtime.UniqueDebuggerId"
+                        },
+                        {
+                            "name": "name",
+                            "description": "The script's url (or generated name based on id if inline script).",
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "id": "AdAncestry",
+                    "description": "Encapsulates the script ancestry and the root script filter list rule that\ncaused the resource or element to be labeled as an ad.",
+                    "experimental": true,
+                    "type": "object",
+                    "properties": [
+                        {
+                            "name": "ancestryChain",
+                            "description": "A chain of `AdScriptIdentifier`s representing the ancestry of an ad\nscript that led to the creation of a resource or element. The chain is\nordered from the script itself (lowest level) up to its root ancestor\nthat was flagged by a filter list.",
+                            "type": "array",
+                            "items": {
+                                "$ref": "AdScriptIdentifier"
+                            }
+                        },
+                        {
+                            "name": "rootScriptFilterlistRule",
+                            "description": "The filter list rule that caused the root (last) script in\n`ancestryChain` to be tagged as an ad.",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "id": "AdProvenance",
+                    "description": "Represents the provenance of an ad resource or element. Only one of\n`filterlistRule` or `adScriptAncestry` can be set. If `filterlistRule`\nis provided, the resource URL directly matches a filter list rule. If\n`adScriptAncestry` is provided, an ad script initiated the resource fetch or\nappended the element to the DOM. If neither is provided, the entity is\nknown to be an ad, but provenance tracking information is unavailable.",
+                    "experimental": true,
+                    "type": "object",
+                    "properties": [
+                        {
+                            "name": "filterlistRule",
+                            "description": "The filterlist rule that matched, if any.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "adScriptAncestry",
+                            "description": "The script ancestry that created the ad, if any.",
+                            "optional": true,
+                            "$ref": "AdAncestry"
                         }
                     ]
                 },
@@ -18839,6 +19081,7 @@
                         "Success",
                         "KeyError",
                         "SigningError",
+                        "TransientSigningError",
                         "ServerRequestedTermination",
                         "InvalidSessionId",
                         "InvalidChallenge",
@@ -18979,7 +19222,9 @@
                                 "ServerError",
                                 "RefreshQuotaExceeded",
                                 "FatalError",
-                                "SigningQuotaExceeded"
+                                "SigningQuotaExceeded",
+                                "RefreshedAsWaiter",
+                                "TransientSigningError"
                             ]
                         },
                         {
@@ -19025,7 +19270,8 @@
                                 "ClearBrowsingData",
                                 "ServerRequested",
                                 "InvalidSessionParams",
-                                "RefreshFatalError"
+                                "RefreshFatalError",
+                                "DevTools"
                             ]
                         }
                     ]
@@ -19368,7 +19614,15 @@
                     "parameters": [
                         {
                             "name": "offline",
-                            "description": "True to emulate internet disconnection.",
+                            "description": "True to emulate internet disconnection. Deprecated, use the offline property in matchedNetworkConditions\nor emulateOfflineServiceWorker instead.",
+                            "deprecated": true,
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "emulateOfflineServiceWorker",
+                            "description": "True to emulate offline service worker.",
+                            "optional": true,
                             "type": "boolean"
                         },
                         {
@@ -19971,6 +20225,17 @@
                     ]
                 },
                 {
+                    "name": "deleteDeviceBoundSession",
+                    "description": "Deletes a device bound session.",
+                    "experimental": true,
+                    "parameters": [
+                        {
+                            "name": "key",
+                            "$ref": "DeviceBoundSessionKey"
+                        }
+                    ]
+                },
+                {
                     "name": "fetchSchemefulSite",
                     "description": "Fetches the schemeful site for a specific origin.",
                     "experimental": true,
@@ -20019,28 +20284,6 @@
                     ]
                 },
                 {
-                    "name": "setCookieControls",
-                    "description": "Sets Controls for third-party cookie access\nPage reload is required before the new cookie behavior will be observed",
-                    "experimental": true,
-                    "parameters": [
-                        {
-                            "name": "enableThirdPartyCookieRestriction",
-                            "description": "Whether 3pc restriction is enabled.",
-                            "type": "boolean"
-                        },
-                        {
-                            "name": "disableThirdPartyCookieMetadata",
-                            "description": "Whether 3pc grace period exception should be enabled; false by default.",
-                            "type": "boolean"
-                        },
-                        {
-                            "name": "disableThirdPartyCookieHeuristics",
-                            "description": "Whether 3pc heuristics exceptions should be enabled; false by default.",
-                            "type": "boolean"
-                        }
-                    ]
-                },
-                {
                     "name": "setResolvedDNS",
                     "description": "Sets pre-resolved DNS entries for a hostname.\nThese entries take priority over profile-based and system DNS resolution.\nCall with empty entries array to remove a hostname's override.",
                     "experimental": true,
@@ -20069,6 +20312,18 @@
                             "items": {
                                 "$ref": "ResolvedDNSHost"
                             }
+                        }
+                    ]
+                },
+                {
+                    "name": "setCookieControls",
+                    "description": "Sets Controls for third-party cookie access\nPage reload is required before the new cookie behavior will be observed",
+                    "experimental": true,
+                    "parameters": [
+                        {
+                            "name": "enableThirdPartyCookieRestriction",
+                            "description": "Whether 3pc restriction is enabled.",
+                            "type": "boolean"
                         }
                     ]
                 }
@@ -22681,46 +22936,6 @@
                     ]
                 },
                 {
-                    "id": "AdScriptId",
-                    "description": "Identifies the script which caused a script or frame to be labelled as an\nad.",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "scriptId",
-                            "description": "Script Id of the script which caused a script or frame to be labelled as\nan ad.",
-                            "$ref": "Runtime.ScriptId"
-                        },
-                        {
-                            "name": "debuggerId",
-                            "description": "Id of scriptId's debugger.",
-                            "$ref": "Runtime.UniqueDebuggerId"
-                        }
-                    ]
-                },
-                {
-                    "id": "AdScriptAncestry",
-                    "description": "Encapsulates the script ancestry and the root script filterlist rule that\ncaused the frame to be labelled as an ad. Only created when `ancestryChain`\nis not empty.",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "ancestryChain",
-                            "description": "A chain of `AdScriptId`s representing the ancestry of an ad script that\nled to the creation of a frame. The chain is ordered from the script\nitself (lower level) up to its root ancestor that was flagged by\nfilterlist.",
-                            "type": "array",
-                            "items": {
-                                "$ref": "AdScriptId"
-                            }
-                        },
-                        {
-                            "name": "rootScriptFilterlistRule",
-                            "description": "The filterlist rule that caused the root (last) script in\n`ancestryChain` to be ad-tagged. Only populated if the rule is\navailable.",
-                            "optional": true,
-                            "type": "string"
-                        }
-                    ]
-                },
-                {
                     "id": "SecureContextType",
                     "description": "Indicates whether the frame is a secure context and why it is the case.",
                     "experimental": true,
@@ -22813,7 +23028,6 @@
                         "encrypted-media",
                         "execution-while-out-of-viewport",
                         "execution-while-not-rendered",
-                        "fenced-unpartitioned-storage-read",
                         "focus-without-user-activation",
                         "fullscreen",
                         "frobulate",
@@ -22859,6 +23073,7 @@
                         "sub-apps",
                         "summarizer",
                         "sync-xhr",
+                        "tools",
                         "translator",
                         "unload",
                         "usb",
@@ -24265,6 +24480,7 @@
                         "EmbedderExtensionMessaging",
                         "EmbedderExtensionMessagingForOpenPort",
                         "EmbedderExtensionSentMessageToCachedFrame",
+                        "EmbedderExtensionFrame",
                         "RequestedByWebViewClient",
                         "PostMessageByWebViewClient",
                         "CacheControlNoStoreDeviceBoundSessionTerminated",
@@ -24703,7 +24919,7 @@
                             "name": "adScriptAncestry",
                             "description": "The ancestry chain of ad script identifiers leading to this frame's\ncreation, along with the root script's filterlist rule. The ancestry\nchain is ordered from the most immediate script (in the frame creation\nstack) to more distant ancestors (that created the immediately preceding\nscript). Only sent if frame is labelled as an ad and ids are available.",
                             "optional": true,
-                            "$ref": "AdScriptAncestry"
+                            "$ref": "Network.AdAncestry"
                         }
                     ]
                 },
@@ -26332,6 +26548,985 @@
             ]
         },
         {
+            "domain": "PasswordManager",
+            "experimental": true,
+            "dependencies": [
+                "Page",
+                "Antibot"
+            ],
+            "types": [
+                {
+                    "id": "CredentialFieldType",
+                    "description": "Field semantic role, derived from the renderer's autofill classification.",
+                    "type": "string",
+                    "enum": [
+                        "username",
+                        "password",
+                        "newPassword",
+                        "otp",
+                        "email",
+                        "unknown"
+                    ]
+                },
+                {
+                    "id": "FormType",
+                    "description": "Form-level semantic, derived from autofill::FormData parsing.",
+                    "type": "string",
+                    "enum": [
+                        "login",
+                        "signup",
+                        "changePassword",
+                        "unknown"
+                    ]
+                },
+                {
+                    "id": "CredentialField",
+                    "description": "One detected input field within a credential form.",
+                    "type": "object",
+                    "properties": [
+                        {
+                            "name": "type",
+                            "$ref": "CredentialFieldType"
+                        },
+                        {
+                            "name": "selector",
+                            "description": "Best-effort CSS selector resolved from the FormFieldData\n(autocomplete attribute > name > id > renderer ID fallback).",
+                            "type": "string"
+                        },
+                        {
+                            "name": "fieldId",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "fieldName",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "autocompleteHint",
+                            "description": "Raw value of the autocomplete attribute (e.g. \"username\",\n\"current-password\", \"one-time-code\"). Empty if unset.",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "id": "RequestTrigger",
+                    "description": "Why a credential request was emitted. Helps the CDP client decide\nwhether to show a picker UI or auto-fill silently.",
+                    "type": "string",
+                    "enum": [
+                        "formDetected",
+                        "userFocus",
+                        "credentialApi"
+                    ]
+                },
+                {
+                    "id": "CredentialChoice",
+                    "description": "One offered credential in the picker. Only the username is sent\nover the wire \u2014 the password stays in the browser's PasswordStore\nuntil the agent calls prefillChoice with the matching choiceId,\nat which point the handler reads the password from the store and\nfills it via Antibot. This avoids ever exposing the cleartext\npassword to the CDP client.",
+                    "type": "object",
+                    "properties": [
+                        {
+                            "name": "choiceId",
+                            "description": "Opaque ID stable for the lifetime of this credentialsRequested\nevent. Pass back via prefillChoice.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "username",
+                            "description": "Username / email / login the credential was saved with. May be\nempty for password-only credentials.",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "id": "StoredCredentialSummary",
+                    "description": "One entry returned by listCredentials.",
+                    "type": "object",
+                    "properties": [
+                        {
+                            "name": "origin",
+                            "description": "eTLD+1 of the origin the credential was saved for.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "username",
+                            "description": "Username / email / login the credential was saved with. Empty\nstring for password-only credentials.",
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "id": "StoredPasskeySummary",
+                    "description": "One passkey returned by listPasskeys.",
+                    "type": "object",
+                    "properties": [
+                        {
+                            "name": "rpId",
+                            "description": "Relying-party identifier (eTLD+1 of the origin).",
+                            "type": "string"
+                        },
+                        {
+                            "name": "username",
+                            "description": "Display name / username bound to the credential. Empty for\nusername-less passkeys.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "credentialId",
+                            "description": "Opaque credential id (base64). Echo back to deletePasskey.",
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "id": "StoredCookieSummary",
+                    "description": "One cookie returned by listCookies. Mirrors Network.Cookie minus the\ninternals the vault doesn't care about (priority, partitionKey,\nsourcePort, sourceScheme).",
+                    "type": "object",
+                    "properties": [
+                        {
+                            "name": "name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "value",
+                            "description": "Cookie value. Cleartext \u2014 the cookie is already plaintext at\nrest in the network stack so there's no defense gained by\nhiding it on the wire here.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "domain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "path",
+                            "type": "string"
+                        },
+                        {
+                            "name": "secure",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "httpOnly",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "sameSite",
+                            "description": "\"Strict\" | \"Lax\" | \"None\" \u2014 empty when unset.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "expires",
+                            "description": "Unix timestamp; zero for session cookies.",
+                            "optional": true,
+                            "type": "integer"
+                        }
+                    ]
+                },
+                {
+                    "id": "StoredTotpSummary",
+                    "description": "One TOTP returned by listTotps. The seed is NEVER sent over the wire\non read paths \u2014 Scrapium's listTotps response carries metadata only\n(origin, account, issuer, algorithm/digits/period). Customer-side\ncode that needs the seed must keep its own copy.",
+                    "type": "object",
+                    "properties": [
+                        {
+                            "name": "origin",
+                            "description": "eTLD+1 / domain the TOTP applies to. Same matching rules as the\nPasswordStore: a credential filled on a page whose effective\norigin matches this value will trigger TOTP autofill into the\nform's `otp` field, if present.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "account",
+                            "description": "Account label (typically the username on the login form). The\nhandler matches (origin, account) to pair this TOTP with the\nright password item when both are registered.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "issuer",
+                            "description": "Display-only issuer label (e.g. \"GitHub\"). Surfaced in logs and\nthe dashboard preview; doesn't participate in matching.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "algorithm",
+                            "description": "\"SHA1\" | \"SHA256\" | \"SHA512\". Empty in summary = default SHA1.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "digits",
+                            "description": "Default 6. The RFC allows 6-8; we accept 6-10 with a wider\nceiling for issuers that emit 10-digit codes.",
+                            "optional": true,
+                            "type": "integer"
+                        },
+                        {
+                            "name": "period",
+                            "description": "Seconds. Default 30.",
+                            "optional": true,
+                            "type": "integer"
+                        }
+                    ]
+                }
+            ],
+            "events": [
+                {
+                    "name": "credentialsRequested",
+                    "description": "Emitted when a credential form is detected OR when the native\npassword-manager UI would normally appear (e.g. user focused a\nsaved-credential field). Fired once per (frame, formId, trigger) tuple.\nThe CDP client looks up the vault by `origin` and replies with\nprovideCredentials or declineRequest. If neither is called within\nthe configured timeout, the request is discarded and the form is\nleft untouched.\n\nWhen trigger == userFocus, Chrome's native password-manager dropdown\nis suppressed for the duration of this request \u2014 the agent owns the\npicker decision. If the agent declines, the dropdown is NOT re-shown\n(this avoids racing the user with the native UI).",
+                    "parameters": [
+                        {
+                            "name": "requestId",
+                            "description": "UUID \u2014 pass back via provideCredentials/declineRequest.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "frameId",
+                            "$ref": "Page.FrameId"
+                        },
+                        {
+                            "name": "frameUrl",
+                            "type": "string"
+                        },
+                        {
+                            "name": "origin",
+                            "description": "eTLD+1 of the form's origin \u2014 the vault lookup key. Matches Chrome's\naffiliation rules so credentials saved for \"login.foo.com\" are\noffered on \"foo.com\".",
+                            "type": "string"
+                        },
+                        {
+                            "name": "formId",
+                            "description": "Stable form_renderer_id within the frame's lifetime. Used by\nfillCredentials to target the same form without re-detection.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "fields",
+                            "type": "array",
+                            "items": {
+                                "$ref": "CredentialField"
+                            }
+                        },
+                        {
+                            "name": "formType",
+                            "$ref": "FormType"
+                        },
+                        {
+                            "name": "trigger",
+                            "description": "Why this request was raised. See RequestTrigger.",
+                            "$ref": "RequestTrigger"
+                        },
+                        {
+                            "name": "choices",
+                            "description": "Credentials Chrome's PasswordStore already has for this origin\n(matches the native dropdown's options). Empty when the trigger\nis `formDetected` (no store lookup yet) or when the store has\nno entry. Passwords are NOT sent over the wire \u2014 only the\nopaque choiceId + username are surfaced; the password is read\nfrom the store at fill time inside the browser process.",
+                            "type": "array",
+                            "items": {
+                                "$ref": "CredentialChoice"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "passkeyRequested",
+                    "description": "Emitted when navigator.credentials.get() runs (passkey assertion) and the\nCDP client should provide a credential. The reply (providePasskey)\ninjects the credential into a session-scoped virtual authenticator,\nletting the in-flight WebAuthn call resolve naturally.",
+                    "parameters": [
+                        {
+                            "name": "requestId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "frameId",
+                            "$ref": "Page.FrameId"
+                        },
+                        {
+                            "name": "rpId",
+                            "description": "Relying-party ID requested by the page (rp.id from the assertion\noptions).",
+                            "type": "string"
+                        },
+                        {
+                            "name": "challenge",
+                            "description": "Base64-encoded challenge from the RP.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "allowedCredentialIds",
+                            "description": "Allowed credential IDs (base64), if the RP set allowCredentials.\nEmpty array means any credential for the RP is acceptable.",
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "passkeyRegistrationRequested",
+                    "description": "Emitted when navigator.credentials.create() runs (passkey registration).\nThe CDP client should mint a credential, store it in the vault, and reply\nwith providePasskey using the newly-generated keypair.",
+                    "parameters": [
+                        {
+                            "name": "requestId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "frameId",
+                            "$ref": "Page.FrameId"
+                        },
+                        {
+                            "name": "rpId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "rpName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "userId",
+                            "description": "Base64-encoded user handle the RP wants the credential bound to.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "userName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "userDisplayName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "challenge",
+                            "type": "string"
+                        }
+                    ]
+                }
+            ],
+            "commands": [
+                {
+                    "name": "prefillChoice",
+                    "description": "Reply to credentialsRequested by selecting one of the offered\n`choices`. The handler reads the matching credential's password\nfrom Chrome's PasswordStore and fills it via the Antibot pipeline\n(Bezier mouse, WPM typing) \u2014 the password never crosses the CDP\nwire. Use this when the agent wants to act on what Chrome already\nhas saved (the native-dropdown replacement flow).\n\nUse provideCredentials instead when the agent's vault has its own\ncredentials it wants to fill (the password the agent supplies\nIS sent over CDP \u2014 that's the trade-off).\n\nSpecify either `choiceId` or `username` (not both). When `username`\nis set, the handler finds the matching choice in the originating\ncredentialsRequested event \u2014 agents that already know which login\nthey want don't have to scan the choice list.",
+                    "parameters": [
+                        {
+                            "name": "requestId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "choiceId",
+                            "description": "choiceId from one of the choices in the originating\ncredentialsRequested event. Mutually exclusive with `username`.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "username",
+                            "description": "Find the choice with this username and use it. Mutually\nexclusive with `choiceId`. If multiple choices share the same\nusername the first match wins.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "submit",
+                            "description": "Submit the form after filling. Default: false.",
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "wpm",
+                            "description": "Words-per-minute for the typing pass. Default: 60.",
+                            "optional": true,
+                            "type": "number"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "success",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "listCredentials",
+                    "description": "List credentials saved in Chrome's PasswordStore, optionally\nfiltered by origin. Returns the username and origin for each entry\n\u2014 passwords are intentionally omitted (the agent doesn't get to\nexfiltrate them via CDP, only fill them via prefillChoice).",
+                    "parameters": [
+                        {
+                            "name": "originFilter",
+                            "description": "Optional origin filter (eTLD+1). When omitted, returns all\ncredentials in the store.",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "credentials",
+                            "type": "array",
+                            "items": {
+                                "$ref": "StoredCredentialSummary"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "deleteCredential",
+                    "description": "Remove a credential from Chrome's PasswordStore. Both `url` (the\nURL it was registered for) and `username` must match an existing\nentry. URL is matched on origin (scheme+host+port) \u2014 the path is\nignored, so deleting works regardless of which path was originally\nused to register.",
+                    "parameters": [
+                        {
+                            "name": "url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "username",
+                            "type": "string"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "success",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "registerPasskey",
+                    "description": "Register a passkey for an rpId. The passkey is stored on the\nsession-scoped virtual authenticator and will be offered when the\npage calls navigator.credentials.get() against the same rpId.\n\nEncoding: `credentialId`, `privateKey` and `userHandle` are\nbase64-encoded (standard base64 with padding). Same format as\nWebAuthn.Credential.* fields \u2014 agents that already have those\nvalues can pass them through unchanged.",
+                    "parameters": [
+                        {
+                            "name": "rpId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "username",
+                            "type": "string"
+                        },
+                        {
+                            "name": "credentialId",
+                            "description": "Base64-encoded credential id (typically 16-32 bytes).",
+                            "type": "string"
+                        },
+                        {
+                            "name": "privateKey",
+                            "description": "PKCS#8 ECDSA P-256 private key, base64-encoded.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "userHandle",
+                            "description": "Optional base64-encoded user handle (defaults to a hash of\n`username` when omitted).",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "signCount",
+                            "description": "Optional signature counter. Defaults to 0.",
+                            "optional": true,
+                            "type": "integer"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "success",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "listPasskeys",
+                    "description": "List passkeys saved on the session-scoped authenticator.\n`rpIdFilter` restricts to a specific relying party.",
+                    "parameters": [
+                        {
+                            "name": "rpIdFilter",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "passkeys",
+                            "type": "array",
+                            "items": {
+                                "$ref": "StoredPasskeySummary"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "deletePasskey",
+                    "description": "Remove a passkey by (rpId, username). Returns success=false when\nno matching entry was found.",
+                    "parameters": [
+                        {
+                            "name": "rpId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "username",
+                            "type": "string"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "success",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "registerCookie",
+                    "description": "Insert a cookie into the browser profile's CookieStore. The cookie\nis visible to subsequent navigations and to any in-flight fetch on\na matching origin. Mirrors Network.setCookies({cookies: [{\u2026}]}) but\naccepts one cookie per call to keep the command symmetric with\nregisterCredential / registerPasskey.\n\nRequired: name, value, domain. Domain may carry a leading dot\n(\"the standard subdomain-spread shape\") or be a bare hostname.\nPath defaults to \"/\". Secure/HttpOnly default to false. SameSite\ndefaults to Lax (Chrome's 2026 default). Expires=0 (or omitted)\nproduces a session cookie.",
+                    "parameters": [
+                        {
+                            "name": "name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "value",
+                            "type": "string"
+                        },
+                        {
+                            "name": "domain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "path",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "secure",
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "httpOnly",
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "sameSite",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "expires",
+                            "optional": true,
+                            "type": "integer"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "success",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "listCookies",
+                    "description": "List cookies in the profile, optionally filtered by domain. The\nfilter matches cookies whose Domain attribute equals the input\n(case-insensitive), including the leading-dot variant. To list\neverything, omit the filter.",
+                    "parameters": [
+                        {
+                            "name": "domainFilter",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "cookies",
+                            "type": "array",
+                            "items": {
+                                "$ref": "StoredCookieSummary"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "deleteCookie",
+                    "description": "Delete a cookie by (name, domain). Returns success=false when no\nmatching entry was found.",
+                    "parameters": [
+                        {
+                            "name": "name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "domain",
+                            "type": "string"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "success",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "registerTotp",
+                    "description": "Register a TOTP seed. The seed is base32-encoded as it appears\ninside an otpauth:// URI (RFC 4648). Algorithm, digits, period are\noptional and default to SHA1/6/30.\n\nThe handler indexes the entry by (origin, account). A subsequent\nprovideCredentials/fillCredentials targeting the same origin+account\nwith an `otp` field in the form will get the current code typed\nautomatically. If no `otp` field is detected, the TOTP is left\nalone \u2014 the agent can also force a code computation via getTotpCode\nfor headless test scenarios.",
+                    "parameters": [
+                        {
+                            "name": "origin",
+                            "type": "string"
+                        },
+                        {
+                            "name": "account",
+                            "type": "string"
+                        },
+                        {
+                            "name": "secret",
+                            "description": "Base32-encoded seed (RFC 4648).",
+                            "type": "string"
+                        },
+                        {
+                            "name": "issuer",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "algorithm",
+                            "description": "\"SHA1\" | \"SHA256\" | \"SHA512\". Defaults to \"SHA1\".",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "digits",
+                            "description": "Defaults to 6.",
+                            "optional": true,
+                            "type": "integer"
+                        },
+                        {
+                            "name": "period",
+                            "description": "Defaults to 30.",
+                            "optional": true,
+                            "type": "integer"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "success",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "listTotps",
+                    "description": "List TOTPs saved on the session vault, optionally filtered by\norigin. Seeds are NEVER returned \u2014 this surface is for management\nUIs that need to know what's registered without taking on the\nblast radius of holding seeds. The dashboard reads + decrypts\nseeds via the same WebCrypto path it uses for other vault items.",
+                    "parameters": [
+                        {
+                            "name": "originFilter",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "totps",
+                            "type": "array",
+                            "items": {
+                                "$ref": "StoredTotpSummary"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "deleteTotp",
+                    "description": "Remove a TOTP by (origin, account). Returns success=false when\nno matching entry was found.",
+                    "parameters": [
+                        {
+                            "name": "origin",
+                            "type": "string"
+                        },
+                        {
+                            "name": "account",
+                            "type": "string"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "success",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "getTotpCode",
+                    "description": "Compute the current TOTP code for a registered (origin, account)\nwithout doing any form fill. Useful for headless test fixtures and\nfor agent-driven flows that want to type the code via their own\ninput primitives.",
+                    "parameters": [
+                        {
+                            "name": "origin",
+                            "type": "string"
+                        },
+                        {
+                            "name": "account",
+                            "type": "string"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "code",
+                            "description": "The current N-digit code as a string (leading zeros preserved).\nEmpty when no TOTP is registered for the pair.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "expiresAtUnix",
+                            "description": "Unix seconds at which `code` becomes invalid (= start of next\nperiod). Lets callers cache without re-querying.",
+                            "type": "integer"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "registerCredential",
+                    "description": "Insert a credential into Chrome's PasswordStore for an explicit\nURL. Used by the agent to seed the vault before navigating to a\nlogin page \u2014 once registered, navigating to a matching URL will\nfire credentialsRequested with the credential surfaced in choices.\n\nURL matching: only scheme + host + path are used as the\nsignon_realm. Query string and fragment are stripped so credentials\nsaved for `https://example.com/login?ref=foo` also match\n`https://example.com/login`. The store still keys by origin\n(scheme+host+port), so a credential registered for\nhttps://example.com/login will be offered on any page on\nhttps://example.com/.\n\nResolves after the PasswordStore has acknowledged the write \u2014\ncallers don't need a sleep before navigating.",
+                    "parameters": [
+                        {
+                            "name": "url",
+                            "description": "Full URL the credential is associated with (query+fragment\nignored). Must be http:// or https://.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "username",
+                            "type": "string"
+                        },
+                        {
+                            "name": "password",
+                            "type": "string"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "success",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "provideCredentials",
+                    "description": "Reply to credentialsRequested. Browser fills the form using Antibot\nprimitives \u2014 Bezier-curve mouse to each field, WPM typing into it,\noptional Tab between fields. Submit (if requested) is a click on the\nform's submit button or Enter on the password field.",
+                    "parameters": [
+                        {
+                            "name": "requestId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "username",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "password",
+                            "type": "string"
+                        },
+                        {
+                            "name": "totp",
+                            "description": "TOTP \u2014 typed into the field tagged `otp` if one was detected,\nelse ignored. Use fillCredentials with totpSelector for explicit\nplacement.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "submit",
+                            "description": "Submit the form after filling. Default: false.",
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "wpm",
+                            "description": "Words-per-minute for the typing pass. Forwarded to Antibot.fill.\nDefault: 60.",
+                            "optional": true,
+                            "type": "number"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "success",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "providePasskey",
+                    "description": "Reply to passkeyRequested or passkeyRegistrationRequested. Adds the\ncredential to a session-scoped virtual authenticator (auto-created on\nfirst call) so the in-flight navigator.credentials call resolves.",
+                    "parameters": [
+                        {
+                            "name": "requestId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "credentialId",
+                            "description": "Base64-encoded credential ID.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "privateKey",
+                            "description": "PKCS#8 ECDSA P-256 private key, base64-encoded. Same encoding as\nWebAuthn.Credential.privateKey.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "userHandle",
+                            "description": "Optional base64-encoded user handle.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "signCount",
+                            "description": "Defaults to 0 for new registrations; should match the vault's\ntracked counter for assertions to avoid backend rejection.",
+                            "optional": true,
+                            "type": "integer"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "success",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "declineRequest",
+                    "description": "Acknowledge a credentialsRequested or passkeyRequested event without\nfilling. The form is left as-is; no further events will fire for the\nsame requestId.",
+                    "parameters": [
+                        {
+                            "name": "requestId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "reason",
+                            "description": "Optional \u2014 surfaced in browser logs only.",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "fillCredentials",
+                    "description": "Agent-driven fill \u2014 skip the event roundtrip. Use when the agent has\nalready located the form (e.g. via Antibot.waitForElement) and wants to\nprovide credentials directly. Either formId (from a prior\ncredentialsRequested) OR explicit selectors must be supplied.",
+                    "parameters": [
+                        {
+                            "name": "frameId",
+                            "description": "Frame containing the form. Defaults to the main frame.",
+                            "optional": true,
+                            "$ref": "Page.FrameId"
+                        },
+                        {
+                            "name": "formId",
+                            "description": "If provided, resolves the form via the renderer's autofill data\n(same path as event-driven fills). selectors below are ignored.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "usernameSelector",
+                            "description": "CSS selectors for explicit-placement mode. usernameSelector is\noptional (signup forms with email-only first step, etc.).",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "passwordSelector",
+                            "description": "Required when formId is not provided.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "username",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "password",
+                            "type": "string"
+                        },
+                        {
+                            "name": "totpSelector",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "totp",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "submit",
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "wpm",
+                            "optional": true,
+                            "type": "number"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "success",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "errorMessage",
+                            "optional": true,
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "enable",
+                    "description": "Enables credentialsRequested / passkeyRequested event emission. The\nbrowser starts observing the autofill driver and the WebAuthn dispatcher\nfor credential-shaped activity. No-op if already enabled.\n\nWhen nativeUi is true, the domain runs in native-UI (VNC) mode: the\nsuggestion interceptor is NOT registered, so Chrome's real password-\nmanager dropdown renders on screen for a human driving the session over\nVNC. credentialsRequested/prefillChoice are not used in this mode;\nregisterCredential still stages credentials into the PasswordStore and\nform-filling is forced to fill-on-account-select so Chrome waits for the\nuser's pick instead of silently autofilling on page load. Defaults to\nfalse (the existing CDP-intercept behaviour).",
+                    "parameters": [
+                        {
+                            "name": "nativeUi",
+                            "optional": true,
+                            "type": "boolean"
+                        }
+                    ]
+                },
+                {
+                    "name": "disable",
+                    "description": "Disables event emission. Pending requests are discarded \u2014 any in-flight\nWebAuthn assertion will fail with NotAllowedError."
+                }
+            ]
+        },
+        {
             "domain": "Performance",
             "types": [
                 {
@@ -26702,6 +27897,11 @@
                             "type": "string"
                         },
                         {
+                            "name": "formSubmission",
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
                             "name": "targetHint",
                             "optional": true,
                             "$ref": "SpeculationTargetHint"
@@ -26816,7 +28016,9 @@
                         "V8OptimizerDisabled",
                         "PrerenderFailedDuringPrefetch",
                         "BrowsingDataRemoved",
-                        "PrerenderHostReused"
+                        "PrerenderHostReused",
+                        "FormSubmitWhenPrerendering",
+                        "CrossDocumentRestart"
                     ]
                 },
                 {
@@ -28961,629 +30163,6 @@
                     ]
                 },
                 {
-                    "id": "AttributionReportingSourceType",
-                    "experimental": true,
-                    "type": "string",
-                    "enum": [
-                        "navigation",
-                        "event"
-                    ]
-                },
-                {
-                    "id": "UnsignedInt64AsBase10",
-                    "experimental": true,
-                    "type": "string"
-                },
-                {
-                    "id": "UnsignedInt128AsBase16",
-                    "experimental": true,
-                    "type": "string"
-                },
-                {
-                    "id": "SignedInt64AsBase10",
-                    "experimental": true,
-                    "type": "string"
-                },
-                {
-                    "id": "AttributionReportingFilterDataEntry",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "key",
-                            "type": "string"
-                        },
-                        {
-                            "name": "values",
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingFilterConfig",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "filterValues",
-                            "type": "array",
-                            "items": {
-                                "$ref": "AttributionReportingFilterDataEntry"
-                            }
-                        },
-                        {
-                            "name": "lookbackWindow",
-                            "description": "duration in seconds",
-                            "optional": true,
-                            "type": "integer"
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingFilterPair",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "filters",
-                            "type": "array",
-                            "items": {
-                                "$ref": "AttributionReportingFilterConfig"
-                            }
-                        },
-                        {
-                            "name": "notFilters",
-                            "type": "array",
-                            "items": {
-                                "$ref": "AttributionReportingFilterConfig"
-                            }
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingAggregationKeysEntry",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "key",
-                            "type": "string"
-                        },
-                        {
-                            "name": "value",
-                            "$ref": "UnsignedInt128AsBase16"
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingEventReportWindows",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "start",
-                            "description": "duration in seconds",
-                            "type": "integer"
-                        },
-                        {
-                            "name": "ends",
-                            "description": "duration in seconds",
-                            "type": "array",
-                            "items": {
-                                "type": "integer"
-                            }
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingTriggerDataMatching",
-                    "experimental": true,
-                    "type": "string",
-                    "enum": [
-                        "exact",
-                        "modulus"
-                    ]
-                },
-                {
-                    "id": "AttributionReportingAggregatableDebugReportingData",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "keyPiece",
-                            "$ref": "UnsignedInt128AsBase16"
-                        },
-                        {
-                            "name": "value",
-                            "description": "number instead of integer because not all uint32 can be represented by\nint",
-                            "type": "number"
-                        },
-                        {
-                            "name": "types",
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingAggregatableDebugReportingConfig",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "budget",
-                            "description": "number instead of integer because not all uint32 can be represented by\nint, only present for source registrations",
-                            "optional": true,
-                            "type": "number"
-                        },
-                        {
-                            "name": "keyPiece",
-                            "$ref": "UnsignedInt128AsBase16"
-                        },
-                        {
-                            "name": "debugData",
-                            "type": "array",
-                            "items": {
-                                "$ref": "AttributionReportingAggregatableDebugReportingData"
-                            }
-                        },
-                        {
-                            "name": "aggregationCoordinatorOrigin",
-                            "optional": true,
-                            "type": "string"
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionScopesData",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "values",
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        },
-                        {
-                            "name": "limit",
-                            "description": "number instead of integer because not all uint32 can be represented by\nint",
-                            "type": "number"
-                        },
-                        {
-                            "name": "maxEventStates",
-                            "type": "number"
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingNamedBudgetDef",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "name",
-                            "type": "string"
-                        },
-                        {
-                            "name": "budget",
-                            "type": "integer"
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingSourceRegistration",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "time",
-                            "$ref": "Network.TimeSinceEpoch"
-                        },
-                        {
-                            "name": "expiry",
-                            "description": "duration in seconds",
-                            "type": "integer"
-                        },
-                        {
-                            "name": "triggerData",
-                            "description": "number instead of integer because not all uint32 can be represented by\nint",
-                            "type": "array",
-                            "items": {
-                                "type": "number"
-                            }
-                        },
-                        {
-                            "name": "eventReportWindows",
-                            "$ref": "AttributionReportingEventReportWindows"
-                        },
-                        {
-                            "name": "aggregatableReportWindow",
-                            "description": "duration in seconds",
-                            "type": "integer"
-                        },
-                        {
-                            "name": "type",
-                            "$ref": "AttributionReportingSourceType"
-                        },
-                        {
-                            "name": "sourceOrigin",
-                            "type": "string"
-                        },
-                        {
-                            "name": "reportingOrigin",
-                            "type": "string"
-                        },
-                        {
-                            "name": "destinationSites",
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        },
-                        {
-                            "name": "eventId",
-                            "$ref": "UnsignedInt64AsBase10"
-                        },
-                        {
-                            "name": "priority",
-                            "$ref": "SignedInt64AsBase10"
-                        },
-                        {
-                            "name": "filterData",
-                            "type": "array",
-                            "items": {
-                                "$ref": "AttributionReportingFilterDataEntry"
-                            }
-                        },
-                        {
-                            "name": "aggregationKeys",
-                            "type": "array",
-                            "items": {
-                                "$ref": "AttributionReportingAggregationKeysEntry"
-                            }
-                        },
-                        {
-                            "name": "debugKey",
-                            "optional": true,
-                            "$ref": "UnsignedInt64AsBase10"
-                        },
-                        {
-                            "name": "triggerDataMatching",
-                            "$ref": "AttributionReportingTriggerDataMatching"
-                        },
-                        {
-                            "name": "destinationLimitPriority",
-                            "$ref": "SignedInt64AsBase10"
-                        },
-                        {
-                            "name": "aggregatableDebugReportingConfig",
-                            "$ref": "AttributionReportingAggregatableDebugReportingConfig"
-                        },
-                        {
-                            "name": "scopesData",
-                            "optional": true,
-                            "$ref": "AttributionScopesData"
-                        },
-                        {
-                            "name": "maxEventLevelReports",
-                            "type": "integer"
-                        },
-                        {
-                            "name": "namedBudgets",
-                            "type": "array",
-                            "items": {
-                                "$ref": "AttributionReportingNamedBudgetDef"
-                            }
-                        },
-                        {
-                            "name": "debugReporting",
-                            "type": "boolean"
-                        },
-                        {
-                            "name": "eventLevelEpsilon",
-                            "type": "number"
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingSourceRegistrationResult",
-                    "experimental": true,
-                    "type": "string",
-                    "enum": [
-                        "success",
-                        "internalError",
-                        "insufficientSourceCapacity",
-                        "insufficientUniqueDestinationCapacity",
-                        "excessiveReportingOrigins",
-                        "prohibitedByBrowserPolicy",
-                        "successNoised",
-                        "destinationReportingLimitReached",
-                        "destinationGlobalLimitReached",
-                        "destinationBothLimitsReached",
-                        "reportingOriginsPerSiteLimitReached",
-                        "exceedsMaxChannelCapacity",
-                        "exceedsMaxScopesChannelCapacity",
-                        "exceedsMaxTriggerStateCardinality",
-                        "exceedsMaxEventStatesLimit",
-                        "destinationPerDayReportingLimitReached"
-                    ]
-                },
-                {
-                    "id": "AttributionReportingSourceRegistrationTimeConfig",
-                    "experimental": true,
-                    "type": "string",
-                    "enum": [
-                        "include",
-                        "exclude"
-                    ]
-                },
-                {
-                    "id": "AttributionReportingAggregatableValueDictEntry",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "key",
-                            "type": "string"
-                        },
-                        {
-                            "name": "value",
-                            "description": "number instead of integer because not all uint32 can be represented by\nint",
-                            "type": "number"
-                        },
-                        {
-                            "name": "filteringId",
-                            "$ref": "UnsignedInt64AsBase10"
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingAggregatableValueEntry",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "values",
-                            "type": "array",
-                            "items": {
-                                "$ref": "AttributionReportingAggregatableValueDictEntry"
-                            }
-                        },
-                        {
-                            "name": "filters",
-                            "$ref": "AttributionReportingFilterPair"
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingEventTriggerData",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "data",
-                            "$ref": "UnsignedInt64AsBase10"
-                        },
-                        {
-                            "name": "priority",
-                            "$ref": "SignedInt64AsBase10"
-                        },
-                        {
-                            "name": "dedupKey",
-                            "optional": true,
-                            "$ref": "UnsignedInt64AsBase10"
-                        },
-                        {
-                            "name": "filters",
-                            "$ref": "AttributionReportingFilterPair"
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingAggregatableTriggerData",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "keyPiece",
-                            "$ref": "UnsignedInt128AsBase16"
-                        },
-                        {
-                            "name": "sourceKeys",
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        },
-                        {
-                            "name": "filters",
-                            "$ref": "AttributionReportingFilterPair"
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingAggregatableDedupKey",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "dedupKey",
-                            "optional": true,
-                            "$ref": "UnsignedInt64AsBase10"
-                        },
-                        {
-                            "name": "filters",
-                            "$ref": "AttributionReportingFilterPair"
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingNamedBudgetCandidate",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "name",
-                            "optional": true,
-                            "type": "string"
-                        },
-                        {
-                            "name": "filters",
-                            "$ref": "AttributionReportingFilterPair"
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingTriggerRegistration",
-                    "experimental": true,
-                    "type": "object",
-                    "properties": [
-                        {
-                            "name": "filters",
-                            "$ref": "AttributionReportingFilterPair"
-                        },
-                        {
-                            "name": "debugKey",
-                            "optional": true,
-                            "$ref": "UnsignedInt64AsBase10"
-                        },
-                        {
-                            "name": "aggregatableDedupKeys",
-                            "type": "array",
-                            "items": {
-                                "$ref": "AttributionReportingAggregatableDedupKey"
-                            }
-                        },
-                        {
-                            "name": "eventTriggerData",
-                            "type": "array",
-                            "items": {
-                                "$ref": "AttributionReportingEventTriggerData"
-                            }
-                        },
-                        {
-                            "name": "aggregatableTriggerData",
-                            "type": "array",
-                            "items": {
-                                "$ref": "AttributionReportingAggregatableTriggerData"
-                            }
-                        },
-                        {
-                            "name": "aggregatableValues",
-                            "type": "array",
-                            "items": {
-                                "$ref": "AttributionReportingAggregatableValueEntry"
-                            }
-                        },
-                        {
-                            "name": "aggregatableFilteringIdMaxBytes",
-                            "type": "integer"
-                        },
-                        {
-                            "name": "debugReporting",
-                            "type": "boolean"
-                        },
-                        {
-                            "name": "aggregationCoordinatorOrigin",
-                            "optional": true,
-                            "type": "string"
-                        },
-                        {
-                            "name": "sourceRegistrationTimeConfig",
-                            "$ref": "AttributionReportingSourceRegistrationTimeConfig"
-                        },
-                        {
-                            "name": "triggerContextId",
-                            "optional": true,
-                            "type": "string"
-                        },
-                        {
-                            "name": "aggregatableDebugReportingConfig",
-                            "$ref": "AttributionReportingAggregatableDebugReportingConfig"
-                        },
-                        {
-                            "name": "scopes",
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        },
-                        {
-                            "name": "namedBudgets",
-                            "type": "array",
-                            "items": {
-                                "$ref": "AttributionReportingNamedBudgetCandidate"
-                            }
-                        }
-                    ]
-                },
-                {
-                    "id": "AttributionReportingEventLevelResult",
-                    "experimental": true,
-                    "type": "string",
-                    "enum": [
-                        "success",
-                        "successDroppedLowerPriority",
-                        "internalError",
-                        "noCapacityForAttributionDestination",
-                        "noMatchingSources",
-                        "deduplicated",
-                        "excessiveAttributions",
-                        "priorityTooLow",
-                        "neverAttributedSource",
-                        "excessiveReportingOrigins",
-                        "noMatchingSourceFilterData",
-                        "prohibitedByBrowserPolicy",
-                        "noMatchingConfigurations",
-                        "excessiveReports",
-                        "falselyAttributedSource",
-                        "reportWindowPassed",
-                        "notRegistered",
-                        "reportWindowNotStarted",
-                        "noMatchingTriggerData"
-                    ]
-                },
-                {
-                    "id": "AttributionReportingAggregatableResult",
-                    "experimental": true,
-                    "type": "string",
-                    "enum": [
-                        "success",
-                        "internalError",
-                        "noCapacityForAttributionDestination",
-                        "noMatchingSources",
-                        "excessiveAttributions",
-                        "excessiveReportingOrigins",
-                        "noHistograms",
-                        "insufficientBudget",
-                        "insufficientNamedBudget",
-                        "noMatchingSourceFilterData",
-                        "notRegistered",
-                        "prohibitedByBrowserPolicy",
-                        "deduplicated",
-                        "reportWindowPassed",
-                        "excessiveReports"
-                    ]
-                },
-                {
-                    "id": "AttributionReportingReportResult",
-                    "experimental": true,
-                    "type": "string",
-                    "enum": [
-                        "sent",
-                        "prohibited",
-                        "failedToAssemble",
-                        "expired"
-                    ]
-                },
-                {
                     "id": "RelatedWebsiteSet",
                     "description": "A single Related Website Set object.",
                     "experimental": true,
@@ -30191,41 +30770,6 @@
                     ]
                 },
                 {
-                    "name": "setAttributionReportingLocalTestingMode",
-                    "description": "https://wicg.github.io/attribution-reporting-api/",
-                    "experimental": true,
-                    "parameters": [
-                        {
-                            "name": "enabled",
-                            "description": "If enabled, noise is suppressed and reports are sent immediately.",
-                            "type": "boolean"
-                        }
-                    ]
-                },
-                {
-                    "name": "setAttributionReportingTracking",
-                    "description": "Enables/disables issuing of Attribution Reporting events.",
-                    "experimental": true,
-                    "parameters": [
-                        {
-                            "name": "enable",
-                            "type": "boolean"
-                        }
-                    ]
-                },
-                {
-                    "name": "sendPendingAttributionReports",
-                    "description": "Sends all pending Attribution Reports immediately, regardless of their\nscheduled report time.",
-                    "experimental": true,
-                    "returns": [
-                        {
-                            "name": "numSent",
-                            "description": "The number of reports that were sent.",
-                            "type": "integer"
-                        }
-                    ]
-                },
-                {
                     "name": "getRelatedWebsiteSets",
                     "description": "Returns the effective Related Website Sets in use by this profile for the browser\nsession. The effective Related Website Sets will not change during a browser session.",
                     "experimental": true,
@@ -30235,36 +30779,6 @@
                             "type": "array",
                             "items": {
                                 "$ref": "RelatedWebsiteSet"
-                            }
-                        }
-                    ]
-                },
-                {
-                    "name": "getAffectedUrlsForThirdPartyCookieMetadata",
-                    "description": "Returns the list of URLs from a page and its embedded resources that match\nexisting grace period URL pattern rules.\nhttps://developers.google.com/privacy-sandbox/cookies/temporary-exceptions/grace-period",
-                    "experimental": true,
-                    "parameters": [
-                        {
-                            "name": "firstPartyUrl",
-                            "description": "The URL of the page currently being visited.",
-                            "type": "string"
-                        },
-                        {
-                            "name": "thirdPartyUrls",
-                            "description": "The list of embedded resource URLs from the page.",
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    ],
-                    "returns": [
-                        {
-                            "name": "matchedUrls",
-                            "description": "Array of matching URLs. If there is a primary pattern match for the first-\nparty URL, only the first-party URL is returned in the array.",
-                            "type": "array",
-                            "items": {
-                                "type": "string"
                             }
                         }
                     ]
@@ -30586,105 +31100,6 @@
                             "type": "string"
                         }
                     ]
-                },
-                {
-                    "name": "attributionReportingSourceRegistered",
-                    "experimental": true,
-                    "parameters": [
-                        {
-                            "name": "registration",
-                            "$ref": "AttributionReportingSourceRegistration"
-                        },
-                        {
-                            "name": "result",
-                            "$ref": "AttributionReportingSourceRegistrationResult"
-                        }
-                    ]
-                },
-                {
-                    "name": "attributionReportingTriggerRegistered",
-                    "experimental": true,
-                    "parameters": [
-                        {
-                            "name": "registration",
-                            "$ref": "AttributionReportingTriggerRegistration"
-                        },
-                        {
-                            "name": "eventLevel",
-                            "$ref": "AttributionReportingEventLevelResult"
-                        },
-                        {
-                            "name": "aggregatable",
-                            "$ref": "AttributionReportingAggregatableResult"
-                        }
-                    ]
-                },
-                {
-                    "name": "attributionReportingReportSent",
-                    "experimental": true,
-                    "parameters": [
-                        {
-                            "name": "url",
-                            "type": "string"
-                        },
-                        {
-                            "name": "body",
-                            "type": "object"
-                        },
-                        {
-                            "name": "result",
-                            "$ref": "AttributionReportingReportResult"
-                        },
-                        {
-                            "name": "netError",
-                            "description": "If result is `sent`, populated with net/HTTP status.",
-                            "optional": true,
-                            "type": "integer"
-                        },
-                        {
-                            "name": "netErrorName",
-                            "optional": true,
-                            "type": "string"
-                        },
-                        {
-                            "name": "httpStatusCode",
-                            "optional": true,
-                            "type": "integer"
-                        }
-                    ]
-                },
-                {
-                    "name": "attributionReportingVerboseDebugReportSent",
-                    "experimental": true,
-                    "parameters": [
-                        {
-                            "name": "url",
-                            "type": "string"
-                        },
-                        {
-                            "name": "body",
-                            "optional": true,
-                            "type": "array",
-                            "items": {
-                                "type": "object"
-                            }
-                        },
-                        {
-                            "name": "netError",
-                            "optional": true,
-                            "type": "integer"
-                        },
-                        {
-                            "name": "netErrorName",
-                            "optional": true,
-                            "type": "string"
-                        },
-                        {
-                            "name": "httpStatusCode",
-                            "optional": true,
-                            "type": "integer"
-                        }
-                    ]
                 }
             ]
         },
@@ -31000,6 +31415,12 @@
                             "type": "boolean"
                         },
                         {
+                            "name": "parentId",
+                            "description": "Id of the parent target, if any. For example, \"iframe\" target may have a \"page\" parent.",
+                            "optional": true,
+                            "$ref": "TargetID"
+                        },
+                        {
                             "name": "openerId",
                             "description": "Opener target Id",
                             "optional": true,
@@ -31020,7 +31441,7 @@
                         },
                         {
                             "name": "parentFrameId",
-                            "description": "Id of the parent frame, only present for the \"iframe\" targets.",
+                            "description": "Id of the parent frame, present for \"iframe\" and \"worker\" targets. For nested workers,\nthis is the \"ancestor\" frame that created the first worker in the nested chain.",
                             "experimental": true,
                             "optional": true,
                             "$ref": "Page.FrameId"
@@ -32574,7 +32995,8 @@
                     "type": "string",
                     "enum": [
                         "ctap2_0",
-                        "ctap2_1"
+                        "ctap2_1",
+                        "ctap2_2"
                     ]
                 },
                 {
@@ -32639,6 +33061,18 @@
                         {
                             "name": "hasPrf",
                             "description": "If set to true, the authenticator will support the prf extension.\nhttps://w3c.github.io/webauthn/#prf-extension\nDefaults to false.",
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "hasHmacSecret",
+                            "description": "If set to true, the authenticator will support the hmac-secret extension.\nhttps://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#sctn-hmac-secret-extension\nDefaults to false.",
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "hasHmacSecretMc",
+                            "description": "If set to true, the authenticator will support the hmac-secret-mc extension.\nhttps://fidoalliance.org/specs/fido-v2.2-rd-20241003/fido-client-to-authenticator-protocol-v2.2-rd-20241003.html#sctn-hmac-secret-make-cred-extension\nDefaults to false.",
                             "optional": true,
                             "type": "boolean"
                         },
@@ -33016,11 +33450,27 @@
                             "type": "boolean"
                         },
                         {
+                            "name": "untrustedContent",
+                            "description": "A hint indicating that the tool output may contain untrusted content, ex: UGC, 3rd party data.",
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
                             "name": "autosubmit",
                             "description": "If the declarative tool was declared with the autosubmit attribute.",
                             "optional": true,
                             "type": "boolean"
                         }
+                    ]
+                },
+                {
+                    "id": "InvocationStatus",
+                    "description": "Represents the status of a tool invocation.",
+                    "type": "string",
+                    "enum": [
+                        "Completed",
+                        "Canceled",
+                        "Error"
                     ]
                 },
                 {
@@ -33070,12 +33520,20 @@
                     ]
                 },
                 {
-                    "id": "InvocationStatus",
-                    "description": "Status of a tool invocation.",
-                    "type": "string",
-                    "enum": [
-                        "completed",
-                        "error"
+                    "id": "RemovedTool",
+                    "description": "Definition of a tool that was removed.",
+                    "type": "object",
+                    "properties": [
+                        {
+                            "name": "name",
+                            "description": "Tool name.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "frameId",
+                            "description": "Frame identifier associated with the tool registration.",
+                            "$ref": "Page.FrameId"
+                        }
                     ]
                 }
             ],
@@ -33089,41 +33547,40 @@
                     "description": "Disables the WebMCP domain."
                 },
                 {
-                    "name": "cancelInvocation",
-                    "description": "Cancels a pending tool invocation. The tool's AbortSignal is fired, and a\ntoolResponded event with status \"error\" will be emitted for the invocationId.",
+                    "name": "invokeTool",
+                    "description": "Invokes a registered tool.",
                     "parameters": [
                         {
-                            "name": "invocationId",
-                            "description": "The invocation ID returned by invokeTool.",
-                            "type": "string"
-                        }
-                    ]
-                },
-                {
-                    "name": "invokeTool",
-                    "description": "Invokes a tool by name with JSON-encoded input arguments.\nReturns an invocationId; the result arrives asynchronously via toolResponded event.",
-                    "parameters": [
+                            "name": "frameId",
+                            "description": "Frame in which to invoke the tool.",
+                            "$ref": "Page.FrameId"
+                        },
                         {
                             "name": "toolName",
                             "description": "Name of the tool to invoke.",
                             "type": "string"
                         },
                         {
-                            "name": "frameId",
-                            "description": "Frame identifier where the tool is registered.",
-                            "$ref": "Page.FrameId"
-                        },
-                        {
                             "name": "input",
-                            "description": "JSON-encoded input arguments for the tool (parsed and passed to the execute callback).",
-                            "optional": true,
+                            "description": "Input parameters for the tool, matching the tool's inputSchema.",
                             "type": "object"
                         }
                     ],
                     "returns": [
                         {
                             "name": "invocationId",
-                            "description": "Unique ID for this invocation, used to correlate with toolResponded.",
+                            "description": "Unique identifier for this invocation. Response is sent before tool events.",
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "cancelInvocation",
+                    "description": "Cancels a pending tool invocation.",
+                    "parameters": [
+                        {
+                            "name": "invocationId",
+                            "description": "Invocation identifier to cancel.",
                             "type": "string"
                         }
                     ]
@@ -33153,34 +33610,44 @@
                             "description": "Array of tools that were removed.",
                             "type": "array",
                             "items": {
-                                "$ref": "Tool"
+                                "$ref": "RemovedTool"
                             }
                         }
                     ]
                 },
                 {
                     "name": "toolInvoked",
-                    "description": "Event fired when a tool invocation has been started (the execute callback is running).",
+                    "description": "Event fired when a tool invocation starts.",
                     "parameters": [
                         {
-                            "name": "invocationId",
-                            "description": "The invocation ID returned by invokeTool.",
+                            "name": "toolName",
+                            "description": "Name of the tool to invoke.",
                             "type": "string"
                         },
                         {
-                            "name": "toolName",
-                            "description": "Name of the tool being invoked.",
+                            "name": "frameId",
+                            "description": "Frame id",
+                            "$ref": "Page.FrameId"
+                        },
+                        {
+                            "name": "invocationId",
+                            "description": "Invocation identifier.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "input",
+                            "description": "The input parameters used for the invocation.",
                             "type": "string"
                         }
                     ]
                 },
                 {
                     "name": "toolResponded",
-                    "description": "Event fired when a tool invocation has completed (successfully or with error).",
+                    "description": "Event fired when a tool invocation completes or fails.",
                     "parameters": [
                         {
                             "name": "invocationId",
-                            "description": "The invocation ID returned by invokeTool.",
+                            "description": "Invocation identifier.",
                             "type": "string"
                         },
                         {
@@ -33190,15 +33657,21 @@
                         },
                         {
                             "name": "output",
-                            "description": "The tool's return value (JSON-encoded), present when status is \"completed\".",
+                            "description": "Output or error delivered as delivered to the agent. Missing if `status` is anything other than Completed.\nNote: The output is untrusted and poses a prompt injection risk. Clients should treat this as potentially malicious user input.",
+                            "optional": true,
+                            "type": "any"
+                        },
+                        {
+                            "name": "errorText",
+                            "description": "Error text for protocol users.",
                             "optional": true,
                             "type": "string"
                         },
                         {
-                            "name": "errorText",
-                            "description": "Error text, present when status is \"error\".",
+                            "name": "exception",
+                            "description": "The exception object, if the javascript tool threw an error>",
                             "optional": true,
-                            "type": "string"
+                            "$ref": "Runtime.RemoteObject"
                         }
                     ]
                 }

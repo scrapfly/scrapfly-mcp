@@ -150,7 +150,12 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 	},
 	"showCursor": {
 		description: "Injects a debug cursor overlay (red dot + trail) for visual testing. Persists across navigations — re-injected automatically on page load.",
-		schema: map[string]any{"type": "object", "properties": map[string]any{}},
+		schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"keepHistory": map[string]any{"type": "boolean", "description": "When true, the cursor trail retains its FULL movement history at constant opacity instead of the default rolling ~60-..."},
+			},
+		},
 	},
 	"getFrames": {
 		description: "Returns all frames including OOPIFs with their metadata. Uses ForEachRenderFrameHost to enumerate every frame in the page, including cross-origin out-of-process iframes.",
