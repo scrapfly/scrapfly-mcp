@@ -415,6 +415,177 @@ func interactionTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 		Meta:        standardPermissionsMeta,
 	}, provider.CloudBrowserDownloads)
 
+	// Alerting tool family — read tools (list/get/count-active/metric-families/
+	// series/preview) are unconditional; mutating tools (create/update/delete/
+	// snooze/unsnooze/test) gate behind confirm=true so the model can preview
+	// the rendered payload before committing.
+	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "alert_list",
+		Title:       "Scrapfly Alerts — List",
+		Description: "List alert definitions for the caller's account. Optional filters: project_uuid, state (ok|pending|triggered|recovering|no_data|snoozed), metric_id. Returns the full Alert rows so the model can reason about state and notification config.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Alerts — List",
+			DestructiveHint: &falseBool,
+			ReadOnlyHint:    true,
+			IdempotentHint:  true,
+			OpenWorldHint:   &trueBool,
+		},
+		Meta: standardPermissionsMeta,
+	}, provider.AlertList)
+	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "alert_get",
+		Title:       "Scrapfly Alerts — Get",
+		Description: "Fetch a single alert definition by UUID. Returns the full Alert row including lifecycle state, snooze status, last-eval/notification timestamps, and notify channels.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Alerts — Get",
+			DestructiveHint: &falseBool,
+			ReadOnlyHint:    true,
+			IdempotentHint:  true,
+			OpenWorldHint:   &trueBool,
+		},
+		Meta: standardPermissionsMeta,
+	}, provider.AlertGet)
+	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "alert_count_active",
+		Title:       "Scrapfly Alerts — Count Active",
+		Description: "Return the count of alerts in actively-firing states (triggered, pending, recovering). Excludes snoozed/ok/no_data. Optional project_uuid narrows to a single project. Backs sidebar badges — sub-millisecond.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Alerts — Count Active",
+			DestructiveHint: &falseBool,
+			ReadOnlyHint:    true,
+			IdempotentHint:  true,
+			OpenWorldHint:   &trueBool,
+		},
+		Meta: standardPermissionsMeta,
+	}, provider.AlertCountActive)
+	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "alert_metric_families",
+		Title:       "Scrapfly Alerts — Metric Families",
+		Description: "Discover which metrics can be alerted on. ALWAYS call this BEFORE alert_create so you pick a valid metric_id and supply only allowed_dimensions. Returns 20+ families across products (extraction, scheduler, scrape, …) with their units, default sustained windows, and source tables.\n\nAFTER this returns: do NOT stop and summarize for the user. The user's intent is to CONFIGURE an alert — your next required step is alert_preview using the metric_id, comparator, threshold, and sustained_minutes you derived from the user's request and (optionally) monitoring_get_metrics baseline. Only stop when you have a previewed-then-created (or previewed-then-dry-run-create) result to show.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Alerts — Metric Families",
+			DestructiveHint: &falseBool,
+			ReadOnlyHint:    true,
+			IdempotentHint:  true,
+			OpenWorldHint:   &trueBool,
+		},
+		Meta: standardPermissionsMeta,
+	}, provider.AlertMetricFamilies)
+	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "alert_series",
+		Title:       "Scrapfly Alerts — Series",
+		Description: "Fetch the metric time series + state-change transitions for one alert. range_minutes is the lookback (default 240=4h, max 10080=7d). Out-of-bound values are clamped server-side.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Alerts — Series",
+			DestructiveHint: &falseBool,
+			ReadOnlyHint:    true,
+			IdempotentHint:  true,
+			OpenWorldHint:   &trueBool,
+		},
+		Meta: standardPermissionsMeta,
+	}, provider.AlertSeries)
+	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "alert_preview",
+		Title:       "Scrapfly Alerts — Preview",
+		Description: "REQUIRED step between alert_metric_families and alert_create when configuring a new alert. Run a hypothetical alert rule against historical data and return 'would-have-fired' markers WITHOUT persisting anything. Use this to validate that a proposed threshold isn't too noisy / too quiet.\n\nAFTER this returns: do NOT stop. If the would-have-fired count over the lookback window is reasonable (typically 0-3 fires over 24h for a normal-noise rule), proceed to alert_create. If it fires too often (>10/24h) or never (0/24h), adjust threshold and re-preview. Only stop the agent loop after alert_create has been called (dry-run is acceptable as a final answer awaiting user confirm).",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Alerts — Preview",
+			DestructiveHint: &falseBool,
+			ReadOnlyHint:    true,
+			IdempotentHint:  true,
+			OpenWorldHint:   &trueBool,
+		},
+		Meta: standardPermissionsMeta,
+	}, provider.AlertPreview)
+	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
+		Name:  "alert_create",
+		Title: "Scrapfly Alerts — Create",
+		Description: "Create a new alert. Two-step: call without confirm=true first to see the rendered request body, then re-call with confirm=true to commit. " +
+			"\n\nPROJECT BINDING — IMPORTANT:" +
+			"\n  Leave project_uuid EMPTY unless the user explicitly named a non-default project. " +
+			"The server falls back to the caller's currently-selected project from the api-key. " +
+			"Do NOT pass the value of info_account.account.account_id as project_uuid — that's the account ID, not the project ID, and the server returns ERR::ALERT::PROJECT_NOT_FOUND when they don't match." +
+			"\n\nRECOMMENDED WORKFLOW for picking a data-driven threshold:" +
+			"\n  1. alert_metric_families → pick a valid metric_id whose unit + product match what you measured" +
+			"\n  2. alert_preview with your chosen comparator/threshold/sustained_minutes" +
+			"\n     → confirm the rule would have fired ~0-2 times over the last 24h baseline (not too noisy, not silent)" +
+			"\n  3. alert_create (this tool) WITHOUT confirm first to show the user the rendered payload, then re-call with confirm=true to commit" +
+			"\n\nmetric_id and metric_dimensions must come from alert_metric_families — never invent these.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Alerts — Create",
+			DestructiveHint: &trueBool,
+			ReadOnlyHint:    false,
+			IdempotentHint:  false,
+			OpenWorldHint:   &trueBool,
+		},
+		Meta: standardPermissionsMeta,
+	}, provider.AlertCreate)
+	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "alert_update",
+		Title:       "Scrapfly Alerts — Update",
+		Description: "Partially update an alert. Only non-nil fields are applied. Server auto-snoozes for sustained_minutes after every edit to prevent notification storms during tuning. Two-step: omit confirm to see the patch payload, set confirm=true to commit.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Alerts — Update",
+			DestructiveHint: &trueBool,
+			ReadOnlyHint:    false,
+			IdempotentHint:  false,
+			OpenWorldHint:   &trueBool,
+		},
+		Meta: standardPermissionsMeta,
+	}, provider.AlertUpdate)
+	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "alert_delete",
+		Title:       "Scrapfly Alerts — Delete",
+		Description: "Permanently remove an alert definition. Cannot be undone. Two-step: omit confirm to see what would be deleted, set confirm=true to commit.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Alerts — Delete",
+			DestructiveHint: &trueBool,
+			ReadOnlyHint:    false,
+			IdempotentHint:  false,
+			OpenWorldHint:   &trueBool,
+		},
+		Meta: standardPermissionsMeta,
+	}, provider.AlertDelete)
+	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "alert_snooze",
+		Title:       "Scrapfly Alerts — Snooze",
+		Description: "Mute notifications either for a fixed window (minutes) or until the next OK transition (until_resolved=true). Exactly one of minutes / until_resolved must be set. Two-step confirmation.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Alerts — Snooze",
+			DestructiveHint: &trueBool,
+			ReadOnlyHint:    false,
+			IdempotentHint:  false,
+			OpenWorldHint:   &trueBool,
+		},
+		Meta: standardPermissionsMeta,
+	}, provider.AlertSnooze)
+	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "alert_unsnooze",
+		Title:       "Scrapfly Alerts — Unsnooze",
+		Description: "Clear any active snooze so the alert resumes normal notification delivery on the next eval tick. Two-step confirmation.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Alerts — Unsnooze",
+			DestructiveHint: &trueBool,
+			ReadOnlyHint:    false,
+			IdempotentHint:  true,
+			OpenWorldHint:   &trueBool,
+		},
+		Meta: standardPermissionsMeta,
+	}, provider.AlertUnsnooze)
+	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
+		Name:        "alert_test",
+		Title:       "Scrapfly Alerts — Test Notify",
+		Description: "Send a one-shot test notification to every configured channel WITHOUT touching alert state. Useful for validating webhook URLs and email addresses end-to-end. Two-step confirmation since this DOES dispatch real messages.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Scrapfly Alerts — Test Notify",
+			DestructiveHint: &trueBool,
+			ReadOnlyHint:    false,
+			IdempotentHint:  false,
+			OpenWorldHint:   &trueBool,
+		},
+		Meta: standardPermissionsMeta,
+	}, provider.AlertTest)
+
 	// Flat interaction tools (click, fill, type_text, hover, press_key,
 	// scroll, select_option, drag, take_snapshot, take_screenshot,
 	// get_page_url, evaluate_script) + WebMCP meta-tools
