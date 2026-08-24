@@ -86,7 +86,9 @@ func (s *Session) StartReader() {
 			// Log every raw message for debugging
 			if resp.ID == 0 && resp.Method == "" {
 				rawStr := string(raw)
-				if len(rawStr) > 300 { rawStr = rawStr[:300] + "..." }
+				if len(rawStr) > 300 {
+					rawStr = rawStr[:300] + "..."
+				}
 				log.Printf("[CDP RAW] no id/method: %s", rawStr)
 			}
 
@@ -186,7 +188,6 @@ func (s *Session) OnEvent(method string, handler EventHandler) {
 	defer s.handlersMu.Unlock()
 	s.eventHandlers[method] = append(s.eventHandlers[method], handler)
 }
-
 
 // SendCDPFireAndForget sends a CDP command without waiting for a response.
 // Used for acks and other fire-and-forget messages that don't return results.

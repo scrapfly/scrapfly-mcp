@@ -246,7 +246,9 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		if err != nil {
 			return ToolErrf("take_screenshot: %v", err), nil, nil
 		}
-		var ss struct{ Data string `json:"data"` }
+		var ss struct {
+			Data string `json:"data"`
+		}
 		json.Unmarshal(result, &ss)
 		// TextContent sidecar: ADK's mcptoolset drops image-only tool
 		// responses and errors with "no text content in tool response".
@@ -394,7 +396,9 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 			return ToolErrFromError("scroll_to_text", err), nil, nil
 		}
 		var rv struct {
-			Result struct{ Value string `json:"value"` } `json:"result"`
+			Result struct {
+				Value string `json:"value"`
+			} `json:"result"`
 		}
 		json.Unmarshal(evalResult, &rv)
 		return &mcp.CallToolResult{
@@ -526,7 +530,9 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 			return ToolErrFromError("find_elements", err), nil, nil
 		}
 		var rv struct {
-			Result struct{ Value string `json:"value"` } `json:"result"`
+			Result struct {
+				Value string `json:"value"`
+			} `json:"result"`
 		}
 		json.Unmarshal(evalResult, &rv)
 		return &mcp.CallToolResult{

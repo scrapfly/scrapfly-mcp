@@ -199,7 +199,9 @@ func InvokeTool(logger Logger, session *Session, toolName string, arguments json
 	if frameResult != nil {
 		var ft struct {
 			FrameTree struct {
-				Frame struct{ Id string `json:"id"` } `json:"frame"`
+				Frame struct {
+					Id string `json:"id"`
+				} `json:"frame"`
 			} `json:"frameTree"`
 		}
 		json.Unmarshal(frameResult, &ft)

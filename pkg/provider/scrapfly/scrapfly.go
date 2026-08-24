@@ -237,8 +237,8 @@ func staticTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	}, provider.CheckIfBlocked)
 
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
-		Name:        "cloud_browser_open",
-		Title:       "Scrapfly Cloud Browser — Open Session",
+		Name:  "cloud_browser_open",
+		Title: "Scrapfly Cloud Browser — Open Session",
 		Description: "Start a stateful real-browser session at a URL. Use this when the task requires *interaction* with a page — the user said \"open\", \"go to\", \"navigate to\", \"log in\", or the work needs clicking, form filling, or multi-step navigation. Returns the initial accessibility snapshot plus the page's registered WebMCP tools.\n\n" +
 			"Do NOT use this for a plain \"download <url>\" or \"fetch <url>\" where the URL already points at the asset and no interaction is needed — use `web_get_page` (simple) or `web_scrape` (with options) instead. Those are cheaper and faster.\n\n" +
 			"Once a session is open, the FULL set of CDP-backed interaction tools is available and operates on this session implicitly (no session_id in the calls):\n" +

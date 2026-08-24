@@ -60,13 +60,13 @@ const (
 )
 
 type presetConfig struct {
-	width, height, dpr  int
-	mobile              bool
-	ua                  string
-	downloadKbps        float64 // in kilobits/s
-	uploadKbps          float64
-	latencyMs           float64
-	cpuSlowdown         float64 // 1 = no throttle
+	width, height, dpr int
+	mobile             bool
+	ua                 string
+	downloadKbps       float64 // in kilobits/s
+	uploadKbps         float64
+	latencyMs          float64
+	cpuSlowdown        float64 // 1 = no throttle
 }
 
 var presets = map[Preset]presetConfig{
@@ -96,16 +96,16 @@ type PSIOptions struct {
 }
 
 type PSIReport struct {
-	Preset       Preset            `json:"preset"`
-	URL          string            `json:"url,omitempty"`
-	FetchTimeMs  int               `json:"fetch_time_ms"`
-	Metrics      LabMetrics        `json:"metrics"`
-	Ratings      map[string]string `json:"ratings"`
-	Score        int               `json:"performance_score"`
-	Diagnostics  Diagnostics       `json:"diagnostics"`
-	Resources    ResourceReport    `json:"resources"`
-	Field        *string           `json:"field_data"`   // always nil — CrUX requires API; see warnings
-	Warnings     []string          `json:"warnings,omitempty"`
+	Preset      Preset            `json:"preset"`
+	URL         string            `json:"url,omitempty"`
+	FetchTimeMs int               `json:"fetch_time_ms"`
+	Metrics     LabMetrics        `json:"metrics"`
+	Ratings     map[string]string `json:"ratings"`
+	Score       int               `json:"performance_score"`
+	Diagnostics Diagnostics       `json:"diagnostics"`
+	Resources   ResourceReport    `json:"resources"`
+	Field       *string           `json:"field_data"` // always nil — CrUX requires API; see warnings
+	Warnings    []string          `json:"warnings,omitempty"`
 }
 
 // LabMetrics: all times in ms, all scores in ms, CLS unitless.
@@ -168,16 +168,16 @@ type ResourceEntry struct {
 // loadingFinished lifecycle. We keep the minimum needed for the waterfall +
 // TTI in-flight counting.
 type netReq struct {
-	requestID     string
-	url           string
-	resType       string
-	startMs       float64 // Network.EventRequestWillBeSent.timestamp is a monotonic seconds.fractional value
-	endMs         float64 // set on loadingFinished / loadingFailed
-	ttfbMs        float64
-	transferBytes int64 // exact byte count; KB derived at output time
-	fromCache     bool
+	requestID        string
+	url              string
+	resType          string
+	startMs          float64 // Network.EventRequestWillBeSent.timestamp is a monotonic seconds.fractional value
+	endMs            float64 // set on loadingFinished / loadingFailed
+	ttfbMs           float64
+	transferBytes    int64 // exact byte count; KB derived at output time
+	fromCache        bool
 	isRenderBlocking bool // heuristic: stylesheet/script in <head> loaded before FCP
-	priority      string
+	priority         string
 }
 
 type screenFrame struct {
@@ -598,10 +598,10 @@ func registerCollectors(
 // waitForQuietLoad blocks until the page is ready for metric computation.
 //
 // Exit conditions (whichever happens first):
-//   1. loadEventFired + 2s of no new LCP events + no new in-flight requests.
-//   2. domContentLoadedEventFired + 3s of network idle (≤2 in-flight) — slow
-//      pages where some resources hang past loadEventFired still reach this.
-//   3. budgetMs elapsed.
+//  1. loadEventFired + 2s of no new LCP events + no new in-flight requests.
+//  2. domContentLoadedEventFired + 3s of network idle (≤2 in-flight) — slow
+//     pages where some resources hang past loadEventFired still reach this.
+//  3. budgetMs elapsed.
 //
 // Returns true if we exited via a completion signal (1 or 2), false on budget
 // timeout. A warning is appended for partial-data cases.
@@ -1118,9 +1118,9 @@ func computeTTI(fcpMs int, longTasks []struct{ startMs, durMs int }, netByID map
 	var curStart int = -1
 	// Merge edges by time and walk with running counters.
 	type tick struct {
-		at    int
-		dlt   int
-		dnet  int
+		at   int
+		dlt  int
+		dnet int
 	}
 	allTicks := make([]tick, 0, len(ltEdges)+len(netEdges))
 	for _, e := range ltEdges {
@@ -1379,7 +1379,9 @@ func histSum(h [48]uint32) uint64 {
 
 // histogramProgress returns how far `cur` has moved from `first` toward
 // `final`, on [0, 1]. We compute it as:
-//   progress = (distance(first, final) - distance(cur, final)) / distance(first, final)
+//
+//	progress = (distance(first, final) - distance(cur, final)) / distance(first, final)
+//
 // where distance is the L1 norm of bucket differences (histogram intersection's
 // complement). A frame identical to `final` has distance=0 → progress=1. A
 // frame identical to `first` has distance=dist(first,final) → progress=0.

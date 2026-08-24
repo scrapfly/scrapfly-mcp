@@ -34,8 +34,9 @@ type scoreWeights struct {
 }
 
 // From PSI's "Performance" score breakdown on pagespeed.dev:
-//   desktop: FCP+10 LCP+25 TBT+30 CLS+25 SI+10 (total 100)
-//   mobile:  FCP+9  LCP+23 TBT+28 CLS+25 SI+10 (total 95 — PSI normalizes)
+//
+//	desktop: FCP+10 LCP+25 TBT+30 CLS+25 SI+10 (total 100)
+//	mobile:  FCP+9  LCP+23 TBT+28 CLS+25 SI+10 (total 95 — PSI normalizes)
 var (
 	weightsDesktop = scoreWeights{fcp: 0.10, si: 0.10, lcp: 0.25, tbt: 0.30, cls: 0.25}
 	weightsMobile  = scoreWeights{fcp: 0.09, si: 0.10, lcp: 0.23, tbt: 0.28, cls: 0.25}

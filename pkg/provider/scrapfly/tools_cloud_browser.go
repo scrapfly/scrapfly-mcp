@@ -23,10 +23,10 @@ type antibotToolOverride struct {
 // ── Tool inputs ─────────────────────────────────────────────────────────────
 
 type CloudBrowserOpenInput struct {
-	URL         string `json:"url" jsonschema:"Target URL to open in the cloud browser."`
-	Country     string `json:"country,omitempty" jsonschema:"Proxy country. ISO 3166-1 alpha-2: 'US', 'DE'. Comma-separated for multiple: 'fr,us,es,de'. Prefix '-' to exclude: '-ru'."`
-	ProxyPool   string `json:"proxy_pool,omitempty" jsonschema:"Proxy pool: datacenter or residential."`
-	Timeout     int    `json:"timeout,omitempty" jsonschema:"Session timeout in seconds (default 900, max 1800)."`
+	URL               string `json:"url" jsonschema:"Target URL to open in the cloud browser."`
+	Country           string `json:"country,omitempty" jsonschema:"Proxy country. ISO 3166-1 alpha-2: 'US', 'DE'. Comma-separated for multiple: 'fr,us,es,de'. Prefix '-' to exclude: '-ru'."`
+	ProxyPool         string `json:"proxy_pool,omitempty" jsonschema:"Proxy pool: datacenter or residential."`
+	Timeout           int    `json:"timeout,omitempty" jsonschema:"Session timeout in seconds (default 900, max 1800)."`
 	BlockImages       bool   `json:"block_images,omitempty" jsonschema:"Stub image requests with empty responses."`
 	BlockStyles       bool   `json:"block_styles,omitempty" jsonschema:"Stub stylesheet requests with empty responses."`
 	BlockFonts        bool   `json:"block_fonts,omitempty" jsonschema:"Stub font requests with empty responses."`
@@ -219,7 +219,9 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 	})
 	session.OnEvent("WebMCP.toolsRemoved", func(method string, params json.RawMessage) bool {
 		var event struct {
-			Tools []struct{ Name string `json:"name"` } `json:"tools"`
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
 		}
 		if json.Unmarshal(params, &event) == nil {
 			names := make([]string, len(event.Tools))
@@ -382,7 +384,11 @@ func (p *ScrapflyToolProvider) CloudBrowserScreenshot(
 			"returnByValue": true,
 		})
 		if boxErr == nil {
-			var evalRes struct{ Result struct{ Value string `json:"value"` } `json:"result"` }
+			var evalRes struct {
+				Result struct {
+					Value string `json:"value"`
+				} `json:"result"`
+			}
 			json.Unmarshal(boxResult, &evalRes)
 			var box struct{ X, Y, Width, Height float64 }
 			if json.Unmarshal([]byte(evalRes.Result.Value), &box) == nil && box.Width > 0 {
@@ -726,7 +732,9 @@ func (p *ScrapflyToolProvider) BrowserUnblock(
 	})
 	session.OnEvent("WebMCP.toolsRemoved", func(method string, params json.RawMessage) bool {
 		var event struct {
-			Tools []struct{ Name string `json:"name"` } `json:"tools"`
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
 		}
 		if json.Unmarshal(params, &event) == nil {
 			names := make([]string, len(event.Tools))

@@ -15,10 +15,10 @@ import (
 )
 
 var (
-	httpAddr = flag.String("http", "", "if set, use streamable HTTP at this address (include port number, eg 127.0.0.1:1423), instead of stdin/stdout")
-	apiKey   = flag.String("apikey", "", "if set, use this API key, instead of the one in the environment variable")
-	apiHost  = flag.String("host", "", "if set, override the Scrapfly API host (e.g. https://api.scrapfly.local for local dev cluster). Falls back to SCRAPFLY_API_HOST env var, then to the SDK default https://api.scrapfly.io.")
-	browserHost = flag.String("browser-host", "", "if set, override the Scrapfly Cloud Browser host (e.g. https://browser.scrapfly.local). Falls back to SCRAPFLY_BROWSER_HOST env var, then derives from -host by replacing the leading 'api.' with 'browser.', then to the SDK default https://browser.scrapfly.io.")
+	httpAddr      = flag.String("http", "", "if set, use streamable HTTP at this address (include port number, eg 127.0.0.1:1423), instead of stdin/stdout")
+	apiKey        = flag.String("apikey", "", "if set, use this API key, instead of the one in the environment variable")
+	apiHost       = flag.String("host", "", "if set, override the Scrapfly API host (e.g. https://api.scrapfly.local for local dev cluster). Falls back to SCRAPFLY_API_HOST env var, then to the SDK default https://api.scrapfly.io.")
+	browserHost   = flag.String("browser-host", "", "if set, override the Scrapfly Cloud Browser host (e.g. https://browser.scrapfly.local). Falls back to SCRAPFLY_BROWSER_HOST env var, then derives from -host by replacing the leading 'api.' with 'browser.', then to the SDK default https://browser.scrapfly.io.")
 	verifySSLFlag = flag.Bool("verify-ssl", true, "verify TLS certificates on outbound calls. Set false ONLY when targeting a self-signed dev host (api.scrapfly.local). Falls back to SCRAPFLY_VERIFY_SSL env var (`0`/`false` to disable).")
 )
 
@@ -76,14 +76,13 @@ func main() {
 		verify = !(v == "0" || v == "false" || v == "False")
 	}
 
-		// Determine HTTP address: -http flag takes precedence, then PORT env var
+	// Determine HTTP address: -http flag takes precedence, then PORT env var
 	addr := *httpAddr
 	if addr == "" {
 		if port := os.Getenv("PORT"); port != "" {
 			addr = ":" + port
 		}
 	}
-
 
 	if apikey == "" && addr == "" {
 		log.Fatal("Either apikey (as an argument or as an environment variable) or httpdAddr must must be set.")
@@ -135,7 +134,7 @@ func main() {
 
 	server := server.NewScrapflyMCPServer(toolProvider)
 
-		// Determine HTTP address: -http flag takes precedence, then PORT env var
+	// Determine HTTP address: -http flag takes precedence, then PORT env var
 
 	if addr != "" { // httpAddr is actually string parsed WITH port number. port only imply 0.0.0.0 eg :1123
 		server.WithHttpAddr(addr)

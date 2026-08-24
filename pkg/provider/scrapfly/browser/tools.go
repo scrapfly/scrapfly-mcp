@@ -40,7 +40,9 @@ func RegisterCDPTools(
 		if err != nil {
 			return toolErrf("take_screenshot: %v", err), nil
 		}
-		var ss struct{ Data string `json:"data"` }
+		var ss struct {
+			Data string `json:"data"`
+		}
 		json.Unmarshal(result, &ss)
 		// TextContent sidecar: ADK's mcptoolset drops image-only tool
 		// responses. Emit a short text summary alongside the PNG so the
@@ -169,7 +171,9 @@ func RegisterCDPTools(
 			return toolErrf("get_page_url: %v", err), nil
 		}
 		var evalResult struct {
-			Result struct{ Value string `json:"value"` } `json:"result"`
+			Result struct {
+				Value string `json:"value"`
+			} `json:"result"`
 		}
 		json.Unmarshal(result, &evalResult)
 		return &mcp.CallToolResult{

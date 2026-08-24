@@ -123,7 +123,9 @@ func (p *PageState) Refresh(session *Session) {
 		"returnByValue": true,
 	})
 	var meta struct {
-		Result struct{ Value string `json:"value"` } `json:"result"`
+		Result struct {
+			Value string `json:"value"`
+		} `json:"result"`
 	}
 	json.Unmarshal(metaResult, &meta)
 	var pageMeta struct {
@@ -139,7 +141,9 @@ func (p *PageState) Refresh(session *Session) {
 	if frameResult != nil {
 		var ft struct {
 			FrameTree struct {
-				Frame struct{ Id string `json:"id"` } `json:"frame"`
+				Frame struct {
+					Id string `json:"id"`
+				} `json:"frame"`
 			} `json:"frameTree"`
 		}
 		json.Unmarshal(frameResult, &ft)
@@ -159,7 +163,9 @@ func (p *PageState) Refresh(session *Session) {
 			"returnByValue": true,
 		})
 		var textEval struct {
-			Result struct{ Value string `json:"value"` } `json:"result"`
+			Result struct {
+				Value string `json:"value"`
+			} `json:"result"`
 		}
 		json.Unmarshal(textResult, &textEval)
 		p.AXTree = textEval.Result.Value
@@ -324,10 +330,10 @@ func (p *PageState) collectCompoundMeta(session *Session, backendIDs []int64) ma
 			continue
 		}
 		callResult, err := session.SendCDP("Runtime.callFunctionOn", map[string]any{
-			"objectId":      resolved.Object.ObjectID,
+			"objectId":            resolved.Object.ObjectID,
 			"functionDeclaration": _compoundMetaJSFn,
-			"returnByValue": true,
-			"silent":        true,
+			"returnByValue":       true,
+			"silent":              true,
 		})
 		if err != nil {
 			continue
@@ -415,7 +421,7 @@ func (p *PageState) Snapshot() string {
 
 // Selector is the Antibot element selector.
 type Selector struct {
-	Type  string `json:"type"`  // css, xpath, axNodeId, coord, role, bottom
+	Type  string `json:"type"` // css, xpath, axNodeId, coord, role, bottom
 	Query string `json:"query"`
 }
 
@@ -565,9 +571,9 @@ func (s *Session) Eval(expression string) (string, error) {
 
 // ScreencastFrame is a single frame from Page.startScreencast.
 type ScreencastFrame struct {
-	Data      string            `json:"data"`      // base64-encoded image
-	Metadata  map[string]any    `json:"metadata"`
-	SessionID int64             `json:"sessionId"`
+	Data      string         `json:"data"` // base64-encoded image
+	Metadata  map[string]any `json:"metadata"`
+	SessionID int64          `json:"sessionId"`
 }
 
 // StartScreencast begins streaming page screenshots via CDP Page.startScreencast.
@@ -614,7 +620,9 @@ func (s *Session) HasDownloads() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	var r struct{ Result bool `json:"result"` }
+	var r struct {
+		Result bool `json:"result"`
+	}
 	json.Unmarshal(result, &r)
 	return r.Result, nil
 }
@@ -625,7 +633,9 @@ func (s *Session) ListDownloads() ([]DownloadMeta, error) {
 	if err != nil {
 		return nil, err
 	}
-	var r struct{ Metadata map[string]int64 `json:"metadata"` }
+	var r struct {
+		Metadata map[string]int64 `json:"metadata"`
+	}
 	json.Unmarshal(result, &r)
 	var downloads []DownloadMeta
 	for name, size := range r.Metadata {
@@ -658,7 +668,9 @@ func (s *Session) GetAllDownloads(deleteAfter bool) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var r struct{ Files map[string]string `json:"files"` }
+	var r struct {
+		Files map[string]string `json:"files"`
+	}
 	json.Unmarshal(result, &r)
 	return r.Files, nil
 }
@@ -683,7 +695,11 @@ func (s *Session) Screenshot(fullPage bool, selector string) ([]byte, error) {
 			"expression": boxJS, "returnByValue": true,
 		})
 		if boxResult != nil {
-			var evalRes struct{ Result struct{ Value string `json:"value"` } `json:"result"` }
+			var evalRes struct {
+				Result struct {
+					Value string `json:"value"`
+				} `json:"result"`
+			}
 			json.Unmarshal(boxResult, &evalRes)
 			var box struct{ X, Y, Width, Height float64 }
 			if json.Unmarshal([]byte(evalRes.Result.Value), &box) == nil && box.Width > 0 {
