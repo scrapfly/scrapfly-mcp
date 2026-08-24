@@ -717,8 +717,10 @@
                         "datadome",
                         "recaptcha",
                         "geetest",
+                        "hcaptcha_click",
                         "perimeterx_hold",
-                        "aws_waf"
+                        "aws_waf",
+                        "cs_captcha_rotation"
                     ]
                 },
                 {
@@ -737,7 +739,7 @@
                         },
                         {
                             "name": "frameUrl",
-                            "description": "URL of the frame the captcha was detected in (or a\n`perimeterx-dom:<page-url>` synth URL for DOM-probed PX detections).",
+                            "description": "URL of the frame the captcha was detected in. Challenges that render\ninline in the host document have no frame of their own, so they carry\na synthetic `<scheme>:<page-url>` value instead \u2014 one of\n`perimeterx-dom:`, `aws-waf:` or `cs-captcha:`. Clients that parse this\nas a URL must tolerate those.",
                             "type": "string"
                         },
                         {
@@ -752,7 +754,7 @@
                         },
                         {
                             "name": "method",
-                            "description": "How the browser solved (or attempted to solve) this captcha \u2014\none of: \"slider\" | \"checkbox\" | \"managed\" | \"hold\" | \"token\" |\n\"coords\". Empty string while pending.",
+                            "description": "How the browser solved (or attempted to solve) this captcha \u2014\none of: \"slider\" | \"checkbox\" | \"managed\" | \"hold\" | \"token\" |\n\"coords\" | \"rotate\". Empty string while pending.",
                             "optional": true,
                             "type": "string"
                         },
@@ -764,7 +766,7 @@
                         },
                         {
                             "name": "errorMessage",
-                            "description": "Populated when status == \"failed\" \u2014 human-readable failure reason\n(timeout, missing API key, SDK error, etc.).",
+                            "description": "Populated when status == \"failed\" \u2014 the same coarse, solver-agnostic\nreason the captchaError event carried.",
                             "optional": true,
                             "type": "string"
                         }
@@ -1665,7 +1667,7 @@
                 },
                 {
                     "name": "solveCaptcha",
-                    "description": "Requests the browser to solve a previously detected captcha.\n\nThe remote solver API key is read from the bot profile via\nvariables.captchaSolverApiKey (not passed through CDP). Types that require\nthe remote solver (turnstile token, datadome token, recaptcha, geetest) will\nfail with captchaError if the key is missing.\n\nThe upstream proxy used by the remote solver is read from the bot profile via\nvariables.captchaProxy (http://user:pass@host:port). Chromium itself\negresses via a local soxy SOCKS5 proxy, but the remote solver needs direct\nHTTP-proxy access to the same upstream egress for IP-bound solves.\nNot passed through CDP to avoid leaking upstream creds on the wire.\n\nFor turnstile_checkbox and datadome_slider no key is needed \u2014 the\nbrowser solves these via the existing Antibot interaction primitives.",
+                    "description": "Requests the browser to solve a previously detected captcha.\n\nRemote-solver credentials and the egress the solver dials are configured\nbrowser-side, not through CDP \u2014 so they are never exposed on this\nchannel. Types that need the remote solver (turnstile token, datadome\ntoken, recaptcha, geetest) fail with captchaError when it is not\nconfigured.\n\nFor turnstile_checkbox and datadome_slider nothing is needed \u2014 the\nbrowser solves these via the existing Antibot interaction primitives.",
                     "parameters": [
                         {
                             "name": "detectionId",
@@ -1675,7 +1677,7 @@
                         },
                         {
                             "name": "timeout",
-                            "description": "Seconds to wait for the remote solve (default 120).",
+                            "description": "Seconds to wait for the remote solve (default 120). Clamped to\n[20, 600]; the poll interval is 10s, so below the floor the solve\ngets no chance to complete.",
                             "optional": true,
                             "type": "integer"
                         }
@@ -1752,14 +1754,14 @@
                         },
                         {
                             "name": "method",
-                            "description": "How the browser will solve: \"slider\" | \"checkbox\" | \"token\".",
+                            "description": "How the browser will solve: \"slider\" | \"checkbox\" | \"managed\" |\n\"hold\" | \"token\" | \"coords\" | \"rotate\".",
                             "type": "string"
                         }
                     ]
                 },
                 {
                     "name": "captchaSolved",
-                    "description": "Emitted when a captcha is solved. For interaction-based solves\n(slider, checkbox) the token field is empty; for token solves\ndelegated to a remote solver it contains the response token.",
+                    "description": "Emitted when a captcha is solved. For interaction-based solves\n(slider, checkbox, managed, hold, coords) the token field is empty; for\ntoken solves delegated to a remote solver it contains the response token.",
                     "parameters": [
                         {
                             "name": "detectionId",
@@ -1771,7 +1773,7 @@
                         },
                         {
                             "name": "method",
-                            "description": "How the captcha was solved: \"slider\" | \"checkbox\" | \"token\".",
+                            "description": "How the captcha was solved: \"slider\" | \"checkbox\" | \"managed\" |\n\"hold\" | \"token\" | \"coords\" | \"rotate\".",
                             "type": "string"
                         },
                         {
@@ -1784,7 +1786,7 @@
                 },
                 {
                     "name": "captchaError",
-                    "description": "Emitted when a captcha cannot be solved (timeout, missing API key,\nremote solver API error, DOM element not found, etc.).",
+                    "description": "Emitted when a captcha cannot be solved (timeout, remote solver\nunavailable, challenge not solvable, DOM element not found, etc.).",
                     "parameters": [
                         {
                             "name": "detectionId",
@@ -1796,6 +1798,7 @@
                         },
                         {
                             "name": "errorMessage",
+                            "description": "Human-readable failure reason. Deliberately coarse: it says whether\nthe solve is worth retrying elsewhere or the identity should be\nrotated, and never carries solver-side detail.",
                             "type": "string"
                         }
                     ]
@@ -5024,6 +5027,84 @@
                         "BiddingAndAuctionServices",
                         "TrustedKeyValue"
                     ]
+                },
+                {
+                    "id": "TlsSession",
+                    "description": "One TLS session as it crosses between Scrapfly's two TLS stacks (this\nbrowser and curlium). Both pin the same BoringSSL revision, so `session`\nis portable between them with no transcoding. [Scrapfly extension]\n\nexportTlsSessions emits the canonical form: every optional field is omitted\nwhen importTlsSessions would derive that exact value from what remains, so\none cache row is one record no matter which of the two stacks minted it, and\nexport(import(record)) returns the record unchanged. A row that is not at\nthe defaults still spells out what it is keyed by. A record that spells a\ndefault out is still accepted; it comes back canonical, not verbatim.\n\nThere is no `alpn` property: the negotiated ALPN already travels inside\n`session` (BoringSSL stores it on the SSL_SESSION for TLS 1.3 and reads it\nback to decide whether 0-RTT may be offered), so a value minted by curl\nsurvives the round trip without a field of its own.",
+                    "experimental": true,
+                    "type": "object",
+                    "properties": [
+                        {
+                            "name": "host",
+                            "description": "Host the session belongs to; one cache row per host.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "port",
+                            "description": "Defaults to 443 when omitted.",
+                            "optional": true,
+                            "type": "integer"
+                        },
+                        {
+                            "name": "topFrameSite",
+                            "description": "Origin whose site keys the connection partition. Omit for a top-level\nnavigation to `host`; pass the top frame's origin for a subresource, or\nthe session is filed under a partition the request will not look in.\nOmitted on export when the site is the one derived from `host`.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "isCrossSite",
+                            "description": "True when the session was cached for a frame cross-site to topFrameSite.\nThe partition key carries this bit, so a third-party row re-imported\nwithout it lands in the first-party partition instead of its own. Sent\non export only alongside topFrameSite: the two are one value.",
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "nonce",
+                            "description": "Nonce of the partition key, as 32 hex characters. Only an anonymous\niframe or a fenced frame has one, and it only matches inside the browser\nrun that minted it; a nonced row re-imported without it becomes\nresumable by the very top-level page the nonce isolates it from.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "networkIsolationPartition",
+                            "description": "Isolation partition of the partition key: \"general\" (the default,\neverything a page fetches), \"protectedAudienceSellerWorklet\",\n\"fedCmUncredentialedRequests\" or \"dnsOverHttps\". Omitted on export when\nit is \"general\".",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "privacyMode",
+                            "description": "Credentials mode the session was negotiated under: \"disabled\" (the\ndefault, credentials sent), \"enabled\", \"enabledWithoutClientCerts\" or\n\"enabledPartitionedStateAllowed\". Part of the cache key: a credentialed\nconnection must not resume a session minted without credentials. Omitted\non export when it is \"disabled\".",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "sessionUsage",
+                            "description": "\"destination\" (the default, a session with the host itself) or \"proxy\"\n(a session with a proxy endpoint that carries traffic elsewhere).\nOmitted on export when it is \"destination\".",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "destIpAddress",
+                            "description": "Destination IP the row is pinned to. Only ever set when the session used\nan RSA key exchange, which TLS 1.3 never does, so it is absent for\neverything minted today.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "ietfTlsId",
+                            "description": "IETF id of the negotiated version (772 = TLS 1.3). Export only.",
+                            "optional": true,
+                            "type": "integer"
+                        },
+                        {
+                            "name": "validUntil",
+                            "description": "Unix seconds after which the session no longer resumes. Export only.",
+                            "optional": true,
+                            "type": "number"
+                        },
+                        {
+                            "name": "session",
+                            "description": "base64 SSL_SESSION_to_bytes output.",
+                            "type": "string"
+                        }
+                    ]
                 }
             ],
             "commands": [
@@ -5482,6 +5563,61 @@
                             "name": "pstCount",
                             "description": "Number of private state tokens flushed.",
                             "type": "integer"
+                        }
+                    ]
+                },
+                {
+                    "name": "importTlsSessions",
+                    "description": "Injects TLS sessions minted elsewhere into this browser's TLS session cache,\nso the next handshake to each host resumes with a PSK instead of looking\nlike a first-ever visitor. [Scrapfly extension]",
+                    "experimental": true,
+                    "parameters": [
+                        {
+                            "name": "sessions",
+                            "type": "array",
+                            "items": {
+                                "$ref": "TlsSession"
+                            }
+                        },
+                        {
+                            "name": "browserContextId",
+                            "description": "BrowserContext to import into. When omitted, the default one is used.",
+                            "optional": true,
+                            "$ref": "BrowserContextID"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "importedCount",
+                            "description": "How many entries are now in the cache. Counts stored rows, not parsed\nones, so a caller may compare it against the number it sent: an entry\nwhose session does not deserialize, and one dropped because memory\npressure has shrunk the cache to nothing, are both missing from it.",
+                            "type": "integer"
+                        }
+                    ]
+                },
+                {
+                    "name": "exportTlsSessions",
+                    "description": "Serializes this browser's cached TLS sessions, one entry per host. Peeks\nrather than consumes: the sessions stay resumable here too.\n[Scrapfly extension]",
+                    "experimental": true,
+                    "parameters": [
+                        {
+                            "name": "host",
+                            "description": "Restrict to a single host. When omitted, the whole cache is returned.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "browserContextId",
+                            "description": "BrowserContext to export from. When omitted, the default one is used.",
+                            "optional": true,
+                            "$ref": "BrowserContextID"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "sessions",
+                            "type": "array",
+                            "items": {
+                                "$ref": "TlsSession"
+                            }
                         }
                     ]
                 }
@@ -13968,6 +14104,24 @@
                         {
                             "name": "responsePhrase",
                             "description": "A textual representation of responseCode.\nIf absent, a standard phrase matching responseCode is used.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "fromCache",
+                            "description": "Report the response as served from the browser cache: transferSize 0 and\ndeliveryType \"cache\" in PerformanceResourceTiming (a warm cache hit).",
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "encodedBodySize",
+                            "description": "Original compressed body size in bytes to report as encodedBodySize.\nDistinct from the fulfilled (decoded) body, which drives decodedBodySize.",
+                            "optional": true,
+                            "type": "integer"
+                        },
+                        {
+                            "name": "alpnNegotiatedProtocol",
+                            "description": "ALPN protocol to report as nextHopProtocol (e.g. \"h2\", \"h3\", \"http/1.1\").",
                             "optional": true,
                             "type": "string"
                         }
@@ -25137,6 +25291,11 @@
                             "items": {
                                 "$ref": "NavigationResponseEntry"
                             }
+                        },
+                        {
+                            "name": "isErrorPage",
+                            "description": "True when the committed document is an error page. Without this a caller\ncannot tell a navigation that FAILED from one still in flight: both yield\na chain carrying no committed final response, and reading the failure as\n\"still loading\" reports it as a timeout.",
+                            "type": "boolean"
                         }
                     ]
                 },
