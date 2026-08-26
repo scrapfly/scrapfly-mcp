@@ -295,7 +295,7 @@ The Scrapfly MCP Server provides **5 powerful tools** covering 99% of web scrapi
 
 | Tool | Description | Use Case |
 |------|-------------|----------|
-| `scraping_instruction_enhanced` | Get best practices & POW token | **Always call first!** |
+| `scraping_instruction_enhanced` | Cheat-sheet of the scraping options | Optional — when the right options are unclear |
 | `web_get_page` | Quick page fetch with smart defaults | Simple scraping tasks |
 | `web_scrape` | Full control with browser automation | Complex scraping, login flows |
 | `screenshot` | Capture page screenshots | Visual analysis, monitoring |

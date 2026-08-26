@@ -11,7 +11,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const ServerVersion = "1.2.0"
+const ServerVersion = "1.3.1"
 
 func init() {
 	log.SetFlags(log.Lmicroseconds | log.Lmsgprefix | log.LstdFlags)
@@ -145,7 +145,9 @@ func newServer(toolProviders ...provider.ToolProvider) *mcp.Server {
 		Version: ServerVersion,
 	},
 		&mcp.ServerOptions{
-			Instructions: "always ensure assistant has read the scraping_instruction_enhanced tool before using any scraping",
+			// Injected verbatim into the client's system context: describe the
+			// server, do not instruct the model.
+			Instructions: "Scrapfly web-scraping tools: fetch and render pages behind anti-bot protection, screenshot them, and drive a cloud browser. `scraping_instruction_enhanced` returns a cheat-sheet of the scraping options when the right ones are unclear.",
 		})
 
 	if len(toolProviders) > 0 {

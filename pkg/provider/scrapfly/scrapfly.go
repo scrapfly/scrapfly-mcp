@@ -195,7 +195,7 @@ func staticTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "scraping_instruction_enhanced",
 		Title:       "Scrapfly Scraping tools instructions // enhanced prompt",
-		Description: "Return a concise cheat-sheet of Scrapfly's scraping options (ASP, render_js, country, proxy pool, session) and when to use each. Call this before your first `web_scrape` / `web_get_page` on an unfamiliar target so the chosen options are right the first time.",
+		Description: "Return a concise cheat-sheet of Scrapfly's scraping options (ASP, render_js, country, proxy pool, extraction) and which of `web_scrape` / `web_get_page` accepts each. Optional — useful on an unfamiliar target so the chosen options are right the first time.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Scraping tools instructions // enhanced prompt",
 			DestructiveHint: &falseBool,

@@ -22,7 +22,7 @@ type GetPageToolInput struct {
 	CapturePage     bool                      `json:"capture_page,omitempty" jsonschema:"If true, capture the page as a screenshot"`
 	CaptureFlags    []scrapfly.ScreenshotFlag `json:"capture_flags,omitempty" jsonschema:"Capture flags to use for the capture."`
 	ExtractionModel scrapfly.ExtractionModel  `json:"extraction_model,omitempty" jsonschema:"if provided, the AI model to use for extraction. exclusive with extraction_template."`
-	PoW             string                    `json:"pow" jsonschema:"use scraping_instruction_enhanced tool use for instructions"`
+	PoW             string                    `json:"pow,omitempty" jsonschema:"Deprecated and ignored. Present so callers written against an earlier version are not rejected by the closed schema."`
 }
 
 type Cookie struct {
@@ -88,7 +88,7 @@ type ScrapeToolInput struct {
 	Timeout          int                       `json:"timeout,omitempty" jsonschema:"Server-side timeout in milliseconds. (Prefer rendering_wait + timeout) "`
 	ExtractionPrompt string                    `json:"extraction_prompt,omitempty" jsonschema:"(Avoid if the llm is thinking and can process the data itself). If data extraction cannot be assumed by the current llm model,AI prompt to add step of llm assisted data extraction."`
 	ExtractionModel  scrapfly.ExtractionModel  `json:"extraction_model,omitempty" jsonschema:"if provided, the AI model to use for extraction. exclusive with extraction_template."`
-	PoW              string                    `json:"pow" jsonschema:"use scraping_instruction_enhanced tool use for instructions"`
+	PoW              string                    `json:"pow,omitempty" jsonschema:"Deprecated and ignored. Present so callers written against an earlier version are not rejected by the closed schema."`
 	//ExtractionModel  string                   `json:"extraction_model,omitempty" jsonschema:"if provided, the AI model to use for extraction. exclusive with extraction_template."`
 }
 
@@ -99,16 +99,6 @@ type LightScrapeResultData struct {
 	Screenshots      map[string]scrapfly.Screenshot `json:"screenshots,omitempty" jsonschema:"Screenshots if any"`
 	ExtractionResult map[string]any                 `json:"extraction_result,omitempty" jsonschema:"Extracted data if extraction_prompt was provided"`
 	Errors           *scrapfly.APIErrorDetails      `json:"errors,omitempty" jsonschema:"Errors if any"`
-}
-
-func InvalidPoWError() (*mcp.CallToolResult, *LightScrapeResultData, error) {
-	lightScrapeResult := &LightScrapeResultData{
-		Content:     "Dear Assistant: Please execute scraping_instruction_enhanced tool first then reuse this one with new aquired knowledge (pow required)",
-		StatusCode:  200,
-		ContentType: "text/plain",
-		Screenshots: make(map[string]scrapfly.Screenshot),
-	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: lightScrapeResult.Content}}, IsError: true}, lightScrapeResult, nil
 }
 
 func ScrapingInputElement[In ScrapingInput, Out any](element string, input In) (Out, bool) {
@@ -146,7 +136,6 @@ func (input ScrapeToolInput) AsMap() map[string]any {
 		"timeout":           input.Timeout,
 		"extraction_prompt": input.ExtractionPrompt,
 		"extraction_model":  input.ExtractionModel,
-		"pow":               input.PoW,
 		"method":            input.Method,
 		"retry":             input.Retry,
 		"wait_for_selector": input.WaitForSelector,
@@ -160,7 +149,6 @@ func (input GetPageToolInput) AsMap() map[string]any {
 		"format_options":   input.FormatOptions,
 		"proxy_pool":       input.ProxyPool,
 		"rendering_wait":   input.RenderingWait,
-		"pow":              input.PoW,
 		"country":          input.Country,
 		"capture_page":     input.CapturePage,
 		"capture_flags":    input.CaptureFlags,
@@ -351,24 +339,13 @@ func (p *ScrapflyToolProvider) LightScrapeResultFromScrapeConfig(ctx context.Con
 
 func ScrapingHandlerFor[T ScrapingInput](p *ScrapflyToolProvider) mcp.ToolHandlerFor[T, *LightScrapeResultData] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input T) (*mcp.CallToolResult, *LightScrapeResultData, error) {
-		pow, ok := ScrapingInputElement[T, string]("pow", input)
-		if !ok {
-			return InvalidPoWError()
-		}
-		switch any(input).(type) {
-		case ScrapeToolInput:
-			return ScrapeCall(p, ctx, req, any(input).(ScrapeToolInput).PoW, any(input).(ScrapeToolInput))
-		case GetPageToolInput:
-			return ScrapeCall(p, ctx, req, any(input).(GetPageToolInput).PoW, any(input).(GetPageToolInput))
-		}
-		return ScrapeCall(p, ctx, req, pow, input)
+		return ScrapeCall(p, ctx, req, input)
 	}
 }
 
 func ScrapeCall[T ScrapingInput](p *ScrapflyToolProvider,
 	ctx context.Context,
 	req *mcp.CallToolRequest,
-	pow string,
 	input T,
 ) (*mcp.CallToolResult, *LightScrapeResultData, error) {
 
@@ -378,9 +355,6 @@ func ScrapeCall[T ScrapingInput](p *ScrapflyToolProvider,
 	}
 
 	p.logger.Println("Executing scraping call for client: ", client.APIKey())
-	if !strings.HasPrefix(pow, "i_know_what_i_am_doing:") {
-		return InvalidPoWError()
-	}
 
 	config, err := ScrapeConfigFromInput(input)
 	if err != nil {

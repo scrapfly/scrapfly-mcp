@@ -73,6 +73,11 @@ func (p *ProgressNotifier) Progress(ctx context.Context, delta float64, message 
 // routine to notify progress every 10 seconds until the scrape is complete or error via channel
 // use specii channel to notify completion or error
 func (p *ScrapflyToolProvider) progressRoutine(ctx context.Context, req *mcp.CallToolRequest, url string, stopChan <-chan struct{}) {
+	// Every notification below goes through the session; without one there is
+	// nothing to report to, and the logging paths would dereference it.
+	if req == nil || req.Session == nil {
+		return
+	}
 	progressNotifier, err := NewProgressNotifierFromRequest(req, 155.0) // 155 seconds is the max timeout for a scrape
 	if err != nil {
 		p.logger.Printf("Error creating progress notifier for Session: %s for url: %s, error: %v", req.Session.ID(), url, err)
