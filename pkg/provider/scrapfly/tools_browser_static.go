@@ -219,7 +219,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		Name:        "get_page_url",
 		Title:       "Get current page URL",
 		Description: "Return the browser's current URL and page title. Cheap; use it to confirm a navigation landed where you expected, or to capture the final URL after redirects before reporting back to the user.",
-		Annotations: &mcp.ToolAnnotations{Title: "Get current page URL", DestructiveHint: &falseBool, ReadOnlyHint: true},
+		Annotations: &mcp.ToolAnnotations{Title: "Get current page URL", DestructiveHint: &falseBool, ReadOnlyHint: true, OpenWorldHint: &trueBool},
 		Meta:        standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
 		session, err := browser.FindSession("")
@@ -235,7 +235,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		Name:        "take_screenshot",
 		Title:       "Take a screenshot",
 		Description: "Capture a PNG of the current cloud-browser page. Use when the user asks for a visual, or when the page's information (charts, diagrams, styled layout) isn't well-represented by the accessibility tree. For structural/text understanding, `take_snapshot` is cheaper and more actionable.",
-		Annotations: &mcp.ToolAnnotations{Title: "Take a screenshot", DestructiveHint: &falseBool, ReadOnlyHint: true},
+		Annotations: &mcp.ToolAnnotations{Title: "Take a screenshot", DestructiveHint: &falseBool, ReadOnlyHint: true, OpenWorldHint: &trueBool},
 		Meta:        standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
 		session, err := browser.FindSession("")
@@ -265,7 +265,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		Name:        "take_snapshot",
 		Title:       "Get page content snapshot",
 		Description: "Return the current page's accessibility tree as structured text with element uids. This is your primary way to see and act on the page — read it to find links, buttons, inputs, headings, then use their uids with `click`, `fill`, `hover`, etc. Cheap — call it freely whenever you're unsure what's on the page or after an action that likely changed the DOM. Do NOT guess uids.",
-		Annotations: &mcp.ToolAnnotations{Title: "Get page content snapshot", DestructiveHint: &falseBool, ReadOnlyHint: true},
+		Annotations: &mcp.ToolAnnotations{Title: "Get page content snapshot", DestructiveHint: &falseBool, ReadOnlyHint: true, OpenWorldHint: &trueBool},
 		Meta:        standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
 		session, err := browser.FindSession("")
@@ -282,7 +282,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		Name:        "evaluate_script",
 		Title:       "Run JavaScript",
 		Description: "Evaluate a JS expression in the page and return its value. Use for *reading*: extract a computed value, read localStorage, inspect window state, pull structured data the snapshot doesn't expose. Do NOT use for interaction — `click`/`fill`/`type_text` are the supported paths and survive anti-bot checks. Script runs as `(() => <your expr>)()` in the main world.",
-		Annotations: &mcp.ToolAnnotations{Title: "Run JavaScript", DestructiveHint: &falseBool},
+		Annotations: &mcp.ToolAnnotations{Title: "Run JavaScript", DestructiveHint: &falseBool, OpenWorldHint: &trueBool},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -352,7 +352,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		Name:        "scroll_to_text",
 		Title:       "Scroll until text is visible",
 		Description: "Scroll the active page until the first element whose textContent contains the given substring is in the viewport. Case-insensitive substring match. No-op if the text is already visible. Cheap to call before any click on content that may be below the fold (long articles, lazy-loaded lists, paginated tables). Returns the matched element's tag and a 80-char text excerpt, or an error if not found.",
-		Annotations: &mcp.ToolAnnotations{Title: "Scroll until text is visible", DestructiveHint: &falseBool},
+		Annotations: &mcp.ToolAnnotations{Title: "Scroll until text is visible", DestructiveHint: &falseBool, OpenWorldHint: &trueBool},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -410,7 +410,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		Name:        "dropdown_options",
 		Title:       "List options of a <select> element",
 		Description: "Return all <option> entries (value, label, selected) of a native HTML <select> element by uid. Use before select_option to discover available choices when the snapshot's `options=\"a|b|c\"` enrichment is truncated or missing.",
-		Annotations: &mcp.ToolAnnotations{Title: "List dropdown options", DestructiveHint: &falseBool, ReadOnlyHint: true},
+		Annotations: &mcp.ToolAnnotations{Title: "List dropdown options", DestructiveHint: &falseBool, ReadOnlyHint: true, OpenWorldHint: &trueBool},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -448,7 +448,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		Name:        "wait",
 		Title:       "Pause execution",
 		Description: "Sleep for N seconds before the next action. Use sparingly — most pages can be interacted with as soon as the snapshot returns. Useful for waiting on animations to settle, on lazy-loaded carousels, or on deliberate rate-limiting between repeated form submissions. Capped at 10s server-side; longer sleeps will be clamped.",
-		Annotations: &mcp.ToolAnnotations{Title: "Wait", DestructiveHint: &falseBool, ReadOnlyHint: true, IdempotentHint: true},
+		Annotations: &mcp.ToolAnnotations{Title: "Wait", DestructiveHint: &falseBool, ReadOnlyHint: true, IdempotentHint: true, OpenWorldHint: &trueBool},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -482,7 +482,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		Name:        "find_elements",
 		Title:       "CSS-selector element finder",
 		Description: "Return up to 20 elements matching a CSS selector with their tag, text excerpt (80 chars), and key attributes. Use when take_snapshot doesn't expose what you need — typically for non-interactive content selection (`<article>`, `.product-card`, `[data-id]`). Returns an empty list rather than an error when nothing matches.",
-		Annotations: &mcp.ToolAnnotations{Title: "Find elements by CSS", DestructiveHint: &falseBool, ReadOnlyHint: true},
+		Annotations: &mcp.ToolAnnotations{Title: "Find elements by CSS", DestructiveHint: &falseBool, ReadOnlyHint: true, OpenWorldHint: &trueBool},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -604,7 +604,7 @@ func addWebMCPMetaTools(ts tools.HandledToolSet, logger *log.Logger) {
 		Name:        "list_webmcp_tools",
 		Title:       "List page-registered MCP tools",
 		Description: "List the WebMCP tools the current page has registered via `navigator.modelContext.registerTool()`. Returns name, description, and input schema for each. When a page exposes these, they are an author-provided programmatic API — prefer calling one via `call_webmcp_tool` over DOM scraping or UI clicks. The `cloud_browser_open` and `cloud_browser_navigate` responses already surface this list, so you rarely need to call this directly.",
-		Annotations: &mcp.ToolAnnotations{Title: "List page-registered MCP tools", DestructiveHint: &falseBool, ReadOnlyHint: true},
+		Annotations: &mcp.ToolAnnotations{Title: "List page-registered MCP tools", DestructiveHint: &falseBool, ReadOnlyHint: true, OpenWorldHint: &trueBool},
 		Meta:        standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
 		session, err := browser.FindSession("")
@@ -632,7 +632,7 @@ func addWebMCPMetaTools(ts tools.HandledToolSet, logger *log.Logger) {
 		Name:        "call_webmcp_tool",
 		Title:       "Execute a page-registered MCP tool",
 		Description: "Invoke a WebMCP tool that the current page registered with `navigator.modelContext.registerTool()`. Preferred over clicking/scraping when the page exposes a matching tool — it's the author's declared API for that action and avoids DOM fragility. Input must satisfy the schema returned by `list_webmcp_tools` (also on the open/navigate response). Tool runs in the page's main world.",
-		Annotations: &mcp.ToolAnnotations{Title: "Execute a page-registered MCP tool", DestructiveHint: &falseBool},
+		Annotations: &mcp.ToolAnnotations{Title: "Execute a page-registered MCP tool", DestructiveHint: &falseBool, OpenWorldHint: &trueBool},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
