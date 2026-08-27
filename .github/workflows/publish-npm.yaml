@@ -21,8 +21,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: 'https://registry.npmjs.org'
+
+      # npm OIDC trusted publishing needs npm >= 11.5.1.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
 
       - name: Verify tag matches package.json
         id: version
@@ -43,7 +47,8 @@ jobs:
             exit 1
           fi
 
+      # No NODE_AUTH_TOKEN: authentication is OIDC trusted publishing,
+      # configured on npmjs.com for this repo + workflow (same model as
+      # sdk/typescript). Provenance is attached automatically by npm.
       - name: Publish to NPM
-        run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTOMATION_TOKEN }}
+        run: npm publish --access public
