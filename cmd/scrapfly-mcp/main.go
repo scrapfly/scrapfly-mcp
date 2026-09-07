@@ -17,9 +17,9 @@ import (
 var (
 	httpAddr      = flag.String("http", "", "if set, use streamable HTTP at this address (include port number, eg 127.0.0.1:1423), instead of stdin/stdout")
 	apiKey        = flag.String("apikey", "", "if set, use this API key, instead of the one in the environment variable")
-	apiHost       = flag.String("host", "", "if set, override the Scrapfly API host (e.g. https://api.scrapfly.local for local dev cluster). Falls back to SCRAPFLY_API_HOST env var, then to the SDK default https://api.scrapfly.io.")
-	browserHost   = flag.String("browser-host", "", "if set, override the Scrapfly Cloud Browser host (e.g. https://browser.scrapfly.local). Falls back to SCRAPFLY_BROWSER_HOST env var, then derives from -host by replacing the leading 'api.' with 'browser.', then to the SDK default https://browser.scrapfly.io.")
-	verifySSLFlag = flag.Bool("verify-ssl", true, "verify TLS certificates on outbound calls. Set false ONLY when targeting a self-signed dev host (api.scrapfly.local). Falls back to SCRAPFLY_VERIFY_SSL env var (`0`/`false` to disable).")
+	apiHost       = flag.String("host", "", "if set, override the Scrapfly API host. Falls back to SCRAPFLY_API_HOST env var, then to the SDK default https://api.scrapfly.io.")
+	browserHost   = flag.String("browser-host", "", "if set, override the Scrapfly Cloud Browser host. Falls back to SCRAPFLY_BROWSER_HOST env var, then derives from -host by replacing the leading 'api.' with 'browser.', then to the SDK default https://browser.scrapfly.io.")
+	verifySSLFlag = flag.Bool("verify-ssl", true, "verify TLS certificates on outbound calls. Set false ONLY when targeting a host serving a self-signed certificate. Falls back to SCRAPFLY_VERIFY_SSL env var (`0`/`false` to disable).")
 )
 
 // deriveBrowserHostFromAPI returns the Cloud Browser host implied by an
@@ -69,8 +69,7 @@ func main() {
 
 	// TLS verification: explicit -verify-ssl=false wins; otherwise
 	// SCRAPFLY_VERIFY_SSL=0/false disables verification. Default true.
-	// We only need to disable for self-signed dev clusters
-	// (api.scrapfly.local).
+	// Only needed for a host serving a self-signed certificate.
 	verify := *verifySSLFlag
 	if v := os.Getenv("SCRAPFLY_VERIFY_SSL"); v != "" {
 		verify = !(v == "0" || v == "false" || v == "False")
