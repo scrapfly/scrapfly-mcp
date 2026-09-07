@@ -1,0 +1,5 @@
+# Accepted exceptions, one extended regex per line, matched against
+# "path:line:text". Everything else the guard flags is a real leak.
+
+# The build image runs as root, so its go build cache genuinely lives there.
+^Dockerfile:[0-9]+:.*--mount=type=cache.*/root/\.cache/go-build
