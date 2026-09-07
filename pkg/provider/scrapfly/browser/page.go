@@ -612,7 +612,7 @@ func (s *Session) StopScreencast() {
 	s.SendCDP("Page.stopScreencast", nil)
 }
 
-// ── ScrapiumBrowser downloads ────────────────────────────────────────────────
+// ── Downloads (Cloud Browser CDP extension) ──────────────────────────────────
 
 // HasDownloads returns whether any files have been downloaded in this session.
 func (s *Session) HasDownloads() (bool, error) {

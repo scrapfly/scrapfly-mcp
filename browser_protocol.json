@@ -5036,7 +5036,7 @@
                 },
                 {
                     "id": "TlsSession",
-                    "description": "One TLS session as it crosses between Scrapfly's two TLS stacks (this\nbrowser and curlium). Both pin the same BoringSSL revision, so `session`\nis portable between them with no transcoding. [Scrapfly extension]\n\nexportTlsSessions emits the canonical form: every optional field is omitted\nwhen importTlsSessions would derive that exact value from what remains, so\none cache row is one record no matter which of the two stacks minted it, and\nexport(import(record)) returns the record unchanged. A row that is not at\nthe defaults still spells out what it is keyed by. A record that spells a\ndefault out is still accepted; it comes back canonical, not verbatim.\n\nThere is no `alpn` property: the negotiated ALPN already travels inside\n`session` (BoringSSL stores it on the SSL_SESSION for TLS 1.3 and reads it\nback to decide whether 0-RTT may be offered), so a value minted by curl\nsurvives the round trip without a field of its own.",
+                    "description": "One TLS session as it crosses between Scrapfly's browser and HTTP TLS stacks (this\nbrowser and the HTTP client). Both pin the same BoringSSL revision, so `session`\nis portable between them with no transcoding. [Scrapfly extension]\n\nexportTlsSessions emits the canonical form: every optional field is omitted\nwhen importTlsSessions would derive that exact value from what remains, so\none cache row is one record no matter which of the two stacks minted it, and\nexport(import(record)) returns the record unchanged. A row that is not at\nthe defaults still spells out what it is keyed by. A record that spells a\ndefault out is still accepted; it comes back canonical, not verbatim.\n\nThere is no `alpn` property: the negotiated ALPN already travels inside\n`session` (BoringSSL stores it on the SSL_SESSION for TLS 1.3 and reads it\nback to decide whether 0-RTT may be offered), so a value minted by curl\nsurvives the round trip without a field of its own.",
                     "experimental": true,
                     "type": "object",
                     "properties": [
@@ -27244,7 +27244,7 @@
                 },
                 {
                     "id": "StoredTotpSummary",
-                    "description": "One TOTP returned by listTotps. The seed is NEVER sent over the wire\non read paths \u2014 Scrapium's listTotps response carries metadata only\n(origin, account, issuer, algorithm/digits/period). Customer-side\ncode that needs the seed must keep its own copy.",
+                    "description": "One TOTP returned by listTotps. The seed is NEVER sent over the wire\non read paths \u2014 listTotps response carries metadata only\n(origin, account, issuer, algorithm/digits/period). Customer-side\ncode that needs the seed must keep its own copy.",
                     "type": "object",
                     "properties": [
                         {

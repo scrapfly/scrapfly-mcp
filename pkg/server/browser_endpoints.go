@@ -10,11 +10,11 @@ import (
 )
 
 // RegisterBrowserEndpoints attaches the /browser/* HTTP routes to the
-// provided mux. These mirror the surface that mcp-cloud's playground
+// provided mux. They back a browser playground UI (screencast, downloads,
 // expects, but use the in-process browser.Session store (no gRPC, no
-// browser-proxy, no internal-token auth). Trust boundary is the
-// process — designed for the "1 agent = 1 browser" agent-ai stack
-// where the playground and MCP run on host loopback.
+// store: no session broker in front, and no auth layer of their own.
+// The trust boundary is therefore this process, which holds at most one
+// browser — bind the listener to loopback, never a public interface.
 //
 // Routes:
 //
@@ -22,8 +22,8 @@ import (
 //	GET /browser/downloads?session_id=...    — JSON: download manifest
 //	GET /browser/download?session_id=&filename=...  — JSON: base64 file payload
 //	GET /browser/captchas?session_id=...     — JSON: empty list (captcha records
-//	    are a browser-proxy-only feature; we always return {"records": []}
-//	    so the UI's polling path doesn't error in OSS / agent-ai mode).
+//	    are not recorded by this server; we always return {"records": []}
+//	    so a client that polls the route gets a valid empty answer, not a 404).
 //	GET /browser/active                      — JSON: {"session_id": "...", "url": "..."}
 //	    or {} if no session — used by the playground UI to reattach to an
 //	    in-progress session after a page reload.
@@ -34,7 +34,7 @@ import (
 //
 // `session_id` is optional everywhere — when omitted, the most recent
 // active session is used (FindSession's empty-id semantics). That is
-// the right behavior for the agent-ai stack, where there is at most
+// the right behavior for this server, which holds at most
 // one concurrent session per MCP process.
 func RegisterBrowserEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/browser/screencast", handleBrowserScreencast)
@@ -138,8 +138,8 @@ func handleBrowserDownload(w http.ResponseWriter, r *http.Request) {
 
 func handleBrowserCaptchas(w http.ResponseWriter, r *http.Request) {
 	// Captcha records require the Antibot CDP domain plumbed through
-	// browser-proxy — not available in the OSS browser package the
-	// agent-ai stack uses. Returning an empty list keeps the UI's
+	// a capture layer this server does not ship, so nothing is ever recorded.
+	// Returning an empty list rather than an error keeps a client's
 	// "no captcha seen" path working without a 404 cascade.
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"records": []any{}})

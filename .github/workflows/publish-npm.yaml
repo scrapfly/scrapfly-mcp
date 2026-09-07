@@ -1,7 +1,7 @@
 name: Publish to NPM
 
 # Tag-driven release. The `make release VERSION=x.y.z NEXT_VERSION=x.y.z+1`
-# target (see Makefile, mirrors sdk/python + sdk/rust) bumps package.json,
+# target (see Makefile) bumps package.json,
 # commits, tags v$VERSION, and pushes. This workflow reacts to the tag push
 # and publishes the tarball to npm. No commits are made by CI.
 on:
@@ -49,6 +49,6 @@ jobs:
 
       # No NODE_AUTH_TOKEN: authentication is OIDC trusted publishing,
       # configured on npmjs.com for this repo + workflow (same model as
-      # sdk/typescript). Provenance is attached automatically by npm.
+      # the other Scrapfly SDK repos). Provenance is attached automatically by npm.
       - name: Publish to NPM
         run: npm publish --access public

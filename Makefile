@@ -1,5 +1,5 @@
 # Scrapfly MCP — release/dev Makefile.
-# Target names mirror sdk/python/Makefile and sdk/rust/Makefile for
+# Target names match the other Scrapfly SDK repos for
 # muscle-memory parity.
 
 VERSION ?=
@@ -31,7 +31,7 @@ generate-antibot-schemas: ## Regenerate antibot tool schemas from browser_protoc
 	@echo "Generated pkg/provider/scrapfly/antibot_schemas_gen.go"
 
 generate-docs: ## Generate Go documentation
-	go doc -all ./... > docs.txt || true
+	mkdir -p bin && go doc -all ./... > bin/docs.txt || true
 
 sync-version: ## Rewrite server.json + ServerVersion from package.json
 	@# package.json is the single source of truth. server.json feeds the MCP
@@ -81,6 +81,6 @@ release: ## make release VERSION=x.y.z NEXT_VERSION=x.y.z+1 — tag + publish to
 	git diff --cached --quiet || { git commit -m "Release $(VERSION)" && git push origin main; }
 	git tag -a v$(VERSION) -m "Version $(VERSION)"
 	@# Push ONLY the new tag. `--tags` sweeps up every stale local tag (see
-	@# cli Makefile note) and can push non-FF on moving tags like `latest`.
+	@# git-push(1)) and can push non-FF on moving tags like `latest`.
 	git push origin v$(VERSION)
 	$(MAKE) bump VERSION=$(NEXT_VERSION)

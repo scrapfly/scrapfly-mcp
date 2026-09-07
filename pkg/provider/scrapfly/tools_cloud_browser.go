@@ -136,9 +136,9 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 	p.logger.Printf("cloud_browser_open: connecting to %s", wsURL)
 
 	// Connect via WebSocket CDP. The handshake covers the full server-side
-	// allocation chain (traefik → cloud-browser → scrape-engine /browser/allocate
-	// → autoscaler → cold-start of a browser pod). On a warm prod pool that's
-	// sub-second; on a cold dev cluster (single replica, autoscaler reconcile cycle)
+	// allocation of a Cloud Browser, not just the socket upgrade. Against a
+	// warm pool that is sub-second; when nothing is free a browser has to be
+	// started first, and on a pool with nothing warm at all
 	// it can take 30s+. 60s gives cold paths room without holding clients
 	// hostage if the cluster is genuinely down.
 	dialer := websocket.Dialer{
@@ -647,14 +647,14 @@ func (p *ScrapflyToolProvider) BrowserUnblock(
 	}
 	p.logger.Printf("[browser_unblock] Step 1 OK: session_id=%s ws_url=%s", result.SessionID, result.WSURL)
 
-	// Step 2: Connect to the unblock browser via internal service (bypass Traefik).
-	// Use the same internal cloud-browser service as cloud_browser_open.
+	// Step 2: Connect to the unblock browser over the Cloud Browser CDP endpoint
+	// the client builds, not the session's ws_url, so it matches cloud_browser_open.
 	browserConfig := &scrapfly.CloudBrowserConfig{
 		Session: result.SessionID,
 		Timeout: timeout,
 	}
 	internalWSURL := client.CloudBrowser(browserConfig)
-	p.logger.Printf("[browser_unblock] Step 2: connecting CDP WebSocket to %s (internal, bypassing proxy)", internalWSURL)
+	p.logger.Printf("[browser_unblock] Step 2: connecting CDP WebSocket to %s", internalWSURL)
 	dialer := websocket.Dialer{
 		TLSClientConfig:  &tls.Config{InsecureSkipVerify: true},
 		HandshakeTimeout: 15 * time.Second,
@@ -802,5 +802,5 @@ func (p *ScrapflyToolProvider) BrowserUnblock(
 }
 
 // proxyWebMCPToolCallCDP dispatches WebMCP tool calls via CDP.
-// - Antibot tools (fill, clickOn, etc.) use WebMCP.callTool (Scrapium's custom handler)
+// - Antibot tools (fill, clickOn, etc.) dispatch to the browser's Antibot CDP domain
 // - Page-registered tools (searchProducts, etc.) use WebMCP.invokeTool + toolResponded event

@@ -227,7 +227,7 @@ func MakeProxyPoolSchema() *jsonschema.Schema {
 	// call where the field was not explicitly provided, which previously
 	// forced cloud_browser_open through the datacenter pool unconditionally
 	// — fine in prod, but breaks any deployment where that pool's upstream
-	// proxy credentials aren't valid (notably dev cluster). When omitted, the
+	// proxy credentials aren't configured. When omitted, the
 	// SDK's `if config.ProxyPool != ""` guard in CloudBrowser() simply does
 	// not append the query param, so the upstream picks its own default.
 	return &jsonschema.Schema{
