@@ -182,7 +182,7 @@ func staticTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "info_api_key",
 		Title:       "Scrapfly Account API Key",
-		Description: "Return the Users' ScrapFly API key",
+		Description: "Reveal the Scrapfly API key this MCP server is authenticated with, so the user can paste it into their own code (SDK snippet, curl, CI secret). The key is a live credential: show it only when the user explicitly asked for their key, and never echo it back in later turns or embed it in generated files that get committed. The other tools already authenticate themselves — you never need this to call `web_scrape`, `screenshot` or `cloud_browser_open`. For plan / credit / quota questions use `info_account` instead.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Account API Key",
 			DestructiveHint: &falseBool,
@@ -435,7 +435,7 @@ func interactionTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "alert_get",
 		Title:       "Scrapfly Alerts — Get",
-		Description: "Fetch a single alert definition by UUID. Returns the full Alert row including lifecycle state, snooze status, last-eval/notification timestamps, and notify channels.",
+		Description: "Fetch one alert definition by UUID: full rule config plus lifecycle state, snooze status, last-eval and last-notification timestamps, and notify channels. Use it to answer \"why is this alert quiet / why did it fire\" before editing.\n\nUse `alert_list` when you do not have the UUID yet, and `alert_series` when the question is about the metric's history rather than the rule's current configuration.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Alerts — Get",
 			DestructiveHint: &falseBool,
@@ -536,7 +536,7 @@ func interactionTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "alert_delete",
 		Title:       "Scrapfly Alerts — Delete",
-		Description: "Permanently remove an alert definition. Cannot be undone. Two-step: omit confirm to see what would be deleted, set confirm=true to commit.",
+		Description: "Permanently remove an alert definition and its evaluation history. Cannot be undone. Two-step: omit confirm to see what would be deleted, set confirm=true to commit.\n\nOnly for rules the user wants gone for good. To stop notifications while keeping the rule, use `alert_update` with enabled=false (indefinite) or `alert_snooze` (auto-resumes). Read the rule with `alert_get` first so the confirmation shows the user what they are dropping.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Alerts — Delete",
 			DestructiveHint: &trueBool,
@@ -549,7 +549,7 @@ func interactionTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "alert_snooze",
 		Title:       "Scrapfly Alerts — Snooze",
-		Description: "Mute notifications either for a fixed window (minutes) or until the next OK transition (until_resolved=true). Exactly one of minutes / until_resolved must be set. Two-step confirmation.",
+		Description: "Mute an alert's notifications either for a fixed window (minutes) or until the next OK transition (until_resolved=true). Exactly one of minutes / until_resolved must be set. The rule keeps evaluating and keeps tracking state — only delivery is suppressed. Two-step confirmation.\n\nRight tool for \"we know, we're fixing it, stop paging us\". For an indefinite pause use `alert_update` enabled=false; to drop the rule entirely use `alert_delete`. Reverse with `alert_unsnooze`.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Alerts — Snooze",
 			DestructiveHint: &trueBool,
@@ -562,7 +562,7 @@ func interactionTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "alert_unsnooze",
 		Title:       "Scrapfly Alerts — Unsnooze",
-		Description: "Clear any active snooze so the alert resumes normal notification delivery on the next eval tick. Two-step confirmation.",
+		Description: "Clear an active snooze so the alert resumes notification delivery on the next eval tick. Safe to call on an un-snoozed alert — it is a no-op. Two-step confirmation.\n\nThis only lifts a snooze; it does NOT re-enable a rule turned off with `alert_update` enabled=false. If the alert is still silent afterwards, check `alert_get` for enabled=false. Note `alert_update` auto-snoozes for sustained_minutes after every edit, so a rule that just got tuned may need this to speak up immediately.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Alerts — Unsnooze",
 			DestructiveHint: &trueBool,

@@ -13,7 +13,22 @@ import (
 // preview the rendered request before committing. Without confirm=true the
 // tool returns a dry-run envelope instead of hitting the API.
 type alertConfirm struct {
-	Confirm bool `json:"confirm,omitempty" jsonschema:"description: REQUIRED to actually perform the action. When false (default) the tool returns the rendered request body so the model and user can review before committing."`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"REQUIRED to actually perform the action. When false (default) the tool returns the rendered request body so the model and user can review before committing."`
+}
+
+// marshalDimensions renders the model-supplied dimension map into the
+// json.RawMessage the SDK carries on the wire. A nil/empty map stays nil so
+// `omitempty` drops the field rather than sending `{}`, which the API reads
+// as "filter on zero dimensions" instead of "no filter".
+func marshalDimensions(d map[string]string) json.RawMessage {
+	if len(d) == 0 {
+		return nil
+	}
+	buf, err := json.Marshal(d)
+	if err != nil {
+		return nil
+	}
+	return buf
 }
 
 func alertDryRun(action string, payload any) *mcp.CallToolResult {
@@ -41,100 +56,100 @@ func alertJSON(payload any) *mcp.CallToolResult {
 }
 
 type AlertListInput struct {
-	ProjectUUID string `json:"project_uuid,omitempty" jsonschema:"description: Optional. Scope to a single project UUID."`
-	State       string `json:"state,omitempty"        jsonschema:"description: Optional. Filter by lifecycle state: ok|pending|triggered|recovering|no_data|snoozed."`
-	MetricID    string `json:"metric_id,omitempty"    jsonschema:"description: Optional. Filter by metric family ID — see alert_metric_families for valid values."`
+	ProjectUUID string `json:"project_uuid,omitempty" jsonschema:"Optional. Scope to a single project UUID."`
+	State       string `json:"state,omitempty"        jsonschema:"Optional. Filter by lifecycle state: ok|pending|triggered|recovering|no_data|snoozed."`
+	MetricID    string `json:"metric_id,omitempty"    jsonschema:"Optional. Filter by metric family ID — see alert_metric_families for valid values."`
 }
 
 type AlertGetInput struct {
-	AlertUUID string `json:"alert_uuid" jsonschema:"description: ULID of the alert definition to fetch."`
+	AlertUUID string `json:"alert_uuid" jsonschema:"ULID of the alert definition to fetch."`
 }
 
 type AlertCountActiveInput struct {
-	ProjectUUID string `json:"project_uuid,omitempty" jsonschema:"description: Optional. Restrict count to a single project UUID."`
+	ProjectUUID string `json:"project_uuid,omitempty" jsonschema:"Optional. Restrict count to a single project UUID."`
 }
 
 type AlertMetricFamiliesInput struct{}
 
 type AlertSeriesInput struct {
-	AlertUUID    string `json:"alert_uuid"               jsonschema:"description: ULID of the alert whose series to fetch."`
-	RangeMinutes int    `json:"range_minutes,omitempty"  jsonschema:"description: Lookback window in minutes (default 240, max 10080). Out-of-range values are clamped server-side."`
+	AlertUUID    string `json:"alert_uuid"               jsonschema:"ULID of the alert whose series to fetch."`
+	RangeMinutes int    `json:"range_minutes,omitempty"  jsonschema:"Lookback window in minutes (default 240, max 10080). Out-of-range values are clamped server-side."`
 }
 
 type AlertCreateInput struct {
 	alertConfirm
 
-	Name        string `json:"name"                  jsonschema:"description: Human-readable alert name shown in the dashboard."`
-	Description string `json:"description,omitempty" jsonschema:"description: Optional longer-form description of what the alert detects."`
-	ProjectUUID string `json:"project_uuid,omitempty" jsonschema:"description: OPTIONAL. Leave EMPTY (omit the field) to fall back to the caller's currently-selected project. Do NOT pass info_account.account.account_id here — that's the account ID, not a project ID, and the server returns ERR::ALERT::PROJECT_NOT_FOUND."`
+	Name        string `json:"name"                  jsonschema:"Human-readable alert name shown in the dashboard."`
+	Description string `json:"description,omitempty" jsonschema:"Optional longer-form description of what the alert detects."`
+	ProjectUUID string `json:"project_uuid,omitempty" jsonschema:"OPTIONAL. Leave EMPTY (omit the field) to fall back to the caller's currently-selected project. Do NOT pass info_account.account.account_id here — that's the account ID, not a project ID, and the server returns ERR::ALERT::PROJECT_NOT_FOUND."`
 
-	MetricID         string          `json:"metric_id"                   jsonschema:"description: Metric family ID — call alert_metric_families first to discover valid values and allowed_dimensions."`
-	MetricDimensions json.RawMessage `json:"metric_dimensions,omitempty" jsonschema:"description: Optional JSON object of string key/value pairs filtering the metric. Keys must be in the metric family's allowed_dimensions list."`
+	MetricID         string          `json:"metric_id"                   jsonschema:"Metric family ID — call alert_metric_families first to discover valid values and allowed_dimensions."`
+	MetricDimensions map[string]string `json:"metric_dimensions,omitempty" jsonschema:"Optional dimension filter, e.g. {\"country\":\"US\"}. Every key must appear in the metric family's allowed_dimensions (see alert_metric_families); unknown keys are rejected server-side."`
 
-	Comparator         string  `json:"comparator"                     jsonschema:"description: Threshold operator: gt|lt|gte|lte|eq|neq."`
-	Threshold          float64 `json:"threshold"                      jsonschema:"description: Numeric threshold the metric is compared against."`
-	SustainedMinutes   int     `json:"sustained_minutes,omitempty"    jsonschema:"description: How long the breach must persist before firing (1-1440). Defaults to the metric family's recommended value."`
-	RecoveryMinutes    int     `json:"recovery_minutes,omitempty"     jsonschema:"description: How long the metric must stay healthy before flipping back to OK. Default 0 (instant recovery)."`
-	EvaluationWindowM  int     `json:"evaluation_window_m,omitempty"  jsonschema:"description: Aggregation window in minutes for each evaluation. Defaults to sustained_minutes."`
-	EvalCadenceSeconds int     `json:"eval_cadence_seconds,omitempty" jsonschema:"description: How often to re-evaluate, in seconds. Default 300."`
+	Comparator         string  `json:"comparator"                     jsonschema:"Threshold operator: gt|lt|gte|lte|eq|neq."`
+	Threshold          float64 `json:"threshold"                      jsonschema:"Numeric threshold the metric is compared against."`
+	SustainedMinutes   int     `json:"sustained_minutes,omitempty"    jsonschema:"How long the breach must persist before firing (1-1440). Defaults to the metric family's recommended value."`
+	RecoveryMinutes    int     `json:"recovery_minutes,omitempty"     jsonschema:"How long the metric must stay healthy before flipping back to OK. Default 0 (instant recovery)."`
+	EvaluationWindowM  int     `json:"evaluation_window_m,omitempty"  jsonschema:"Aggregation window in minutes for each evaluation. Defaults to sustained_minutes."`
+	EvalCadenceSeconds int     `json:"eval_cadence_seconds,omitempty" jsonschema:"How often to re-evaluate, in seconds. Default 300."`
 
-	NotifyChannels  []scrapfly.AlertNotifyChannel `json:"notify_channels" jsonschema:"description: List of delivery targets. Each has kind (email|webhook|inapp), target (address|url|empty), and optional opts (e.g. webhook headers)."`
-	RenotifyMinutes int                           `json:"renotify_minutes,omitempty" jsonschema:"description: Re-notification cadence while breach is active. Default 60."`
-	NoDataPolicy    string                        `json:"no_data_policy,omitempty"   jsonschema:"description: What to do when the evaluation window has no rows: ok|triggered|ignore. Default ignore."`
+	NotifyChannels  []scrapfly.AlertNotifyChannel `json:"notify_channels" jsonschema:"List of delivery targets. Each has kind (email|webhook|inapp), target (address|url|empty), and optional opts (e.g. webhook headers)."`
+	RenotifyMinutes int                           `json:"renotify_minutes,omitempty" jsonschema:"Re-notification cadence while breach is active. Default 60."`
+	NoDataPolicy    string                        `json:"no_data_policy,omitempty"   jsonschema:"What to do when the evaluation window has no rows: ok|triggered|ignore. Default ignore."`
 }
 
 type AlertUpdateInput struct {
 	alertConfirm
 
-	AlertUUID string `json:"alert_uuid" jsonschema:"description: ULID of the alert to patch."`
+	AlertUUID string `json:"alert_uuid" jsonschema:"ULID of the alert to patch."`
 
-	Name        *string `json:"name,omitempty"`
-	Description *string `json:"description,omitempty"`
-	Enabled     *bool   `json:"enabled,omitempty"`
+	Name        *string `json:"name,omitempty"        jsonschema:"New dashboard name. Omit to leave unchanged."`
+	Description *string `json:"description,omitempty" jsonschema:"New longer-form description. Omit to leave unchanged."`
+	Enabled     *bool   `json:"enabled,omitempty"     jsonschema:"false pauses evaluation without deleting the rule — prefer this over alert_delete when the user wants to stop notifications temporarily; prefer alert_snooze when they want it back automatically."`
 
-	Comparator        *string  `json:"comparator,omitempty"`
-	Threshold         *float64 `json:"threshold,omitempty"`
-	SustainedMinutes  *int     `json:"sustained_minutes,omitempty"`
-	RecoveryMinutes   *int     `json:"recovery_minutes,omitempty"`
-	EvaluationWindowM *int     `json:"evaluation_window_m,omitempty"`
+	Comparator        *string  `json:"comparator,omitempty"          jsonschema:"New threshold operator: gt|lt|gte|lte|eq|neq."`
+	Threshold         *float64 `json:"threshold,omitempty"           jsonschema:"New numeric threshold. Re-run alert_preview with the new value before patching a live rule."`
+	SustainedMinutes  *int     `json:"sustained_minutes,omitempty"   jsonschema:"New breach duration before firing (1-1440). Also sets the post-edit auto-snooze window."`
+	RecoveryMinutes   *int     `json:"recovery_minutes,omitempty"    jsonschema:"New healthy duration before flipping back to OK. 0 is instant recovery."`
+	EvaluationWindowM *int     `json:"evaluation_window_m,omitempty" jsonschema:"New aggregation window in minutes per evaluation."`
 
-	NotifyChannels  []scrapfly.AlertNotifyChannel `json:"notify_channels,omitempty"`
-	RenotifyMinutes *int                          `json:"renotify_minutes,omitempty"`
-	NoDataPolicy    *string                       `json:"no_data_policy,omitempty"`
+	NotifyChannels  []scrapfly.AlertNotifyChannel `json:"notify_channels,omitempty"  jsonschema:"REPLACES the whole delivery list — send every channel you want kept, not just the new one. Each has kind (email|webhook|inapp), target (address|url|empty), optional opts."`
+	RenotifyMinutes *int                          `json:"renotify_minutes,omitempty" jsonschema:"New re-notification cadence in minutes while the breach stays active."`
+	NoDataPolicy    *string                       `json:"no_data_policy,omitempty"   jsonschema:"How empty evaluation windows count: ok|triggered|ignore."`
 }
 
 type AlertDeleteInput struct {
 	alertConfirm
-	AlertUUID string `json:"alert_uuid" jsonschema:"description: ULID of the alert to delete. Cannot be undone."`
+	AlertUUID string `json:"alert_uuid" jsonschema:"ULID of the alert to delete. Cannot be undone."`
 }
 
 type AlertSnoozeInput struct {
 	alertConfirm
-	AlertUUID     string `json:"alert_uuid"               jsonschema:"description: ULID of the alert to snooze."`
-	Minutes       int    `json:"minutes,omitempty"        jsonschema:"description: Mute for this many minutes. Mutually exclusive with until_resolved."`
-	UntilResolved bool   `json:"until_resolved,omitempty" jsonschema:"description: Mute until the next OK transition. Mutually exclusive with minutes."`
+	AlertUUID     string `json:"alert_uuid"               jsonschema:"ULID of the alert to snooze."`
+	Minutes       int    `json:"minutes,omitempty"        jsonschema:"Mute for this many minutes. Mutually exclusive with until_resolved."`
+	UntilResolved bool   `json:"until_resolved,omitempty" jsonschema:"Mute until the next OK transition. Mutually exclusive with minutes."`
 }
 
 type AlertUnsnoozeInput struct {
 	alertConfirm
-	AlertUUID string `json:"alert_uuid" jsonschema:"description: ULID of the alert to unsnooze."`
+	AlertUUID string `json:"alert_uuid" jsonschema:"ULID of the alert to unsnooze."`
 }
 
 type AlertTestInput struct {
 	alertConfirm
-	AlertUUID string `json:"alert_uuid" jsonschema:"description: ULID of the alert. Fires a synthetic notification on every configured channel without touching alert state."`
+	AlertUUID string `json:"alert_uuid" jsonschema:"ULID of the alert. Fires a synthetic notification on every configured channel without touching alert state."`
 }
 
 type AlertPreviewInput struct {
-	MetricID          string          `json:"metric_id"`
-	MetricDimensions  json.RawMessage `json:"metric_dimensions,omitempty"`
-	ProjectUUID       string          `json:"project_uuid,omitempty"`
-	Comparator        string          `json:"comparator"`
-	Threshold         float64         `json:"threshold"`
-	SustainedMinutes  int             `json:"sustained_minutes,omitempty"`
-	EvaluationWindowM int             `json:"evaluation_window_m,omitempty"`
-	RangeMinutes      int             `json:"range_minutes,omitempty" jsonschema:"description: Lookback range in minutes. Default 1440 (24h)."`
-	NoDataPolicy      string          `json:"no_data_policy,omitempty"`
+	MetricID          string            `json:"metric_id"                     jsonschema:"Metric family ID to evaluate — must come from alert_metric_families, never invented."`
+	MetricDimensions  map[string]string `json:"metric_dimensions,omitempty"   jsonschema:"Optional dimension filter, e.g. {\"country\":\"US\"}. Every key must appear in the metric family's allowed_dimensions."`
+	ProjectUUID       string            `json:"project_uuid,omitempty"        jsonschema:"OPTIONAL. Omit to use the caller's currently-selected project. Never pass an account ID here."`
+	Comparator        string            `json:"comparator"                    jsonschema:"Threshold operator: gt|lt|gte|lte|eq|neq."`
+	Threshold         float64           `json:"threshold"                     jsonschema:"Numeric threshold the metric is compared against. Tune this between previews until the fire count looks sane."`
+	SustainedMinutes  int               `json:"sustained_minutes,omitempty"   jsonschema:"How long the breach must persist before the rule would fire (1-1440). Defaults to the metric family's recommended value. Raise it to damp a noisy preview."`
+	EvaluationWindowM int               `json:"evaluation_window_m,omitempty" jsonschema:"Aggregation window in minutes per evaluation. Defaults to sustained_minutes."`
+	RangeMinutes      int               `json:"range_minutes,omitempty"       jsonschema:"Lookback range in minutes to replay against. Default 1440 (24h), max 10080 (7d)."`
+	NoDataPolicy      string            `json:"no_data_policy,omitempty"      jsonschema:"How empty evaluation windows count: ok|triggered|ignore. Default ignore."`
 }
 
 func (p *ScrapflyToolProvider) AlertList(ctx context.Context, _ *mcp.CallToolRequest, in AlertListInput) (*mcp.CallToolResult, any, error) {
@@ -214,7 +229,7 @@ func (p *ScrapflyToolProvider) AlertPreview(ctx context.Context, _ *mcp.CallTool
 	}
 	out, err := c.PreviewAlert(scrapfly.AlertPreviewRequest{
 		MetricID:          in.MetricID,
-		MetricDimensions:  in.MetricDimensions,
+		MetricDimensions:  marshalDimensions(in.MetricDimensions),
 		ProjectUUID:       in.ProjectUUID,
 		Comparator:        scrapfly.AlertComparator(in.Comparator),
 		Threshold:         in.Threshold,
@@ -235,7 +250,7 @@ func (p *ScrapflyToolProvider) AlertCreate(ctx context.Context, _ *mcp.CallToolR
 		Description:        in.Description,
 		ProjectUUID:        in.ProjectUUID,
 		MetricID:           in.MetricID,
-		MetricDimensions:   in.MetricDimensions,
+		MetricDimensions:   marshalDimensions(in.MetricDimensions),
 		Comparator:         scrapfly.AlertComparator(in.Comparator),
 		Threshold:          in.Threshold,
 		SustainedMinutes:   in.SustainedMinutes,
