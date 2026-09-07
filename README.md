@@ -375,8 +375,9 @@ You can run the Scrapfly MCP server locally or self-host it.
 # Start HTTP server using PORT env var
 PORT=8080 ./scrapfly-mcp
 
-# Start with API key
-./scrapfly-mcp -http :8080 -apikey scp-live-xxxx
+# Start with an API key. Prefer the environment variable: a key passed as a
+# flag lands in your shell history and in the process list.
+SCRAPFLY_API_KEY=... ./scrapfly-mcp -http :8080
 
 # Start in stdio mode (for local MCP clients)
 ./scrapfly-mcp
