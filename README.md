@@ -38,7 +38,7 @@ Built on **battle-tested infrastructure** used by thousands of developers:
 
 - **99.9% Uptime** — Enterprise-grade reliability
 - **100+ Countries** — [Global proxy network](https://scrapfly.io/docs/scrape-api/proxy) with datacenter & residential IPs
-- **Anti-Bot Bypass** — [Advanced ASP technology](https://scrapfly.io/docs/scrape-api/anti-scraping-protection) defeats modern protections
+- **Anti-Bot Bypass** — [Advanced Unblocker technology](https://scrapfly.io/docs/scrape-api/anti-scraping-protection) defeats modern protections
 - **OAuth2 Security** — [Enterprise authentication](https://scrapfly.io/docs/mcp/authentication) for production deployments
 
 > 📖 **Learn more**: [Why Scrapfly MCP?](https://scrapfly.io/docs/mcp/getting-started#why-scrapfly-mcp)

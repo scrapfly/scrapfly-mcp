@@ -154,7 +154,7 @@ func staticTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "web_scrape",
 		Title:       "Scrapfly Advanced Scraping Tool",
-		Description: "One-shot fetch of a URL with full control (headers, JS rendering, country, proxy pool, anti-scraping options). Stateless — returns the response body and metadata, no persistent session. This is the right tool whenever the task is \"get the content/bytes at this URL\": downloading a file, fetching an HTML page, calling a JSON endpoint, grabbing a sitemap. Only switch to `cloud_browser_open` when the task requires multi-step interaction with a page (clicking, form filling, navigating between pages, logging in). Use `scraping_instruction_enhanced` first if you're uncertain which options to set. Prefer `web_get_page` for the common quick-fetch path.",
+		Description: "One-shot fetch of a URL with full control (headers, JS rendering, country, proxy pool, unblocker options). Stateless — returns the response body and metadata, no persistent session. This is the right tool whenever the task is \"get the content/bytes at this URL\": downloading a file, fetching an HTML page, calling a JSON endpoint, grabbing a sitemap. Only switch to `cloud_browser_open` when the task requires multi-step interaction with a page (clicking, form filling, navigating between pages, logging in). Use `scraping_instruction_enhanced` first if you're uncertain which options to set. Prefer `web_get_page` for the common quick-fetch path.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Advanced Scraping Tool",
 			DestructiveHint: &falseBool,
@@ -195,7 +195,7 @@ func staticTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "scraping_instruction_enhanced",
 		Title:       "Scrapfly Scraping tools instructions // enhanced prompt",
-		Description: "Return a concise cheat-sheet of Scrapfly's scraping options (ASP, render_js, country, proxy pool, extraction) and which of `web_scrape` / `web_get_page` accepts each. Optional — useful on an unfamiliar target so the chosen options are right the first time.",
+		Description: "Return a concise cheat-sheet of Scrapfly's scraping options (unblocker, render_js, country, proxy pool, extraction) and which of `web_scrape` / `web_get_page` accepts each. Optional — useful on an unfamiliar target so the chosen options are right the first time.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Scraping tools instructions // enhanced prompt",
 			DestructiveHint: &falseBool,

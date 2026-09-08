@@ -13,14 +13,16 @@ const InstructionPromptString = `# Scrapfly scraping options — cheat sheet
 is optional and defaulted by the service.
 
 ## Which tool
-* ` + "`web_get_page`" + ` — quick fetch. Anti-scraping protection, browser rendering and
+* ` + "`web_get_page`" + ` — quick fetch. The unblocker, browser rendering and
   markdown output are always on; it takes only ` + "`url`, `country`, `format`, `format_options`" + `,
   ` + "`proxy_pool`, `rendering_wait`, `capture_page`, `capture_flags`, `extraction_model`" + `.
 * ` + "`web_scrape`" + ` — full control. Everything below applies to this tool.
 
 ## Defaults worth setting on web_scrape
-* ` + "`asp: true`" + ` — anti-scraping-protection solver. Resolves most blocking
-  (WAF challenges, bot checks, CAPTCHAs).
+* ` + "`unblocker: true`" + ` — anti-bot bypass. Resolves most blocking
+  (WAF challenges, bot checks, CAPTCHAs). On by default; set it to false to
+  turn it off. ` + "`asp`" + ` is the previous name for this parameter and is
+  still accepted.
 * ` + "`render_js: true`" + ` — headless-browser rendering. Needed for pages whose
   content is built client-side.
 * ` + "`format: markdown`" + ` — cheapest content shape to read and to reason over.
@@ -35,7 +37,8 @@ is optional and defaulted by the service.
   i.e. after it has been scraped at least once.
 
 ## Blocking (both tools)
-* ` + "`asp: true`" + ` covers most cases, and is already on for ` + "`web_get_page`" + `.
+* ` + "`unblocker: true`" + ` covers most cases on ` + "`web_scrape`" + `.
+  ` + "`web_get_page`" + ` always runs with it on and takes no parameter for it.
 * Residential exit (` + "`proxy_pool: public_residential_pool`" + `) helps when a target
   rejects datacenter ranges, or when the response is a VPN/consent interstitial.
 * ` + "`country`" + ` (ISO 3166-1 alpha-2) is what geo-gated and CMP-gated pages key on.

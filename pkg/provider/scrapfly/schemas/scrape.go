@@ -127,12 +127,28 @@ func MakeScreenshotsSchema() *jsonschema.Schema {
 	return schema
 }
 
-func MakeASPSchema() *jsonschema.Schema {
+// `unblocker` is the only name presented to callers. Neither it nor its `asp`
+// alias declares a schema Default: the go-sdk applies schema defaults before
+// unmarshal, so a default on either name would land in every call where the
+// caller omitted it, both pointers would always be non-nil, and the
+// presence-based precedence in ResolveUnblocker would be destroyed. The
+// effective default (enabled) lives in that resolver instead.
+func MakeUnblockerSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
-		Title:       "Anti Scraping Protection",
+		Title:       "Unblocker",
 		Type:        "boolean",
-		Description: "Enable Anti Scraping Protection.",
-		Default:     json.RawMessage(`true`),
+		Description: "Enable the Unblocker: anti-bot bypass for WAF challenges, bot checks and CAPTCHAs. Enabled when omitted.",
+	}
+}
+
+// Deprecated alias of `unblocker`, declared permanently. The scraping input
+// schemas are closed (additionalProperties: false), so removing the property
+// is a hard call rejection for every pinned client still sending it.
+func MakeDeprecatedASPSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title:       "Anti Scraping Protection (deprecated)",
+		Type:        "boolean",
+		Description: "Deprecated alias of `unblocker`, accepted for backward compatibility. Prefer `unblocker`. Supplied explicitly, it takes precedence over `unblocker`.",
 	}
 }
 
@@ -307,9 +323,17 @@ func MustRefineScrapingToolInputSchema[T any]() *jsonschema.Schema {
 		schema.Properties["capture_flags"] = MakeScreenshotFlagsSchema()
 	}
 
-	// if asp is in the schema, its full ScrapeToolInput so add all the properties
-	if _, ok := schema.Properties["asp"]; ok {
-		schema.Properties["asp"] = MakeASPSchema()
+	// js_scenario is the ScrapeToolInput discriminator: it is the only
+	// scraping input that declares it, and it is not a rename candidate.
+	// Keying this block on a property that is being renamed would drop every
+	// refinement below the moment the name moves.
+	if _, ok := schema.Properties["js_scenario"]; ok {
+		// Both names go through `refine`: a schema property the input struct no
+		// longer backs would validate and then bind to nothing, and an
+		// unconditional assignment here makes the closed-schema tests on `asp`
+		// pass whatever the struct says.
+		refine("unblocker", MakeUnblockerSchema)
+		refine("asp", MakeDeprecatedASPSchema)
 		schema.Properties["retry"] = MakeRetrySchema()
 		schema.Properties["lang"] = MakeLangSchema()
 		schema.Properties["render_js"] = MakeRenderJSSchema()

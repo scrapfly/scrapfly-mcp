@@ -71,7 +71,8 @@ type ScrapeToolInput struct {
 	ProxyPool        scrapfly.ProxyPool        `json:"proxy_pool,omitempty" jsonschema:"Proxy pool to use (e.g., 'public_residential_pool', default: 'public_datacenter_pool')."`
 	RenderJS         bool                      `json:"render_js,omitempty" jsonschema:"Enable JavaScript rendering with a headless browser."`
 	RenderingWait    int                       `json:"rendering_wait,omitempty" jsonschema:"Wait for this number of milliseconds before returning the response."`
-	ASP              bool                      `json:"asp,omitempty" jsonschema:"(prefer true)Enable Anti Scraping Protection solver."`
+	Unblocker        *bool                     `json:"unblocker,omitempty" jsonschema:"(prefer true)Enable the Unblocker anti-bot bypass. Enabled when omitted."`
+	ASP              *bool                     `json:"asp,omitempty" jsonschema:"Deprecated alias of unblocker. Declared so callers written against an earlier version are not rejected by the closed schema."`
 	Cache            bool                      `json:"cache,omitempty" jsonschema:"Enable caching of the response."`
 	CacheTTL         int                       `json:"cache_ttl,omitempty" jsonschema:"Cache TTL in seconds when cache is true."`
 	CacheClear       bool                      `json:"cache_clear,omitempty" jsonschema:"If true, bypass & clear cache for this URL."`
@@ -101,6 +102,29 @@ type LightScrapeResultData struct {
 	Errors           *scrapfly.APIErrorDetails      `json:"errors,omitempty" jsonschema:"Errors if any"`
 }
 
+// ResolveUnblocker settles the two names for the anti-bot bypass. `unblocker`
+// is the only name presented to callers; `asp` is the retired spelling that
+// must keep working forever.
+//
+// Precedence is presence-based and never an OR: an explicitly supplied `asp`
+// wins, `unblocker` answers only when `asp` was absent, and an explicit false
+// on the winner turns the feature off. Both arrive as *bool because a plain
+// bool cannot tell "absent" from "sent as false".
+//
+// The default lives here, not in the schemas: the go-sdk applies schema
+// defaults before unmarshal, so a Default on either property would make both
+// pointers permanently non-nil. `true` reproduces the effective behaviour of
+// the previous `Default: true` on `asp`.
+func ResolveUnblocker(asp, unblocker *bool) bool {
+	if asp != nil {
+		return *asp
+	}
+	if unblocker != nil {
+		return *unblocker
+	}
+	return true
+}
+
 func ScrapingInputElement[In ScrapingInput, Out any](element string, input In) (Out, bool) {
 	e, ok := input.AsMap()[element].(Out)
 	return e, ok
@@ -114,13 +138,15 @@ type ScrapingInput interface {
 
 func (input ScrapeToolInput) AsMap() map[string]any {
 	return map[string]any{
-		"url":               input.URL,
-		"format":            input.Format,
-		"format_options":    input.FormatOptions,
-		"proxy_pool":        input.ProxyPool,
-		"render_js":         input.RenderJS,
-		"rendering_wait":    input.RenderingWait,
-		"asp":               input.ASP,
+		"url":            input.URL,
+		"format":         input.Format,
+		"format_options": input.FormatOptions,
+		"proxy_pool":     input.ProxyPool,
+		"render_js":      input.RenderJS,
+		"rendering_wait": input.RenderingWait,
+		// Keyed "asp" to match the Scrapfly API's wire spelling, which the
+		// rename does not touch; the value is the resolved one.
+		"asp":               ResolveUnblocker(input.ASP, input.Unblocker),
 		"cache":             input.Cache,
 		"cache_ttl":         input.CacheTTL,
 		"cache_clear":       input.CacheClear,
@@ -182,15 +208,17 @@ func ScrapeConfigFromScrapeToolInput(input ScrapeToolInput) (*scrapfly.ScrapeCon
 		return nil, err
 	}
 	config := &scrapfly.ScrapeConfig{
-		URL:              input.URL,
-		Method:           input.Method,
-		Body:             input.Body,
-		Headers:          input.Headers,
-		Country:          input.Country,
-		ProxyPool:        input.ProxyPool,
-		RenderJS:         input.RenderJS,
-		RenderingWait:    input.RenderingWait,
-		ASP:              input.ASP,
+		URL:           input.URL,
+		Method:        input.Method,
+		Body:          input.Body,
+		Headers:       input.Headers,
+		Country:       input.Country,
+		ProxyPool:     input.ProxyPool,
+		RenderJS:      input.RenderJS,
+		RenderingWait: input.RenderingWait,
+		// scrapfly.ScrapeConfig.ASP serialises to the `asp` query parameter;
+		// only the customer-facing name moved, not the wire key.
+		ASP:              ResolveUnblocker(input.ASP, input.Unblocker),
 		Cache:            input.Cache,
 		CacheTTL:         input.CacheTTL,
 		CacheClear:       input.CacheClear,

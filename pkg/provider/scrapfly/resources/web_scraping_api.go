@@ -19,7 +19,7 @@ tags:
     description: "Essential and common parameters for scraping."
   - name: "Data Extraction"
     description: "Parameters for extracting structured data using templates or AI."
-  - name: "Anti Scraping Protection"
+  - name: "Unblocker"
     description: "Parameters to bypass advanced bot detections."
   - name: "Headless Browser / Javascript Rendering"
     description: "Control headless browser for JavaScript-heavy websites."
@@ -57,8 +57,8 @@ paths:
         - $ref: '#/components/parameters/ExtractionTemplate'
         - $ref: '#/components/parameters/ExtractionPrompt'
         - $ref: '#/components/parameters/ExtractionModel'
-        # Anti Scraping Protection
-        - $ref: '#/components/parameters/Asp'
+        # Unblocker
+        - $ref: '#/components/parameters/Unblocker'
         - $ref: '#/components/parameters/CostBudget'
         # Headless Browser
         - $ref: '#/components/parameters/RenderJs'
@@ -100,7 +100,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         "422":
-          description: "Unprocessable Entity. The request was well-formed but could not be processed due to a semantic error (e.g., target URL is invalid, selector not found, ASP failed)."
+          description: "Unprocessable Entity. The request was well-formed but could not be processed due to a semantic error (e.g., target URL is invalid, selector not found, the Unblocker failed)."
           content:
             application/json:
               schema:
@@ -245,9 +245,10 @@ components:
     ExtractionTemplate: { name: "extraction_template", in: "query", description: "An extraction template (ephemeral or stored) to get structured data from the page.", schema: { type: "string" }, tags: ["Data Extraction"] }
     ExtractionPrompt: { name: "extraction_prompt", in: "query", description: "An LLM prompt to extract data or ask a question about the scraped content.", schema: { type: "string" }, tags: ["Data Extraction"] }
     ExtractionModel: { name: "extraction_model", in: "query", description: "The name of a pre-trained AI model to auto-parse the document for structured data.", schema: { type: "string", example: "product" }, tags: ["Data Extraction"] }
-    # Anti Scraping Protection
-    Asp: { name: "asp", in: "query", description: "Enables the Anti Scraping Protection (ASP) layer to bypass bot detection systems like Cloudflare.", schema: { type: "boolean", default: false }, tags: ["Anti Scraping Protection"] }
-    CostBudget: { name: "cost_budget", in: "query", description: "(Requires ` + "`" + `asp=true` + "`" + `) Sets a maximum cost budget (in API credits) for the ASP to use, preventing unexpected cost overruns.", schema: { type: "integer", example: 25 }, tags: ["Anti Scraping Protection"] }
+    # Unblocker. The REST API accepts both names; 'asp' is the former name and
+    # keeps working, so only the current one is documented here.
+    Unblocker: { name: "unblocker", in: "query", description: "Enables the Unblocker layer to bypass bot detection systems like Cloudflare. Also accepted under its former name 'asp'; when both are sent, 'asp' wins.", schema: { type: "boolean", default: false }, tags: ["Unblocker"] }
+    CostBudget: { name: "cost_budget", in: "query", description: "(Requires ` + "`" + `unblocker=true` + "`" + `) Sets a maximum cost budget (in API credits) for the Unblocker to use, preventing unexpected cost overruns.", schema: { type: "integer", example: 25 }, tags: ["Unblocker"] }
     # Headless Browser
     RenderJs: { name: "render_js", in: "query", description: "Enables a headless browser to render JavaScript on the page. Only available for GET requests.", schema: { type: "boolean", default: false }, tags: ["Headless Browser / Javascript Rendering"] }
     RenderingWait: { name: "rendering_wait", in: "query", description: "(Requires ` + "`" + `render_js=true` + "`" + `) Time in milliseconds to wait after the page load event. Max is 25000.", schema: { type: "integer", default: 1000 }, tags: ["Headless Browser / Javascript Rendering"] }
