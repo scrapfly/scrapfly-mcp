@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -12,6 +13,28 @@ import (
 	scrapfly "github.com/scrapfly/go-scrapfly"
 	"github.com/scrapfly/scrapfly-mcp/pkg/provider/scrapfly/browser"
 )
+
+// wsURLSecretParams are the CDP URL query params that carry a credential. The
+// vault key is customer-held and unrecoverable, so it must never reach a log
+// line or the model's context; api_key/key leak the account.
+var wsURLSecretParams = []string{"api_key", "key", "vault_key", "vnc_password", "rtc_password"}
+
+// redactWSURL masks credential params before a CDP URL is logged or handed back
+// as a tool result. The session keeps the unredacted URL for its own dial.
+func redactWSURL(wsURL string) string {
+	u, err := url.Parse(wsURL)
+	if err != nil {
+		return "<unparseable ws url>"
+	}
+	q := u.Query()
+	for _, p := range wsURLSecretParams {
+		if q.Get(p) != "" {
+			q.Set(p, "REDACTED")
+		}
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
+}
 
 // antibotToolOverride holds a schema override and optional description for antibot tools
 // whose schemas Chrome returns as empty.
@@ -35,6 +58,8 @@ type CloudBrowserOpenInput struct {
 	Cache             bool   `json:"cache,omitempty" jsonschema:"Cache static resources (CSS, JS, fonts, images)."`
 	OptimizeBandwidth bool   `json:"optimize_bandwidth,omitempty" jsonschema:"Enable all bandwidth optimizations (block images, styles, fonts, media, trackers + cache). Shortcut for setting all stub and cache options to true."`
 	Debug             bool   `json:"debug,omitempty" jsonschema:"Enable session recording for replay."`
+	Vault             string `json:"vault,omitempty" jsonschema:"Credential vault name. Items are decrypted server-side and filled into matching origins through Scrapium's password manager before the session yields. Requires vault_key."`
+	VaultKey          string `json:"vault_key,omitempty" jsonschema:"Customer-held key for the named vault, emitted once at vault creation. Scrapfly stores no copy, so a lost key cannot be recovered and the session fails with ERR::BROWSER::VAULT_KEY_INVALID."`
 }
 
 type CloudBrowserScreenshotInput struct {
@@ -131,9 +156,11 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 		Debug:       input.Debug,
 		Timeout:     timeout,
 		EnableMCP:   true,
+		Vault:       input.Vault,
+		VaultKey:    input.VaultKey,
 	}
 	wsURL := client.CloudBrowser(browserConfig)
-	p.logger.Printf("cloud_browser_open: connecting to %s", wsURL)
+	p.logger.Printf("cloud_browser_open: connecting to %s", redactWSURL(wsURL))
 
 	// Connect via WebSocket CDP. The handshake covers the full server-side
 	// allocation of a Cloud Browser, not just the socket upgrade. Against a
@@ -340,7 +367,7 @@ func (p *ScrapflyToolProvider) CloudBrowserSessions(
 		s := value.(*browser.Session)
 		sessions = append(sessions, map[string]any{
 			"session_id": key,
-			"ws_url":     s.WSURL,
+			"ws_url":     redactWSURL(s.WSURL),
 			"page_url":   s.Page.URL,
 			"expires_at": s.ExpiresAt.Format(time.RFC3339),
 			"active":     time.Now().Before(s.ExpiresAt),
@@ -645,7 +672,7 @@ func (p *ScrapflyToolProvider) BrowserUnblock(
 		p.logger.Printf("[browser_unblock] Step 1 FAILED: %v", err)
 		return ToolErrFromError("browser_unblock", err), nil, nil
 	}
-	p.logger.Printf("[browser_unblock] Step 1 OK: session_id=%s ws_url=%s", result.SessionID, result.WSURL)
+	p.logger.Printf("[browser_unblock] Step 1 OK: session_id=%s ws_url=%s", result.SessionID, redactWSURL(result.WSURL))
 
 	// Step 2: Connect to the unblock browser over the Cloud Browser CDP endpoint
 	// the client builds, not the session's ws_url, so it matches cloud_browser_open.

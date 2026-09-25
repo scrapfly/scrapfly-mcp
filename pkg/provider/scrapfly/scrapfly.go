@@ -308,6 +308,12 @@ func staticTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 		HandledTools[name] = ht
 	}
 
+	// Credential vault family. Always visible: a vault is created and filled
+	// before any session exists, and the session only names it.
+	for name, ht := range cloudBrowserVaultTools(provider) {
+		HandledTools[name] = ht
+	}
+
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "browser_unblock",
 		Title:       "Open Browser with Anti-Bot Bypass",
