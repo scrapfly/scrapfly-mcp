@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"slices"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	scrapfly "github.com/scrapfly/go-scrapfly"
+	"github.com/scrapfly/scrapfly-mcp/pkg/provider/scrapfly/schemas"
 	"github.com/scrapfly/scrapfly-mcp/pkg/tools"
 )
 
@@ -240,13 +243,44 @@ type VaultItemDeleteInput struct {
 	ItemID  string `json:"item_id"  jsonschema:"Item id to delete. Cannot be undone."`
 }
 
+// VaultLinkedService is the linked_service discriminator. The API decodes the
+// column through a registry of these and answers 400 for a name absent from it.
+// Collapses into the go-scrapfly type once that module publishes one.
+type VaultLinkedService string
+
+const (
+	VaultLinkedServiceOnePassword VaultLinkedService = "1password"
+)
+
+// vaultLinkedServices mirrors the API's registry, which stays the authority. It is
+// published as the schema enum, so the accepted set reaches the model as a
+// constraint and not only as prose.
+var vaultLinkedServices = []VaultLinkedService{VaultLinkedServiceOnePassword}
+
+// vaultServiceInputSchema refines the reflected schema of a tool that carries the
+// discriminator: inference renders a named string type as a bare string, so the
+// accepted set has to be attached here or it never leaves the description.
+func vaultServiceInputSchema[T any]() *jsonschema.Schema {
+	schema := schemas.SchemaFor[T]()
+	prop, ok := schema.Properties["linked_service"]
+	if !ok {
+		log.Fatalf("vaultServiceInputSchema: %T declares no linked_service property", *new(T))
+	}
+	enum := make([]any, len(vaultLinkedServices))
+	for i, s := range vaultLinkedServices {
+		enum[i] = string(s)
+	}
+	prop.Enum = enum
+	return schema
+}
+
 type VaultServiceLinkInput struct {
 	vaultConfirm
-	VaultID           string         `json:"vault_id"                     jsonschema:"Vault id to link. It must be a manual vault with no rows owned by another service."`
-	VaultKey          string         `json:"vault_key"                    jsonschema:"Base64 32-byte vault key. Required: the token is sealed under it and the server verifies it first."`
-	LinkedService     string         `json:"linked_service,omitempty"     jsonschema:"Provider discriminator. 1password is the only accepted value and is used when omitted."`
-	Token             string         `json:"token"                        jsonschema:"1Password service-account token. Required. Treated as secret material: it is sealed in the vault and never returned by any endpoint."`
-	LinkedServiceData map[string]any `json:"linked_service_data,omitempty" jsonschema:"Non-secret selection rules: {vault_id or vault_name, title_filter, tags, sync_mode (manual or on_session), sync_ttl_s}. One of vault_id or vault_name is required. Call cloud_browser_vault_service_test first to learn which upstream vaults the token can see."`
+	VaultID           string             `json:"vault_id"                     jsonschema:"Vault id to link. It must be a manual vault with no rows owned by another service."`
+	VaultKey          string             `json:"vault_key"                    jsonschema:"Base64 32-byte vault key. Required: the token is sealed under it and the server verifies it first."`
+	LinkedService     VaultLinkedService `json:"linked_service,omitempty"     jsonschema:"Provider discriminator: 1password. This endpoint has no server-side default, so omitting it sends 1password."`
+	Token             string             `json:"token"                        jsonschema:"1Password service-account token. Required. Treated as secret material: it is sealed in the vault and never returned by any endpoint."`
+	LinkedServiceData map[string]any     `json:"linked_service_data,omitempty" jsonschema:"Non-secret selection rules: {vault_id or vault_name, title_filter, tags, sync_mode (manual or on_session), sync_ttl_s}. One of vault_id or vault_name is required. Call cloud_browser_vault_service_test first to learn which upstream vaults the token can see."`
 }
 
 type VaultServiceUpdateInput struct {
@@ -271,10 +305,10 @@ type VaultServiceSyncInput struct {
 }
 
 type VaultServiceTestInput struct {
-	VaultID       string `json:"vault_id"                 jsonschema:"Vault id the probe is scoped to. The vault does not need to be linked yet when a token is supplied."`
-	VaultKey      string `json:"vault_key"                jsonschema:"Base64 32-byte vault key. Required on this endpoint even when a candidate token is supplied."`
-	LinkedService string `json:"linked_service,omitempty" jsonschema:"Provider discriminator. 1password is the only accepted value and is assumed when omitted."`
-	Token         string `json:"token,omitempty"          jsonschema:"Candidate 1Password service-account token to probe. Omit to probe the token already sealed in the vault. Secret material: never echoed back."`
+	VaultID       string             `json:"vault_id"                 jsonschema:"Vault id the probe is scoped to. The vault does not need to be linked yet when a token is supplied."`
+	VaultKey      string             `json:"vault_key"                jsonschema:"Base64 32-byte vault key. Required on this endpoint even when a candidate token is supplied."`
+	LinkedService VaultLinkedService `json:"linked_service,omitempty" jsonschema:"Provider discriminator: 1password. Omit it and the server applies its own default, which is 1password."`
+	Token         string             `json:"token,omitempty"          jsonschema:"Candidate 1Password service-account token to probe. Omit to probe the token already sealed in the vault. Secret material: never echoed back."`
 }
 
 func (p *ScrapflyToolProvider) CloudBrowserVaultList(
@@ -586,14 +620,14 @@ func (p *ScrapflyToolProvider) CloudBrowserVaultServiceLink(
 	case in.Token == "":
 		return vaultErr(fmt.Errorf("token is required to link a service")), nil, nil
 	}
-	// The API registers one discriminator and rejects an empty one outright.
+	// POST /service has no server-side default and rejects an empty discriminator.
 	service := in.LinkedService
 	if service == "" {
-		service = "1password"
+		service = VaultLinkedServiceOnePassword
 	}
 	if !in.Confirm {
 		return vaultDryRun("POST /vault/"+in.VaultID+"/service", map[string]any{
-			"linked_service":      service,
+			"linked_service":      string(service),
 			"linked_service_data": in.LinkedServiceData,
 			"token":               secretPresence(in.Token),
 			"vault_key":           secretPresence(in.VaultKey),
@@ -604,7 +638,7 @@ func (p *ScrapflyToolProvider) CloudBrowserVaultServiceLink(
 		return vaultErr(err), nil, nil
 	}
 	out, err := p.vaultServiceCall(ctx, c, http.MethodPost, "", in.VaultID, in.VaultKey, nil, map[string]any{
-		"linked_service":      service,
+		"linked_service":      string(service),
 		"token":               in.Token,
 		"linked_service_data": in.LinkedServiceData,
 	})
@@ -723,8 +757,10 @@ func (p *ScrapflyToolProvider) CloudBrowserVaultServiceTest(
 		return vaultErr(err), nil, nil
 	}
 	body := map[string]any{}
+	// Sent only when the caller chose one: the endpoint defaults an absent
+	// discriminator to 1password itself.
 	if in.LinkedService != "" {
-		body["linked_service"] = in.LinkedService
+		body["linked_service"] = string(in.LinkedService)
 	}
 	if in.Token != "" {
 		body["token"] = in.Token
@@ -896,7 +932,8 @@ func cloudBrowserVaultTools(provider *ScrapflyToolProvider) tools.HandledToolSet
 			IdempotentHint:  false,
 			OpenWorldHint:   &trueBool,
 		},
-		Meta: standardPermissionsMeta,
+		InputSchema: vaultServiceInputSchema[VaultServiceLinkInput](),
+		Meta:        standardPermissionsMeta,
 	}, provider.CloudBrowserVaultServiceLink)
 
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
@@ -952,7 +989,8 @@ func cloudBrowserVaultTools(provider *ScrapflyToolProvider) tools.HandledToolSet
 			IdempotentHint:  true,
 			OpenWorldHint:   &trueBool,
 		},
-		Meta: standardPermissionsMeta,
+		InputSchema: vaultServiceInputSchema[VaultServiceTestInput](),
+		Meta:        standardPermissionsMeta,
 	}, provider.CloudBrowserVaultServiceTest)
 
 	return HandledTools
