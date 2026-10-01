@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
+	"net"
 	"os"
 	"strings"
 
@@ -20,7 +22,36 @@ var (
 	apiHost       = flag.String("host", "", "if set, override the Scrapfly API host. Falls back to SCRAPFLY_API_HOST env var, then to the SDK default https://api.scrapfly.io.")
 	browserHost   = flag.String("browser-host", "", "if set, override the Scrapfly Cloud Browser host. Falls back to SCRAPFLY_BROWSER_HOST env var, then derives from -host by replacing the leading 'api.' with 'browser.', then to the SDK default https://browser.scrapfly.io.")
 	verifySSLFlag = flag.Bool("verify-ssl", true, "verify TLS certificates on outbound calls. Set false ONLY when targeting a host serving a self-signed certificate. Falls back to SCRAPFLY_VERIFY_SSL env var (`0`/`false` to disable).")
+	allowRemote   = flag.Bool("allow-remote", false, "server-key HTTP mode only: allow binding a non-loopback interface. That mode has no per-caller authentication — every request uses the baked-in API key — so bind loopback unless you front it with your own auth. Falls back to SCRAPFLY_ALLOW_REMOTE env var.")
 )
+
+// isLoopbackHost reports whether h is a loopback address or "localhost".
+func isLoopbackHost(h string) bool {
+	if h == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
+}
+
+// normalizeServerKeyBind keeps server-key HTTP mode off the network. That mode
+// authenticates no caller: every request uses the baked-in API key, so a
+// routable bind would hand the key to anyone who can reach the port. A missing
+// host defaults to loopback; a non-loopback host is refused unless allowRemote.
+func normalizeServerKeyBind(addr string, allowRemote bool) (string, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		// No colon (e.g. "8080") — treat the whole value as a port on loopback.
+		return "127.0.0.1:" + strings.TrimPrefix(addr, ":"), nil
+	}
+	if host == "" {
+		return "127.0.0.1:" + port, nil
+	}
+	if !allowRemote && !isLoopbackHost(host) {
+		return "", fmt.Errorf("refusing to bind server-key HTTP mode to %s: this mode has no authentication and would expose the API key to anyone who can reach the port; bind 127.0.0.1, or pass -allow-remote to override", addr)
+	}
+	return addr, nil
+}
 
 // deriveBrowserHostFromAPI returns the Cloud Browser host implied by an
 // API host override, on the convention that the two share the same root
@@ -87,6 +118,26 @@ func main() {
 		log.Fatal("Either apikey (as an argument or as an environment variable) or httpdAddr must must be set.")
 	}
 
+	// Server-key HTTP mode (a key is baked in AND we serve HTTP) runs no
+	// per-caller auth, so keep it on loopback unless explicitly allowed out.
+	serverKeyHTTP := apikey != "" && addr != ""
+	if serverKeyHTTP {
+		allow := *allowRemote
+		// Fail closed: only an explicit truthy value opens the unauthenticated
+		// port to the network; anything else (typo, "no", "off") keeps loopback.
+		if v := os.Getenv("SCRAPFLY_ALLOW_REMOTE"); v != "" {
+			allow = v == "1" || v == "true" || v == "True"
+		}
+		normalized, err := normalizeServerKeyBind(addr, allow)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if normalized != addr {
+			log.Printf("[SCRAPFLY-MCP] server-key HTTP mode has no authentication; binding %s (loopback only — pass -allow-remote to override)", normalized)
+			addr = normalized
+		}
+	}
+
 	// makeClient picks the right SDK constructor based on whether a
 	// custom host was supplied. NewWithHost is the SDK's documented
 	// path for "configure host + verifySSL"; we don't roll our own
@@ -128,6 +179,13 @@ func main() {
 	scrapflyToolProvider := scrapflyprovider.NewScrapflyToolProvider(makeClient(),
 		clientGetter,
 		nil)
+	// Keep TLS verification on for the Cloud Browser CDP dial unless the
+	// operator asked to disable it for a self-signed host.
+	scrapflyToolProvider.InsecureSkipTLSVerify = !verify
+	// info_api_key returns the operator credential; expose it only when the
+	// caller already holds that key — stdio (local client) or per-request HTTP
+	// auth (caller presents their own) — never in server-key HTTP mode.
+	scrapflyToolProvider.ExposeAPIKeyTool = !serverKeyHTTP
 
 	toolProvider := provider.NewToolProvider("scrapfly", scrapflyToolProvider)
 

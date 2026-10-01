@@ -115,11 +115,18 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 		return ToolErrFromError("cloud_browser_open", err), nil, nil
 	}
 
+	owner := browser.OwnerKey(client.APIKey())
+
 	p.logger.Printf("Opening cloud browser for %s (enable_mcp=true)", input.URL)
 
-	// Close any existing sessions + release from pool before allocating a new one
+	// Close this caller's existing sessions + release from pool before
+	// allocating a new one. Scoped to owner so a caller cannot tear down
+	// another caller's session in multi-caller HTTP mode.
 	browser.Store.Range(func(key, value any) bool {
 		s := value.(*browser.Session)
+		if s.Owner != "" && s.Owner != owner {
+			return true
+		}
 		sid := key.(string)
 		s.Close()
 		if stopErr := client.CloudBrowserSessionStop(sid); stopErr != nil {
@@ -169,7 +176,7 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 	// it can take 30s+. 60s gives cold paths room without holding clients
 	// hostage if the cluster is genuinely down.
 	dialer := websocket.Dialer{
-		TLSClientConfig:  &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig:  &tls.Config{InsecureSkipVerify: p.InsecureSkipTLSVerify},
 		HandshakeTimeout: 60 * time.Second,
 	}
 	conn, _, err := dialer.Dial(wsURL, nil)
@@ -180,6 +187,7 @@ func (p *ScrapflyToolProvider) CloudBrowserOpen(
 
 	p.logger.Printf("cloud_browser_open: connected (local=%s remote=%s)", conn.LocalAddr(), conn.RemoteAddr())
 	session := &browser.Session{
+		Owner:     owner,
 		WSURL:     wsURL,
 		ExpiresAt: time.Now().Add(time.Duration(timeout) * time.Second),
 		CdpConn:   conn,
@@ -334,12 +342,15 @@ func (p *ScrapflyToolProvider) CloudBrowserClose(
 
 	p.logger.Printf("Closing cloud browser session %s", input.SessionID)
 
-	// Close WebSocket and clean up session
+	// Close WebSocket and clean up session — only if it belongs to this caller.
+	owner := browser.OwnerKey(client.APIKey())
 	if val, ok := browser.Store.Load(input.SessionID); ok {
 		session := val.(*browser.Session)
-		session.SendCDP("WebMCP.disable", nil)
-		session.Close() // closes WebSocket, removes from Store, cancels cleanup timer
-		p.logger.Printf("Closed session %s", input.SessionID)
+		if session.Owner == "" || session.Owner == owner {
+			session.SendCDP("WebMCP.disable", nil)
+			session.Close() // closes WebSocket, removes from Store, cancels cleanup timer
+			p.logger.Printf("Closed session %s", input.SessionID)
+		}
 	}
 
 	// Best-effort: also call the API stop endpoint
@@ -362,9 +373,15 @@ func (p *ScrapflyToolProvider) CloudBrowserSessions(
 	req *mcp.CallToolRequest,
 	input struct{},
 ) (*mcp.CallToolResult, any, error) {
+	owner := p.sessionOwner(ctx)
 	var sessions []map[string]any
 	browser.Store.Range(func(key, value any) bool {
 		s := value.(*browser.Session)
+		// List only the caller's own sessions so one caller cannot enumerate
+		// another's session IDs or page URLs in multi-caller HTTP mode.
+		if s.Owner != "" && s.Owner != owner {
+			return true
+		}
 		sessions = append(sessions, map[string]any{
 			"session_id": key,
 			"ws_url":     redactWSURL(s.WSURL),
@@ -385,7 +402,7 @@ func (p *ScrapflyToolProvider) CloudBrowserScreenshot(
 	req *mcp.CallToolRequest,
 	input CloudBrowserScreenshotInput,
 ) (*mcp.CallToolResult, any, error) {
-	session, err := browser.FindSession(input.SessionID)
+	session, err := browser.FindSession(p.sessionOwner(ctx), input.SessionID)
 	if err != nil {
 		return ToolErrf("cloud_browser_screenshot: %v", err), nil, nil
 	}
@@ -464,7 +481,7 @@ func (p *ScrapflyToolProvider) CloudBrowserEval(
 	req *mcp.CallToolRequest,
 	input CloudBrowserEvalInput,
 ) (*mcp.CallToolResult, any, error) {
-	session, err := browser.FindSession(input.SessionID)
+	session, err := browser.FindSession(p.sessionOwner(ctx), input.SessionID)
 	if err != nil {
 		return ToolErrf("cloud_browser_eval: %v", err), nil, nil
 	}
@@ -499,7 +516,7 @@ func (p *ScrapflyToolProvider) CloudBrowserSnapshot(
 	req *mcp.CallToolRequest,
 	input CloudBrowserSnapshotInput,
 ) (*mcp.CallToolResult, any, error) {
-	session, err := browser.FindSession(input.SessionID)
+	session, err := browser.FindSession(p.sessionOwner(ctx), input.SessionID)
 	if err != nil {
 		return ToolErrf("cloud_browser_snapshot: %v", err), nil, nil
 	}
@@ -514,7 +531,7 @@ func (p *ScrapflyToolProvider) CloudBrowserPerformance(
 	req *mcp.CallToolRequest,
 	input CloudBrowserPerformanceInput,
 ) (*mcp.CallToolResult, any, error) {
-	session, err := browser.FindSession(input.SessionID)
+	session, err := browser.FindSession(p.sessionOwner(ctx), input.SessionID)
 	if err != nil {
 		return ToolErrf("cloud_browser_performance: %v", err), nil, nil
 	}
@@ -536,7 +553,7 @@ func (p *ScrapflyToolProvider) CloudBrowserDownloads(
 	req *mcp.CallToolRequest,
 	input CloudBrowserDownloadsInput,
 ) (*mcp.CallToolResult, any, error) {
-	session, err := browser.FindSession(input.SessionID)
+	session, err := browser.FindSession(p.sessionOwner(ctx), input.SessionID)
 	if err != nil {
 		return ToolErrf("cloud_browser_downloads: %v", err), nil, nil
 	}
@@ -587,7 +604,7 @@ func (p *ScrapflyToolProvider) CloudBrowserNavigate(
 		return ToolErrFromError("cloud_browser_navigate", err), nil, nil
 	}
 
-	session, err2 := browser.FindSession(input.SessionID)
+	session, err2 := browser.FindSession(p.sessionOwner(ctx), input.SessionID)
 	if err2 != nil {
 		return ToolErrf("cloud_browser_navigate: %v", err2), nil, nil
 	}
@@ -638,13 +655,19 @@ func (p *ScrapflyToolProvider) BrowserUnblock(
 		timeout = 900
 	}
 
+	owner := browser.OwnerKey(client.APIKey())
+
 	p.logger.Printf("[browser_unblock] START url=%s country=%s timeout=%d", input.URL, input.Country, timeout)
 
-	// Step 0: Close any existing browser session AND release from pool.
+	// Step 0: Close this caller's existing browser session AND release from
+	// pool. Scoped to owner so a caller cannot release another's session.
 	// Must call API stop endpoint to free the pool slot, not just close WebSocket.
 	sessionCount := 0
 	browser.Store.Range(func(key, value any) bool {
 		s := value.(*browser.Session)
+		if s.Owner != "" && s.Owner != owner {
+			return true
+		}
 		sid := key.(string)
 		p.logger.Printf("[browser_unblock] Step 0: closing + releasing session %s", sid)
 		s.Close()
@@ -681,9 +704,9 @@ func (p *ScrapflyToolProvider) BrowserUnblock(
 		Timeout: timeout,
 	}
 	internalWSURL := client.CloudBrowser(browserConfig)
-	p.logger.Printf("[browser_unblock] Step 2: connecting CDP WebSocket to %s", internalWSURL)
+	p.logger.Printf("[browser_unblock] Step 2: connecting CDP WebSocket to %s", redactWSURL(internalWSURL))
 	dialer := websocket.Dialer{
-		TLSClientConfig:  &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig:  &tls.Config{InsecureSkipVerify: p.InsecureSkipTLSVerify},
 		HandshakeTimeout: 15 * time.Second,
 	}
 	conn, _, err := dialer.Dial(internalWSURL, nil)
@@ -695,6 +718,7 @@ func (p *ScrapflyToolProvider) BrowserUnblock(
 
 	session := &browser.Session{
 		SessionID: result.SessionID,
+		Owner:     owner,
 		WSURL:     result.WSURL,
 		ExpiresAt: time.Now().Add(time.Duration(timeout) * time.Second),
 		CdpConn:   conn,

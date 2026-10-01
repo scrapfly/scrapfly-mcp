@@ -61,7 +61,7 @@ func handleBrowserScreencast(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	session, err := browser.FindSession(r.URL.Query().Get("session_id"))
+	session, err := browser.FindSession("", r.URL.Query().Get("session_id"))
 	if err != nil {
 		writeJSONErr(w, err, http.StatusNotFound)
 		return
@@ -102,7 +102,7 @@ func handleBrowserScreencast(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleBrowserDownloads(w http.ResponseWriter, r *http.Request) {
-	session, err := browser.FindSession(r.URL.Query().Get("session_id"))
+	session, err := browser.FindSession("", r.URL.Query().Get("session_id"))
 	if err != nil {
 		writeJSONErr(w, err, http.StatusNotFound)
 		return
@@ -122,7 +122,7 @@ func handleBrowserDownload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"filename is required"}`, http.StatusBadRequest)
 		return
 	}
-	session, err := browser.FindSession(r.URL.Query().Get("session_id"))
+	session, err := browser.FindSession("", r.URL.Query().Get("session_id"))
 	if err != nil {
 		writeJSONErr(w, err, http.StatusNotFound)
 		return
@@ -152,7 +152,7 @@ func handleBrowserCaptchas(w http.ResponseWriter, r *http.Request) {
 // `take_screenshot` CDP path exactly.
 func handleBrowserScreenshot(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	session, err := browser.FindSession(r.URL.Query().Get("session_id"))
+	session, err := browser.FindSession("", r.URL.Query().Get("session_id"))
 	if err != nil {
 		writeJSONErr(w, err, http.StatusNotFound)
 		return
@@ -179,7 +179,7 @@ func handleBrowserScreenshot(w http.ResponseWriter, r *http.Request) {
 // captured-downloads pane without losing context.
 func handleBrowserActive(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	session, err := browser.FindSession("")
+	session, err := browser.FindSession("", "")
 	if err != nil || session == nil {
 		_ = json.NewEncoder(w).Encode(map[string]any{})
 		return

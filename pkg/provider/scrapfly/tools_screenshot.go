@@ -59,7 +59,7 @@ func (p *ScrapflyToolProvider) Screenshot(
 		return ToolErrFromError("screenshot", err), nil, err
 	}
 
-	p.logger.Println("Executing screenshot call for client: ", client.APIKey())
+	p.logger.Println("Executing screenshot call for client: ", redactKey(client.APIKey()))
 
 	config, err := ScreenshotConfigFromScreenshotToolInput(input)
 	if err != nil {

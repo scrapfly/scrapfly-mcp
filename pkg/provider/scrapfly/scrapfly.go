@@ -8,6 +8,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/scrapfly/go-scrapfly"
+	"github.com/scrapfly/scrapfly-mcp/pkg/provider/scrapfly/browser"
 	"github.com/scrapfly/scrapfly-mcp/pkg/provider/scrapfly/constants"
 	"github.com/scrapfly/scrapfly-mcp/pkg/provider/scrapfly/resources"
 	"github.com/scrapfly/scrapfly-mcp/pkg/provider/scrapfly/schemas"
@@ -21,6 +22,30 @@ type ScrapflyToolProvider struct {
 	ClientGetter ScrapflyClientGetter
 	MCPServer    *mcp.Server // set during RegisterAll(), used for dynamic tool registration (cloud browser)
 	logger       *log.Logger
+
+	// InsecureSkipTLSVerify disables TLS verification on the Cloud Browser CDP
+	// WebSocket dial. Mirrors the binary's -verify-ssl=false. Default false:
+	// verification stays on, so a self-signed or wrong-host endpoint is
+	// refused and the api/vault keys on the wss URL stay protected.
+	InsecureSkipTLSVerify bool
+
+	// ExposeAPIKeyTool registers info_api_key, which returns the operator
+	// credential. Left off in server-key HTTP mode, where any reachable
+	// client would otherwise read the server's key back.
+	ExposeAPIKeyTool bool
+}
+
+// sessionOwner derives the Cloud Browser session owner for the caller behind
+// ctx. Single-key modes (stdio, server-key) resolve to one stable owner, so
+// scoping is a no-op; per-request HTTP auth gives each API key its own owner.
+// A client-resolution failure returns browser.NoOwner, which matches no stored
+// session, so a lookup fails closed rather than reaching another caller's.
+func (p *ScrapflyToolProvider) sessionOwner(ctx context.Context) string {
+	c, err := p.ClientGetter(p, ctx)
+	if err != nil || c == nil {
+		return browser.NoOwner
+	}
+	return browser.OwnerKey(c.APIKey())
 }
 
 // if logger is nil, it will use the default logger with opinionated prefix and settings
@@ -179,19 +204,24 @@ func staticTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 		InputSchema: schemas.MustRefineScrapingToolInputSchema[GetPageToolInput](),
 		Meta:        standardPermissionsMeta,
 	}, ScrapingHandlerFor[GetPageToolInput](provider))
-	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
-		Name:        "info_api_key",
-		Title:       "Scrapfly Account API Key",
-		Description: "Reveal the Scrapfly API key this MCP server is authenticated with, so the user can paste it into their own code (SDK snippet, curl, CI secret). The key is a live credential: show it only when the user explicitly asked for their key, and never echo it back in later turns or embed it in generated files that get committed. The other tools already authenticate themselves — you never need this to call `web_scrape`, `screenshot` or `cloud_browser_open`. For plan / credit / quota questions use `info_account` instead.",
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Scrapfly Account API Key",
-			DestructiveHint: &falseBool,
-			IdempotentHint:  true,
-			OpenWorldHint:   &falseBool,
-			ReadOnlyHint:    true,
-		},
-		Meta: standardPermissionsMeta,
-	}, provider.InfoApiKey)
+	// info_api_key returns the operator credential, so it ships only when the
+	// transport's caller already holds that key (stdio / per-request HTTP
+	// auth), never in server-key HTTP mode.
+	if provider.ExposeAPIKeyTool {
+		tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
+			Name:        "info_api_key",
+			Title:       "Scrapfly Account API Key",
+			Description: "Reveal the Scrapfly API key this MCP server is authenticated with, so the user can paste it into their own code (SDK snippet, curl, CI secret). The key is a live credential: show it only when the user explicitly asked for their key, and never echo it back in later turns or embed it in generated files that get committed. The other tools already authenticate themselves — you never need this to call `web_scrape`, `screenshot` or `cloud_browser_open`. For plan / credit / quota questions use `info_account` instead.",
+			Annotations: &mcp.ToolAnnotations{
+				Title:           "Scrapfly Account API Key",
+				DestructiveHint: &falseBool,
+				IdempotentHint:  true,
+				OpenWorldHint:   &falseBool,
+				ReadOnlyHint:    true,
+			},
+			Meta: standardPermissionsMeta,
+		}, provider.InfoApiKey)
+	}
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "scraping_instruction_enhanced",
 		Title:       "Scrapfly Scraping tools instructions // enhanced prompt",
@@ -290,7 +320,7 @@ func staticTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	// dynamic mount/unmount boundary even when the MCP client
 	// (e.g. adk-python) doesn't refetch tools/list on
 	// notifications/tools/list_changed.
-	addWebMCPMetaTools(HandledTools, provider.logger)
+	addWebMCPMetaTools(HandledTools, provider)
 
 	// Interaction tools (click, fill, take_snapshot, take_screenshot,
 	// cloud_browser_navigate, cloud_browser_downloads, …) are also

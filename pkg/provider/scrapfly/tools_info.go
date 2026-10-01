@@ -24,6 +24,17 @@ type DummyInput struct {
 	Dummy string `json:"dummy,omitempty" jsonschema:"Dummy input (for langchain compatibility)"`
 }
 
+// redactKey masks an API key for logging. The provider prefix (scp-...) is not
+// secret and helps identify the key family; everything after it is withheld so
+// the live credential never lands in a log line.
+func redactKey(k string) string {
+	const keep = 8
+	if len(k) <= keep {
+		return "****"
+	}
+	return k[:keep] + "****"
+}
+
 //
 // this will be immediately functional and you'll save hours or days of headache that is not on the mcp server side.
 //
@@ -39,7 +50,7 @@ func (p *ScrapflyToolProvider) InfoAccount(
 	if err != nil {
 		return ToolErrFromError("info_account", err), nil, err
 	}
-	p.logger.Println("Executing tool: info_account for client: ", client.APIKey())
+	p.logger.Println("Executing tool: info_account for client: ", redactKey(client.APIKey()))
 	accountData, err := client.Account()
 	if err != nil {
 		return ToolErrFromError("account", err), nil, err
@@ -61,7 +72,7 @@ func (p *ScrapflyToolProvider) InfoApiKey(
 	if err != nil {
 		return ToolErrFromError("info_api_key", err), nil, err
 	}
-	p.logger.Println("Executing tool: info_api_key for client: ", client.APIKey())
+	p.logger.Println("Executing tool: info_api_key for client: ", redactKey(client.APIKey()))
 	apiKey := client.APIKey()
 	return nil, &ApiKeyOutput{ApiKey: apiKey}, nil
 }

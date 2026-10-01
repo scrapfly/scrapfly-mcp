@@ -356,15 +356,24 @@ You can run the Scrapfly MCP server locally or self-host it.
 
 | Flag | Description |
 |------|-------------|
-| `-http <address>` | Start HTTP server at the specified address (e.g., `:8080`). Takes precedence over `PORT` env var. |
+| `-http <address>` | Start HTTP server at the specified address (e.g., `:8080`). Takes precedence over `PORT` env var. In server-key mode this binds loopback (`127.0.0.1`) unless you also pass `-allow-remote`. |
 | `-apikey <key>` | Use this API key instead of the `SCRAPFLY_API_KEY` environment variable. |
+| `-allow-remote` | Server-key HTTP mode only: permit binding a non-loopback interface. That mode performs no per-caller authentication — every request uses the baked-in key — so only enable this behind your own auth proxy. |
+| `-verify-ssl` | Verify TLS certificates on outbound calls (default `true`). Set `false` only when targeting a host that serves a self-signed certificate. |
 
 ### Environment Variables
 
 | Variable | Description |
 |----------|-------------|
 | `PORT` | HTTP port to listen on. Used if `-http` flag is not set. |
-| `SCRAPFLY_API_KEY` | Default Scrapfly API key. Can also be passed via query parameter `?apiKey=xxx` at runtime. |
+| `SCRAPFLY_API_KEY` | Scrapfly API key baked into the server. When set, the server uses it for every request (server-key mode) and does **not** read a per-request key. |
+| `SCRAPFLY_ALLOW_REMOTE` | `1`/`true` is the env equivalent of `-allow-remote`. |
+| `SCRAPFLY_VERIFY_SSL` | `0`/`false` is the env equivalent of `-verify-ssl=false`. |
+
+Per-request key: start the server **without** a baked-in key (`-http` only) and
+each caller supplies their own key per request — as `Authorization: Bearer <key>`,
+or `?key=<key>` / `?apiKey=<key>`. This path is authenticated; the server-key
+path above is not, which is why it stays on loopback by default.
 
 ### Examples
 
@@ -377,7 +386,11 @@ PORT=8080 ./scrapfly-mcp
 
 # Start with an API key. Prefer the environment variable: a key passed as a
 # flag lands in your shell history and in the process list.
+# Server-key mode has no per-caller auth, so it binds 127.0.0.1 here.
 SCRAPFLY_API_KEY=... ./scrapfly-mcp -http :8080
+
+# Same, but expose it on all interfaces — only behind your own auth proxy.
+SCRAPFLY_API_KEY=... ./scrapfly-mcp -http 0.0.0.0:8080 -allow-remote
 
 # Start in stdio mode (for local MCP clients)
 ./scrapfly-mcp

@@ -382,7 +382,7 @@ func ScrapeCall[T ScrapingInput](p *ScrapflyToolProvider,
 		return ToolErrFromError("scrape", err), nil, err
 	}
 
-	p.logger.Println("Executing scraping call for client: ", client.APIKey())
+	p.logger.Println("Executing scraping call for client: ", redactKey(client.APIKey()))
 
 	config, err := ScrapeConfigFromInput(input)
 	if err != nil {

@@ -1,14 +1,13 @@
 package scrapflyprovider
 
 // Static browser interaction tools — registered once at startup with flat names.
-// Each tool looks up the active browser session via browser.FindSession("").
+// Each tool looks up the active browser session via browser.FindSession(provider.sessionOwner(ctx), "").
 // Follows the Chrome DevTools MCP pattern (flat names, no session prefix).
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -48,7 +47,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		Meta:        standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
 		args := wrapUidToSelector(req.Params.Arguments)
-		r, err := callActiveAntibot(logger, "clickOn", args)
+		r, err := callActiveAntibot(logger, provider.sessionOwner(ctx), "clickOn", args)
 		return r, nil, err
 	})
 
@@ -61,7 +60,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		Meta:        standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
 		args := wrapUidToFillArgs(req.Params.Arguments)
-		r, err := callActiveAntibot(logger, "fill", args)
+		r, err := callActiveAntibot(logger, provider.sessionOwner(ctx), "fill", args)
 		return r, nil, err
 	})
 
@@ -79,7 +78,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		},
 		Meta: standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
-		r, err := callActiveAntibot(logger, "typeText", req.Params.Arguments)
+		r, err := callActiveAntibot(logger, provider.sessionOwner(ctx), "typeText", req.Params.Arguments)
 		return r, nil, err
 	})
 
@@ -92,7 +91,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		Meta:        standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
 		args := wrapUidToSelector(req.Params.Arguments)
-		r, err := callActiveAntibot(logger, "hover", args)
+		r, err := callActiveAntibot(logger, provider.sessionOwner(ctx), "hover", args)
 		return r, nil, err
 	})
 
@@ -110,7 +109,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		},
 		Meta: standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
-		r, err := callActiveAntibot(logger, "pressKey", req.Params.Arguments)
+		r, err := callActiveAntibot(logger, provider.sessionOwner(ctx), "pressKey", req.Params.Arguments)
 		return r, nil, err
 	})
 
@@ -146,14 +145,14 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 			cdpArgs["delta"] = map[string]any{"x": params.DeltaX, "y": params.DeltaY}
 		}
 		translated, _ := json.Marshal(cdpArgs)
-		r, err := callActiveAntibot(logger, "scroll", translated)
+		r, err := callActiveAntibot(logger, provider.sessionOwner(ctx), "scroll", translated)
 		if err != nil {
 			return r, nil, err
 		}
 
 		// Also execute JS scrollBy as fallback — some pages have custom scroll containers
 		// that Antibot.scroll (which uses native wheel events) can't scroll
-		session, _ := browser.FindSession("")
+		session, _ := browser.FindSession(provider.sessionOwner(ctx), "")
 		if session != nil && (params.DeltaX != 0 || params.DeltaY != 0) {
 			session.SendCDP("Runtime.evaluate", map[string]any{
 				"expression":    fmt.Sprintf("window.scrollBy(%v, %v)", params.DeltaX, params.DeltaY),
@@ -180,7 +179,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		Meta: standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
 		args := wrapUidToSelector(req.Params.Arguments)
-		r, err := callActiveAntibot(logger, "selectOption", args)
+		r, err := callActiveAntibot(logger, provider.sessionOwner(ctx), "selectOption", args)
 		return r, nil, err
 	})
 
@@ -209,7 +208,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 			"from": map[string]any{"type": "axNodeId", "query": args.FromUID},
 			"to":   map[string]any{"type": "axNodeId", "query": args.ToUID},
 		})
-		r, err := callActiveAntibot(logger, "dragAndDrop", translated)
+		r, err := callActiveAntibot(logger, provider.sessionOwner(ctx), "dragAndDrop", translated)
 		return r, nil, err
 	})
 
@@ -222,7 +221,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		Annotations: &mcp.ToolAnnotations{Title: "Get current page URL", DestructiveHint: &falseBool, ReadOnlyHint: true, OpenWorldHint: &trueBool},
 		Meta:        standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
-		session, err := browser.FindSession("")
+		session, err := browser.FindSession(provider.sessionOwner(ctx), "")
 		if err != nil {
 			return ToolErrf("get_page_url: no active browser session"), nil, nil
 		}
@@ -238,7 +237,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		Annotations: &mcp.ToolAnnotations{Title: "Take a screenshot", DestructiveHint: &falseBool, ReadOnlyHint: true, OpenWorldHint: &trueBool},
 		Meta:        standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
-		session, err := browser.FindSession("")
+		session, err := browser.FindSession(provider.sessionOwner(ctx), "")
 		if err != nil {
 			return ToolErrf("take_screenshot: no active browser session"), nil, nil
 		}
@@ -268,7 +267,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		Annotations: &mcp.ToolAnnotations{Title: "Get page content snapshot", DestructiveHint: &falseBool, ReadOnlyHint: true, OpenWorldHint: &trueBool},
 		Meta:        standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
-		session, err := browser.FindSession("")
+		session, err := browser.FindSession(provider.sessionOwner(ctx), "")
 		if err != nil {
 			return ToolErrf("take_snapshot: no active browser session"), nil, nil
 		}
@@ -292,7 +291,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		},
 		Meta: standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
-		session, err := browser.FindSession("")
+		session, err := browser.FindSession(provider.sessionOwner(ctx), "")
 		if err != nil {
 			return ToolErrf("evaluate_script: no active browser session"), nil, nil
 		}
@@ -341,11 +340,11 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 	// — server.AddTool replaces existing tools with the same name, no
 	// duplicate-registration risk.
 
-	addWebMCPMetaTools(ts, logger)
+	addWebMCPMetaTools(ts, provider)
 
 	// ── browser-use parity tools ───────────────────────────────────────────
 	// Convenience tools that close the gap with browser-use's action set.
-	// All gated by browser.FindSession("") so they error cleanly when no
+	// All gated by browser.FindSession(provider.sessionOwner(ctx), "") so they error cleanly when no
 	// session is open — same contract as the rest of this file.
 
 	tools.MustAddToolToToolset(ts, &mcp.Tool{
@@ -362,7 +361,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		},
 		Meta: standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
-		session, err := browser.FindSession("")
+		session, err := browser.FindSession(provider.sessionOwner(ctx), "")
 		if err != nil {
 			return ToolErrf("scroll_to_text: no active browser session"), nil, nil
 		}
@@ -493,7 +492,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		},
 		Meta: standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
-		session, err := browser.FindSession("")
+		session, err := browser.FindSession(provider.sessionOwner(ctx), "")
 		if err != nil {
 			return ToolErrf("find_elements: no active browser session"), nil, nil
 		}
@@ -551,7 +550,7 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 		},
 		Meta: standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
-		session, err := browser.FindSession("")
+		session, err := browser.FindSession(provider.sessionOwner(ctx), "")
 		if err != nil {
 			return ToolErrf("go_back: no active browser session"), nil, nil
 		}
@@ -599,7 +598,8 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 // `server.AddTool` replaces by name, so double-registration is safe.
 //
 // Both handlers no-op gracefully when no browser session is open.
-func addWebMCPMetaTools(ts tools.HandledToolSet, logger *log.Logger) {
+func addWebMCPMetaTools(ts tools.HandledToolSet, provider *ScrapflyToolProvider) {
+	logger := provider.logger
 	tools.MustAddToolToToolset(ts, &mcp.Tool{
 		Name:        "list_webmcp_tools",
 		Title:       "List page-registered MCP tools",
@@ -607,7 +607,7 @@ func addWebMCPMetaTools(ts tools.HandledToolSet, logger *log.Logger) {
 		Annotations: &mcp.ToolAnnotations{Title: "List page-registered MCP tools", DestructiveHint: &falseBool, ReadOnlyHint: true, OpenWorldHint: &trueBool},
 		Meta:        standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
-		session, err := browser.FindSession("")
+		session, err := browser.FindSession(provider.sessionOwner(ctx), "")
 		if err != nil {
 			return ToolErrf("list_webmcp_tools: no active browser session"), nil, nil
 		}
@@ -643,7 +643,7 @@ func addWebMCPMetaTools(ts tools.HandledToolSet, logger *log.Logger) {
 		},
 		Meta: standardPermissionsMeta,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ DummyInput) (*mcp.CallToolResult, any, error) {
-		session, err := browser.FindSession("")
+		session, err := browser.FindSession(provider.sessionOwner(ctx), "")
 		if err != nil {
 			return ToolErrf("call_webmcp_tool: no active browser session"), nil, nil
 		}
@@ -669,9 +669,10 @@ func addWebMCPMetaTools(ts tools.HandledToolSet, logger *log.Logger) {
 	})
 }
 
-// callActiveAntibot finds the active session and calls an Antibot CDP tool.
-func callActiveAntibot(logger browser.Logger, toolName string, arguments json.RawMessage) (*mcp.CallToolResult, error) {
-	session, err := browser.FindSession("")
+// callActiveAntibot finds the caller's active session and calls an Antibot CDP
+// tool. owner scopes the lookup so one caller cannot drive another's session.
+func callActiveAntibot(logger browser.Logger, owner, toolName string, arguments json.RawMessage) (*mcp.CallToolResult, error) {
+	session, err := browser.FindSession(owner, "")
 	if err != nil {
 		return ToolErrf("%s: no active browser session. Call cloud_browser_open first.", toolName), nil
 	}
