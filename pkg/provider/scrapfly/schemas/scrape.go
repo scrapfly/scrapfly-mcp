@@ -146,7 +146,7 @@ func MakeUnblockerSchema() *jsonschema.Schema {
 // is a hard call rejection for every pinned client still sending it.
 func MakeDeprecatedASPSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
-		Title:       "Anti Scraping Protection (deprecated)",
+		Title:       "Unblocker, former name asp (deprecated)",
 		Type:        "boolean",
 		Description: "Deprecated alias of `unblocker`, accepted for backward compatibility. Prefer `unblocker`. Supplied explicitly, it takes precedence over `unblocker`.",
 	}

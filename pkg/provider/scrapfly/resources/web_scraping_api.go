@@ -4,7 +4,7 @@ const WebScrapingApi = `
 openapi: 3.0.0
 info:
   title: "ScrapFly Scraping API"
-  description: "Comprehensive specification for the ScrapFly Scrape API, which allows for advanced web scraping of target URLs using a configurable proxy network, headless browsers, and anti-scraping protection. This specification includes detailed parameter descriptions, usage examples, and response schemas."
+  description: "Comprehensive specification for the ScrapFly Scrape API, which allows for advanced web scraping of target URLs using a configurable proxy network, headless browsers, and the Unblocker anti-bot bypass (formerly ASP). This specification includes detailed parameter descriptions, usage examples, and response schemas."
   version: "1.0.1"
   contact:
     name: "ScrapFly Support"
@@ -32,7 +32,7 @@ paths:
   /scrape:
     get:
       summary: "Scrape a target URL with advanced options"
-      description: "Performs a scrape request on a given URL with fine-grained control over proxies, JavaScript rendering, sessions, caching, and anti-scraping protection."
+      description: "Performs a scrape request on a given URL with fine-grained control over proxies, JavaScript rendering, sessions, caching, and the Unblocker anti-bot bypass."
       operationId: "scrapeUrl"
       parameters:
         # Core Parameters
