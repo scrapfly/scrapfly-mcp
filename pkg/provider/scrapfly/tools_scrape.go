@@ -333,7 +333,6 @@ func (p *ScrapflyToolProvider) LightScrapeResultFromScrapeConfig(ctx context.Con
 		Content:     resultdata.Content,
 		StatusCode:  resultdata.StatusCode,
 		ContentType: resultdata.ContentType,
-		// Failed scrapes can still be billed, so the cost is set before the error return.
 		APICost:     scrapeResult.Context.Cost.Total,
 		CostDetails: scrapeResult.Context.Cost.Details,
 	}

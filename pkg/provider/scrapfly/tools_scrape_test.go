@@ -325,6 +325,77 @@ func TestScrapingHandlersRunWithoutAttestation(t *testing.T) {
 	})
 }
 
+// cannedTransport answers every request with one 200 scrape API body.
+type cannedTransport struct{ body string }
+
+func (t cannedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(t.body)),
+		Request:    req,
+	}, nil
+}
+
+const billedScrapeBody = `{
+	"uuid": "00000000-0000-0000-0000-000000000000",
+	"config": {"url": "https://example.com"},
+	"context": {"cost": {"total": 26, "details": [
+		{"amount": 1, "code": "BASE", "description": "Scrape request"},
+		{"amount": 25, "code": "UNBLOCKER", "description": "Anti-bot bypass"}
+	]}},
+	"result": {"success": true, "status": "DONE", "status_code": 200,
+		"content": "<html></html>", "content_type": "text/html", "format": "text"}
+}`
+
+// Drives the registered handler, not LightScrapeResultFromScrapeConfig, so the
+// cost also has to survive output schema validation and land in
+// structuredContent, which is what clients read.
+func TestScrapingToolsReportAPICost(t *testing.T) {
+	client, err := scrapfly.New("test-key")
+	if err != nil {
+		t.Fatalf("scrapfly.New: %v", err)
+	}
+	client.SetHTTPClient(&http.Client{Transport: cannedTransport{body: billedScrapeBody}})
+	set := staticTools(NewScrapflyToolProvider(client, GetDefaultScrapflyClient, log.New(io.Discard, "", 0)))
+
+	for _, name := range []string{"web_scrape", "web_get_page"} {
+		t.Run(name, func(t *testing.T) {
+			res, err := set[name].Handler(context.Background(), &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{
+				Name:      name,
+				Arguments: json.RawMessage(`{"url":"https://example.com"}`),
+			}})
+			if err != nil {
+				t.Fatalf("handler: %v", err)
+			}
+			if res.IsError {
+				t.Fatalf("tool error: %v", res.Content)
+			}
+			raw, ok := res.StructuredContent.(json.RawMessage)
+			if !ok {
+				t.Fatalf("structuredContent is %T, want json.RawMessage", res.StructuredContent)
+			}
+			var got struct {
+				APICost     *int                  `json:"api_cost"`
+				CostDetails []scrapfly.CostDetail `json:"cost_details"`
+			}
+			if err := json.Unmarshal(raw, &got); err != nil {
+				t.Fatalf("unmarshal structuredContent: %v", err)
+			}
+			if got.APICost == nil || *got.APICost != 26 {
+				t.Errorf("api_cost missing or not 26; structuredContent: %s", raw)
+			}
+			want := []scrapfly.CostDetail{
+				{Amount: 1, Code: "BASE", Description: "Scrape request"},
+				{Amount: 25, Code: "UNBLOCKER", Description: "Anti-bot bypass"},
+			}
+			if !slices.Equal(got.CostDetails, want) {
+				t.Errorf("cost_details = %+v, want %+v", got.CostDetails, want)
+			}
+		})
+	}
+}
+
 func assertReachedUpstream(t *testing.T, res *mcp.CallToolResult, transport *countingTransport) {
 	t.Helper()
 	if res != nil {
