@@ -100,6 +100,8 @@ type LightScrapeResultData struct {
 	Screenshots      map[string]scrapfly.Screenshot `json:"screenshots,omitempty" jsonschema:"Screenshots if any"`
 	ExtractionResult map[string]any                 `json:"extraction_result,omitempty" jsonschema:"Extracted data if extraction_prompt was provided"`
 	Errors           *scrapfly.APIErrorDetails      `json:"errors,omitempty" jsonschema:"Errors if any"`
+	APICost          int                            `json:"api_cost" jsonschema:"API credits this scrape consumed (same value as the X-Scrapfly-Api-Cost header)"`
+	CostDetails      []scrapfly.CostDetail          `json:"cost_details,omitempty" jsonschema:"Per-item breakdown of api_cost"`
 }
 
 // ResolveUnblocker settles the two names for the anti-bot bypass. `unblocker`
@@ -331,6 +333,9 @@ func (p *ScrapflyToolProvider) LightScrapeResultFromScrapeConfig(ctx context.Con
 		Content:     resultdata.Content,
 		StatusCode:  resultdata.StatusCode,
 		ContentType: resultdata.ContentType,
+		// Failed scrapes can still be billed, so the cost is set before the error return.
+		APICost:     scrapeResult.Context.Cost.Total,
+		CostDetails: scrapeResult.Context.Cost.Details,
 	}
 	if err != nil {
 		if resultdata.Error != nil {
