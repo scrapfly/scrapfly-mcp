@@ -163,11 +163,11 @@ func (p *ScrapflyToolProvider) CheckIfBlocked(
 	case result.Blocked && result.Antibot != "":
 		output.Confidence = "high"
 		output.Details = fmt.Sprintf("%s shield matched the response signature.", result.Antibot)
-		output.Recommendation = "Enable unblocker=true with render_js=true; if still blocked, switch to residential proxy pool."
+		output.Recommendation = "Send it with the Unblocker: proxy_pool=unblocker, proxy_pool=unblocker_ultra if the API answers ERR::PROXY::UNBLOCKER_ULTRA_REQUIRED, or proxy_pool=auto to let the API pick the pool."
 	case result.Blocked:
 		output.Confidence = "medium"
 		output.Details = "Response flagged as blocked without a named shield match."
-		output.Recommendation = "Enable unblocker=true; try render_js=true and/or a different proxy pool."
+		output.Recommendation = "Send it with the Unblocker: proxy_pool=unblocker, proxy_pool=unblocker_ultra if the API answers ERR::PROXY::UNBLOCKER_ULTRA_REQUIRED, or proxy_pool=auto to let the API pick the pool. render_js=true can help as well."
 	default:
 		output.Confidence = "high"
 		output.Details = "No antibot blocking detected — the page content looks legitimate."

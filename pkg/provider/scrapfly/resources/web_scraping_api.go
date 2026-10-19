@@ -144,8 +144,8 @@ components:
     ProxyPool:
       name: "proxy_pool"
       in: "query"
-      description: "The proxy pool to use. See your proxy dashboard for available pools."
-      schema: { type: "string", default: "public_datacenter_pool", enum: ["public_datacenter_pool", "public_residential_pool"] }
+      description: "Proxy pool. ` + "`" + `basic` + "`" + `: datacenter proxies, Unblocker off. ` + "`" + `unblocker` + "`" + `: residential proxies and the Unblocker. ` + "`" + `unblocker_ultra` + "`" + `: residential proxies and the Unblocker, the only pool accepted by a target or an anti-bot protection with a price of its own (e.g. Cloudflare, Kasada): those refuse ` + "`" + `basic` + "`" + ` and ` + "`" + `unblocker` + "`" + ` with ERR::PROXY::UNBLOCKER_ULTRA_REQUIRED (HTTP 422, not billed). ` + "`" + `auto` + "`" + `: the API picks the pool before the request, from the target's profile: the Unblocker on datacenter proxies, or the pool the target needs; accepted on every target, the ones that require ` + "`" + `unblocker_ultra` + "`" + ` included, where their price is added; priced as the pool it runs on. Each of these four sets the Unblocker itself. ` + "`" + `public_tor_pool` + "`" + `: the Tor network (.onion). public_datacenter_pool and public_residential_pool are deprecated; the migration guide covers them: https://scrapfly.io/new-pricing#legacy-spellings"
+      schema: { type: "string", default: "public_datacenter_pool", enum: ["basic", "unblocker", "unblocker_ultra", "auto", "public_datacenter_pool", "public_residential_pool", "public_tor_pool"] }
       tags: ["Core"]
     Country:
       name: "country"
@@ -245,10 +245,9 @@ components:
     ExtractionTemplate: { name: "extraction_template", in: "query", description: "An extraction template (ephemeral or stored) to get structured data from the page.", schema: { type: "string" }, tags: ["Data Extraction"] }
     ExtractionPrompt: { name: "extraction_prompt", in: "query", description: "An LLM prompt to extract data or ask a question about the scraped content.", schema: { type: "string" }, tags: ["Data Extraction"] }
     ExtractionModel: { name: "extraction_model", in: "query", description: "The name of a pre-trained AI model to auto-parse the document for structured data.", schema: { type: "string", example: "product" }, tags: ["Data Extraction"] }
-    # Unblocker. The REST API accepts both names; 'asp' is the former name and
-    # keeps working, so only the current one is documented here.
-    Unblocker: { name: "unblocker", in: "query", description: "Enables the Unblocker layer to bypass bot detection systems like Cloudflare. Also accepted under its former name 'asp'; when both are sent, 'asp' wins.", schema: { type: "boolean", default: false }, tags: ["Unblocker"] }
-    CostBudget: { name: "cost_budget", in: "query", description: "(Requires ` + "`" + `unblocker=true` + "`" + `) Sets a maximum cost budget (in API credits) for the Unblocker to use, preventing unexpected cost overruns.", schema: { type: "integer", example: 25 }, tags: ["Unblocker"] }
+    # Unblocker (deprecated). Its former name 'asp' is covered by this entry.
+    Unblocker: { name: "unblocker", in: "query", deprecated: true, description: "Deprecated, as is its former name ` + "`" + `asp` + "`" + `: use ` + "`" + `proxy_pool` + "`" + ` (` + "`" + `unblocker_ultra` + "`" + ` for the Unblocker). The migration guide covers requests written before the proxy pools: https://scrapfly.io/new-pricing#legacy-spellings", schema: { type: "boolean", default: false }, tags: ["Unblocker"] }
+    CostBudget: { name: "cost_budget", in: "query", description: "Sets a maximum cost budget (in API credits) for an Unblocker request (` + "`" + `proxy_pool=unblocker` + "`" + `, ` + "`" + `unblocker_ultra` + "`" + ` or ` + "`" + `auto` + "`" + `), preventing unexpected cost overruns.", schema: { type: "integer", example: 25 }, tags: ["Unblocker"] }
     # Headless Browser
     RenderJs: { name: "render_js", in: "query", description: "Enables a headless browser to render JavaScript on the page. Only available for GET requests.", schema: { type: "boolean", default: false }, tags: ["Headless Browser / Javascript Rendering"] }
     RenderingWait: { name: "rendering_wait", in: "query", description: "(Requires ` + "`" + `render_js=true` + "`" + `) Time in milliseconds to wait after the page load event. Max is 25000.", schema: { type: "integer", default: 1000 }, tags: ["Headless Browser / Javascript Rendering"] }

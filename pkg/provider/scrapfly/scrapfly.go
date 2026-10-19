@@ -148,6 +148,10 @@ var standardPermissionsMeta = mcp.Meta{
 	"scrapfly/permissions/required":   []string{"tools:default"},
 }
 
+// proxyPoolChoice closes both scraping tool descriptions: which pool a site
+// needs, and what a call without a pool sends.
+const proxyPoolChoice = "Proxy pools: `basic` (datacenter proxies, Unblocker off), `unblocker` (residential proxies and the Unblocker), `unblocker_ultra` (the same, and the only pool a target or an anti-bot protection with a price of its own accepts) and `auto` (the API picks the pool before the request, from the target's profile; accepted on every target, the ones that require unblocker_ultra included, where their price is added; priced as the pool it runs on). Pick the pool a site needs: `proxy_pool=basic` where datacenter proxies get through, `proxy_pool=unblocker` or `proxy_pool=unblocker_ultra` where it needs residential proxies and the Unblocker, `proxy_pool=auto` to let the API pick; on ERR::PROXY::UNBLOCKER_ULTRA_REQUIRED, resend with `proxy_pool=unblocker_ultra` or `proxy_pool=auto`. Without a proxy_pool, the tool sends the API no pool and, by default, asp=true; the migration guide covers that request: https://scrapfly.io/new-pricing#legacy-spellings"
+
 // staticTools — the always-visible tool surface. Returned by
 // ToolSet() and registered at MCP server boot via tools/list. These
 // don't require a Cloud Browser session: account info, stateless
@@ -179,7 +183,7 @@ func staticTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "web_scrape",
 		Title:       "Scrapfly Advanced Scraping Tool",
-		Description: "One-shot fetch of a URL with full control (headers, JS rendering, country, proxy pool, unblocker options). Stateless — returns the response body and metadata, no persistent session. This is the right tool whenever the task is \"get the content/bytes at this URL\": downloading a file, fetching an HTML page, calling a JSON endpoint, grabbing a sitemap. Only switch to `cloud_browser_open` when the task requires multi-step interaction with a page (clicking, form filling, navigating between pages, logging in). Use `scraping_instruction_enhanced` first if you're uncertain which options to set. Prefer `web_get_page` for the common quick-fetch path.",
+		Description: "One-shot fetch of a URL with full control (headers, JS rendering, country, proxy pool). Stateless — returns the response body and metadata, no persistent session. This is the right tool whenever the task is \"get the content/bytes at this URL\": downloading a file, fetching an HTML page, calling a JSON endpoint, grabbing a sitemap. Only switch to `cloud_browser_open` when the task requires multi-step interaction with a page (clicking, form filling, navigating between pages, logging in). Use `scraping_instruction_enhanced` first if you're uncertain which options to set. Prefer `web_get_page` for the common quick-fetch path. " + proxyPoolChoice,
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Advanced Scraping Tool",
 			DestructiveHint: &falseBool,
@@ -193,7 +197,7 @@ func staticTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "web_get_page",
 		Title:       "Scrapfly Quick Page Fetch Tool",
-		Description: "One-shot fetch of a URL with sane defaults. Stateless. Right choice for simple \"get me the page / the JSON / the file at X\" asks — including plain file downloads where the URL already points at the asset. Falls back to `web_scrape` when you need to tune headers/JS-rendering/proxy; to `cloud_browser_open` when the task needs interaction with the page.",
+		Description: "One-shot fetch of a URL with sane defaults. Stateless. Right choice for simple \"get me the page / the JSON / the file at X\" asks — including plain file downloads where the URL already points at the asset. Falls back to `web_scrape` when you need to tune headers/JS-rendering/proxy; to `cloud_browser_open` when the task needs interaction with the page. " + proxyPoolChoice,
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Quick Page Fetch Tool",
 			DestructiveHint: &falseBool,
@@ -225,7 +229,7 @@ func staticTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "scraping_instruction_enhanced",
 		Title:       "Scrapfly Scraping tools instructions // enhanced prompt",
-		Description: "Return a concise cheat-sheet of Scrapfly's scraping options (unblocker, render_js, country, proxy pool, extraction) and which of `web_scrape` / `web_get_page` accepts each. Optional — useful on an unfamiliar target so the chosen options are right the first time.",
+		Description: "Return a concise cheat-sheet of Scrapfly's scraping options (proxy pool, render_js, country, extraction) and which of `web_scrape` / `web_get_page` accepts each. Optional — useful on an unfamiliar target so the chosen options are right the first time.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Scraping tools instructions // enhanced prompt",
 			DestructiveHint: &falseBool,
@@ -254,7 +258,7 @@ func staticTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "check_if_blocked",
 		Title:       "Antibot Block Detector",
-		Description: "Given a scrape result (URL + status + headers + body), decide if it is actually a block page. Runs the Scrapfly classification API which detects the major anti-bot products (Cloudflare, DataDome, PerimeterX, Akamai, Kasada, Imperva, AWS WAF, F5 Shape, and more). Returns `is_blocked` and, when known, the matching `antibot` vendor. Costs 1 API credit per call. Run after a `web_scrape` / `web_get_page` whenever the response looks suspicious — a 200 with empty/tiny body, unexpected challenge markup — before feeding the content back to the user. If blocked, retry via `browser_unblock`.",
+		Description: "Given a scrape result (URL + status + headers + body), decide if it is actually a block page. Runs the Scrapfly classification API which detects the major anti-bot products (Cloudflare, DataDome, PerimeterX, Akamai, Kasada, Imperva, AWS WAF, F5 Shape, and more). Returns `is_blocked` and, when known, the matching `antibot` vendor. Costs 1 API credit per call. Run after a `web_scrape` / `web_get_page` whenever the response looks suspicious — a 200 with empty/tiny body, unexpected challenge markup — before feeding the content back to the user. If blocked, send the scrape with the Unblocker: `proxy_pool=unblocker`, `proxy_pool=unblocker_ultra` if the API answers ERR::PROXY::UNBLOCKER_ULTRA_REQUIRED, or `proxy_pool=auto` to let the API pick the pool; or open the page via `browser_unblock`.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Antibot Block Detector",
 			DestructiveHint: &falseBool,
@@ -284,7 +288,7 @@ func staticTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 			OpenWorldHint:   &trueBool,
 			ReadOnlyHint:    false,
 		},
-		InputSchema: schemas.MustRefineScrapingToolInputSchema[CloudBrowserOpenInput](),
+		InputSchema: schemas.MustRefineCloudBrowserToolInputSchema[CloudBrowserOpenInput](),
 		Meta:        standardPermissionsMeta,
 	}, provider.CloudBrowserOpen)
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{

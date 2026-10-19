@@ -37,7 +37,7 @@ The **Scrapfly MCP Server** connects your AI assistants to live web data through
 Built on **battle-tested infrastructure** used by thousands of developers:
 
 - **99.9% Uptime** — Enterprise-grade reliability
-- **100+ Countries** — [Global proxy network](https://scrapfly.io/docs/scrape-api/proxy) with datacenter & residential IPs
+- **100+ Countries** — [Global proxy network](https://scrapfly.io/docs/scrape-api/proxy) with datacenter & residential IPs, in three proxy pools (Basic, Unblocker, Unblocker Ultra) or Auto, where the API picks the pool
 - **Anti-Bot Bypass** — [Advanced Unblocker technology](https://scrapfly.io/docs/scrape-api/anti-scraping-protection) defeats modern protections
 - **OAuth2 Security** — [Enterprise authentication](https://scrapfly.io/docs/mcp/authentication) for production deployments
 
@@ -302,6 +302,35 @@ The Scrapfly MCP Server provides **5 powerful tools** covering 99% of web scrapi
 | `info_account` | Check usage & quota | Account management |
 
 > 📖 **Full reference**: [Tools & API Specification](https://scrapfly.io/docs/mcp/tools)
+
+### Proxy pools
+
+`web_scrape` and `web_get_page` take a `proxy_pool`, which sets both the proxies and the Unblocker
+(anti-bot bypass):
+
+| `proxy_pool` | What it runs |
+|---|---|
+| `basic` | datacenter proxies, Unblocker off |
+| `unblocker` | residential proxies, Unblocker on |
+| `unblocker_ultra` | residential proxies, Unblocker on, the only pool accepted by targets and anti-bot protections that have a price of their own |
+| `auto` | the API picks the pool before the request, from the target's profile: the Unblocker on datacenter proxies, or the pool the target needs; priced as the pool it runs on |
+
+Pick the pool a site needs: `basic` where datacenter proxies get through, `unblocker` or
+`unblocker_ultra` where it needs residential proxies and the Unblocker, `auto` to let the API pick.
+A target or an anti-bot protection with a price of its own refuses `basic` and `unblocker` with
+`ERR::PROXY::UNBLOCKER_ULTRA_REQUIRED` (HTTP 422, not billed): resend with
+`proxy_pool=unblocker_ultra`, or with `proxy_pool=auto`, which is accepted on every target, the ones
+that require `unblocker_ultra` included, where their price is added. `public_tor_pool` runs on the
+Tor network (.onion).
+
+#### Deprecated: `unblocker` and `asp`
+
+The `unblocker` input of `web_scrape` and its former name `asp` are deprecated: use `proxy_pool`
+(`unblocker_ultra` for the Unblocker). The
+[migration guide](https://scrapfly.io/new-pricing#legacy-spellings) covers requests written before
+the proxy pools, the pool names `public_datacenter_pool` and `public_residential_pool` included.
+Without a `proxy_pool`, the server sends the API no pool and, by default, `asp=true`, a request the
+guide covers as well.
 
 ### Example: Scrape a Page
 

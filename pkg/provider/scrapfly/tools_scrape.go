@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/scrapfly/scrapfly-mcp/internal/sanitizer"
+	"github.com/scrapfly/scrapfly-mcp/pkg/provider/scrapfly/schemas"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	scrapfly "github.com/scrapfly/go-scrapfly"
@@ -17,7 +18,7 @@ type GetPageToolInput struct {
 	Country         string                    `json:"country,omitempty" jsonschema:"Optional: ISO code for proxy geolocation."`
 	Format          scrapfly.Format           `json:"format,omitempty" jsonschema:"For Scraped Content (not data extraction).Format to return the SCRAPED CONTENT in . Example: clean_html,markdown,text,raw"`
 	FormatOptions   []scrapfly.FormatOption   `json:"format_options,omitempty" jsonschema:"if format is either markdown or text, additional options to apply to the format (zero to all of 'no_links','no_images','only_content')"`
-	ProxyPool       scrapfly.ProxyPool        `json:"proxy_pool,omitempty" jsonschema:"Proxy pool to use (e.g., 'public_residential_pool', default: 'public_datacenter_pool')."`
+	ProxyPool       scrapfly.ProxyPool        `json:"proxy_pool,omitempty" jsonschema:"Proxy pool: basic, unblocker, unblocker_ultra or auto."`
 	RenderingWait   int                       `json:"rendering_wait,omitempty" jsonschema:"Wait for this number of milliseconds before returning the response."`
 	CapturePage     bool                      `json:"capture_page,omitempty" jsonschema:"If true, capture the page as a screenshot"`
 	CaptureFlags    []scrapfly.ScreenshotFlag `json:"capture_flags,omitempty" jsonschema:"Capture flags to use for the capture."`
@@ -68,11 +69,11 @@ type ScrapeToolInput struct {
 	Body             string                    `json:"body,omitempty" jsonschema:"Request body for POST/PUT/PATCH requests."`
 	Headers          map[string]string         `json:"headers,omitempty" jsonschema:"HTTP headers to send."`
 	Country          string                    `json:"country,omitempty" jsonschema:"ISO 3166-1 alpha-2 country code for proxy geolocation."`
-	ProxyPool        scrapfly.ProxyPool        `json:"proxy_pool,omitempty" jsonschema:"Proxy pool to use (e.g., 'public_residential_pool', default: 'public_datacenter_pool')."`
+	ProxyPool        scrapfly.ProxyPool        `json:"proxy_pool,omitempty" jsonschema:"Proxy pool: basic, unblocker, unblocker_ultra or auto."`
 	RenderJS         bool                      `json:"render_js,omitempty" jsonschema:"Enable JavaScript rendering with a headless browser."`
 	RenderingWait    int                       `json:"rendering_wait,omitempty" jsonschema:"Wait for this number of milliseconds before returning the response."`
-	Unblocker        *bool                     `json:"unblocker,omitempty" jsonschema:"(prefer true)Enable the Unblocker anti-bot bypass. Enabled when omitted."`
-	ASP              *bool                     `json:"asp,omitempty" jsonschema:"Deprecated alias of unblocker. Declared so callers written against an earlier version are not rejected by the closed schema."`
+	Unblocker        *bool                     `json:"unblocker,omitempty" jsonschema:"Deprecated: use proxy_pool (unblocker_ultra for the Unblocker)."`
+	ASP              *bool                     `json:"asp,omitempty" jsonschema:"Deprecated: use proxy_pool (unblocker_ultra for the Unblocker)."`
 	Cache            bool                      `json:"cache,omitempty" jsonschema:"Enable caching of the response."`
 	CacheTTL         int                       `json:"cache_ttl,omitempty" jsonschema:"Cache TTL in seconds when cache is true."`
 	CacheClear       bool                      `json:"cache_clear,omitempty" jsonschema:"If true, bypass & clear cache for this URL."`
@@ -104,9 +105,9 @@ type LightScrapeResultData struct {
 	CostDetails      []scrapfly.CostDetail          `json:"cost_details,omitempty" jsonschema:"Per-item breakdown of api_cost"`
 }
 
-// ResolveUnblocker settles the two names for the anti-bot bypass. `unblocker`
-// is the only name presented to callers; `asp` is the retired spelling that
-// must keep working forever.
+// ResolveUnblocker settles the two names of the deprecated anti-bot toggle,
+// `unblocker` and its former name `asp`. Both stay declared: the schemas are
+// closed, so dropping either rejects every pinned client still sending it.
 //
 // Precedence is presence-based and never an OR: an explicitly supplied `asp`
 // wins, `unblocker` answers only when `asp` was absent, and an explicit false
@@ -116,7 +117,8 @@ type LightScrapeResultData struct {
 // The default lives here, not in the schemas: the go-sdk applies schema
 // defaults before unmarshal, so a Default on either property would make both
 // pointers permanently non-nil. `true` reproduces the effective behaviour of
-// the previous `Default: true` on `asp`.
+// the previous `Default: true` on `asp`. ResolveProxyPool does not consult it
+// beside a new pool.
 func ResolveUnblocker(asp, unblocker *bool) bool {
 	if asp != nil {
 		return *asp
@@ -125,6 +127,34 @@ func ResolveUnblocker(asp, unblocker *bool) bool {
 		return *unblocker
 	}
 	return true
+}
+
+// ResolveProxyPool settles proxy_pool against the deprecated toggle and
+// returns the pool and the asp value to send.
+//
+// A new pool (basic, unblocker, unblocker_ultra, auto) sets the Unblocker
+// itself, so it goes out alone, without asp. Any other call, a legacy pool
+// name or none, carries the resolved toggle: asp=true unless `unblocker` or
+// `asp` is sent as false.
+func ResolveProxyPool(pool scrapfly.ProxyPool, asp, unblocker *bool) (scrapfly.ProxyPool, bool) {
+	if schemas.IsNewProxyPool(string(pool)) {
+		return pool, false
+	}
+	return pool, ResolveUnblocker(asp, unblocker)
+}
+
+// bypassRequested reports whether the request asks for the Unblocker:
+// unblocker, unblocker_ultra and auto run it, basic does not, and any other
+// call follows asp. The API sizes the timeout of such a request itself, so the
+// retry/timeout rule keys on it.
+func bypassRequested(config *scrapfly.ScrapeConfig) bool {
+	switch config.ProxyPool {
+	case schemas.ProxyPoolUnblocker, schemas.ProxyPoolUnblockerUltra, schemas.ProxyPoolAuto:
+		return true
+	case schemas.ProxyPoolBasic:
+		return false
+	}
+	return config.ASP
 }
 
 func ScrapingInputElement[In ScrapingInput, Out any](element string, input In) (Out, bool) {
@@ -139,16 +169,17 @@ type ScrapingInput interface {
 }
 
 func (input ScrapeToolInput) AsMap() map[string]any {
+	pool, asp := ResolveProxyPool(input.ProxyPool, input.ASP, input.Unblocker)
 	return map[string]any{
 		"url":            input.URL,
 		"format":         input.Format,
 		"format_options": input.FormatOptions,
-		"proxy_pool":     input.ProxyPool,
+		"proxy_pool":     pool,
 		"render_js":      input.RenderJS,
 		"rendering_wait": input.RenderingWait,
 		// Keyed "asp" to match the Scrapfly API's wire spelling, which the
 		// rename does not touch; the value is the resolved one.
-		"asp":               ResolveUnblocker(input.ASP, input.Unblocker),
+		"asp":               asp,
 		"cache":             input.Cache,
 		"cache_ttl":         input.CacheTTL,
 		"cache_clear":       input.CacheClear,
@@ -171,11 +202,12 @@ func (input ScrapeToolInput) AsMap() map[string]any {
 }
 
 func (input GetPageToolInput) AsMap() map[string]any {
+	pool, _ := resolveGetPageProxyPool(input.ProxyPool)
 	return map[string]any{
 		"url":              input.URL,
 		"format":           input.Format,
 		"format_options":   input.FormatOptions,
-		"proxy_pool":       input.ProxyPool,
+		"proxy_pool":       pool,
 		"rendering_wait":   input.RenderingWait,
 		"country":          input.Country,
 		"capture_page":     input.CapturePage,
@@ -209,18 +241,19 @@ func ScrapeConfigFromScrapeToolInput(input ScrapeToolInput) (*scrapfly.ScrapeCon
 	if err != nil {
 		return nil, err
 	}
+	pool, asp := ResolveProxyPool(input.ProxyPool, input.ASP, input.Unblocker)
 	config := &scrapfly.ScrapeConfig{
 		URL:           input.URL,
 		Method:        input.Method,
 		Body:          input.Body,
 		Headers:       input.Headers,
 		Country:       input.Country,
-		ProxyPool:     input.ProxyPool,
+		ProxyPool:     pool,
 		RenderJS:      input.RenderJS,
 		RenderingWait: input.RenderingWait,
 		// scrapfly.ScrapeConfig.ASP serialises to the `asp` query parameter;
 		// only the customer-facing name moved, not the wire key.
-		ASP:              ResolveUnblocker(input.ASP, input.Unblocker),
+		ASP:              asp,
 		Cache:            input.Cache,
 		CacheTTL:         input.CacheTTL,
 		CacheClear:       input.CacheClear,
@@ -238,7 +271,11 @@ func ScrapeConfigFromScrapeToolInput(input ScrapeToolInput) (*scrapfly.ScrapeCon
 	}
 
 	if input.ExtractionPrompt != "" || input.ExtractionModel != "" {
-		config.ASP = true
+		// A new pool decides the Unblocker alone; forcing asp only means
+		// something beside a legacy pool name or none.
+		if !schemas.IsNewProxyPool(string(config.ProxyPool)) {
+			config.ASP = true
+		}
 		config.Timeout = config.Timeout + 15000
 		if config.Timeout < 45000 {
 			config.Timeout = 45000
@@ -249,7 +286,7 @@ func ScrapeConfigFromScrapeToolInput(input ScrapeToolInput) (*scrapfly.ScrapeCon
 		config.Timeout = config.Timeout + input.RenderingWait
 	}
 
-	if config.ASP {
+	if bypassRequested(config) {
 		config.Retry = true
 	}
 	if config.Retry {
@@ -258,6 +295,17 @@ func ScrapeConfigFromScrapeToolInput(input ScrapeToolInput) (*scrapfly.ScrapeCon
 
 	return config, nil
 }
+
+// resolveGetPageProxyPool returns the pool and the asp value web_get_page
+// sends: a new pool decides the Unblocker alone, and without one the call
+// carries asp=true, which web_get_page has always forced.
+func resolveGetPageProxyPool(pool scrapfly.ProxyPool) (scrapfly.ProxyPool, bool) {
+	if schemas.IsNewProxyPool(string(pool)) {
+		return pool, false
+	}
+	return pool, true
+}
+
 func ScrapeConfigFromGetPageToolInput(input GetPageToolInput) (*scrapfly.ScrapeConfig, error) {
 	config := &scrapfly.ScrapeConfig{
 		URL: input.URL,
@@ -267,18 +315,18 @@ func ScrapeConfigFromGetPageToolInput(input GetPageToolInput) (*scrapfly.ScrapeC
 			"capture": "fullpage",
 		}
 	}
+	pool, asp := resolveGetPageProxyPool(input.ProxyPool)
 	if input.ExtractionModel != "" {
-		config.ASP = true
 		config.Timeout = config.Timeout + 15000
 		if config.Timeout < 45000 {
 			config.Timeout = 45000
 		}
 	}
 	config.RenderJS = true
-	config.ASP = true
+	config.ASP = asp
 	config.Country = input.Country
 	config.Format = scrapfly.FormatMarkdown
-	config.ProxyPool = input.ProxyPool
+	config.ProxyPool = pool
 	config.RenderingWait = input.RenderingWait
 	config.ScreenshotFlags = input.CaptureFlags
 	config.ExtractionModel = input.ExtractionModel

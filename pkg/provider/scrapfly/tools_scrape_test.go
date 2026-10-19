@@ -39,8 +39,8 @@ func scrapingToolSchemas() map[string]*jsonschema.Schema {
 	}
 }
 
-// Only ScrapeToolInput exposes the anti-bot toggle; web_get_page forces it on
-// and declares neither name.
+// Only ScrapeToolInput exposes the legacy toggle; web_get_page keeps the
+// Unblocker on without a new pool and declares neither name.
 func unblockerToolSchemas() map[string]*jsonschema.Schema {
 	return map[string]*jsonschema.Schema{
 		"web_scrape": schemas.MustRefineScrapingToolInputSchema[ScrapeToolInput](),
@@ -176,29 +176,43 @@ func TestResolveUnblockerPrecedence(t *testing.T) {
 }
 
 // The resolved value must reach scrapfly.ScrapeConfig.ASP, which serialises to
-// the `asp` query parameter. The rename moved the caller-facing name only.
+// the `asp` query parameter, next to the resolved pool. A new pool goes out
+// alone; any other call, a legacy pool name or none, carries the toggle.
 func TestScrapeConfigCarriesResolvedUnblocker(t *testing.T) {
 	yes, no := true, false
 	for _, tc := range []struct {
-		name  string
-		input ScrapeToolInput
-		want  bool
+		name     string
+		input    ScrapeToolInput
+		wantASP  bool
+		wantPool scrapfly.ProxyPool
 	}{
-		{"omitted", ScrapeToolInput{URL: "https://example.com"}, true},
-		{"unblocker false", ScrapeToolInput{URL: "https://example.com", Unblocker: &no}, false},
-		{"asp false beats unblocker true", ScrapeToolInput{URL: "https://example.com", ASP: &no, Unblocker: &yes}, false},
-		{"asp true beats unblocker false", ScrapeToolInput{URL: "https://example.com", ASP: &yes, Unblocker: &no}, true},
+		{"omitted keeps the Unblocker on", ScrapeToolInput{URL: "https://example.com"}, true, ""},
+		{"unblocker false", ScrapeToolInput{URL: "https://example.com", Unblocker: &no}, false, ""},
+		{"unblocker true alone stays legacy", ScrapeToolInput{URL: "https://example.com", Unblocker: &yes}, true, ""},
+		{"asp false beats unblocker true", ScrapeToolInput{URL: "https://example.com", ASP: &no, Unblocker: &yes}, false, ""},
+		{"asp true beats unblocker false", ScrapeToolInput{URL: "https://example.com", ASP: &yes, Unblocker: &no}, true, ""},
+		{"legacy pool alone keeps the toggle on", ScrapeToolInput{URL: "https://example.com", ProxyPool: "public_residential_pool"}, true, "public_residential_pool"},
+		{"new pool wins over unblocker false", ScrapeToolInput{URL: "https://example.com", ProxyPool: "unblocker", Unblocker: &no}, false, "unblocker"},
+		{"new pool wins over asp true", ScrapeToolInput{URL: "https://example.com", ProxyPool: "basic", ASP: &yes}, false, "basic"},
+		{"unblocker_ultra", ScrapeToolInput{URL: "https://example.com", ProxyPool: "unblocker_ultra"}, false, "unblocker_ultra"},
+		{"auto wins over unblocker true", ScrapeToolInput{URL: "https://example.com", ProxyPool: "auto", Unblocker: &yes}, false, "auto"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config, err := ScrapeConfigFromScrapeToolInput(tc.input)
 			if err != nil {
 				t.Fatalf("ScrapeConfigFromScrapeToolInput: %v", err)
 			}
-			if config.ASP != tc.want {
-				t.Errorf("config.ASP = %v, want %v", config.ASP, tc.want)
+			if config.ASP != tc.wantASP {
+				t.Errorf("config.ASP = %v, want %v", config.ASP, tc.wantASP)
 			}
-			if got, _ := tc.input.AsMap()["asp"].(bool); got != tc.want {
-				t.Errorf("AsMap()[\"asp\"] = %v, want %v", got, tc.want)
+			if config.ProxyPool != tc.wantPool {
+				t.Errorf("config.ProxyPool = %q, want %q", config.ProxyPool, tc.wantPool)
+			}
+			if got, _ := tc.input.AsMap()["asp"].(bool); got != tc.wantASP {
+				t.Errorf("AsMap()[\"asp\"] = %v, want %v", got, tc.wantASP)
+			}
+			if got, _ := tc.input.AsMap()["proxy_pool"].(scrapfly.ProxyPool); got != tc.wantPool {
+				t.Errorf("AsMap()[\"proxy_pool\"] = %q, want %q", got, tc.wantPool)
 			}
 		})
 	}
@@ -219,7 +233,9 @@ func TestSchemaDefaultsDoNotForgeUnblockerPresence(t *testing.T) {
 		args string
 		want bool
 	}{
-		{"neither name sent", `{"url":"https://example.com"}`, true},
+		{"neither name sent keeps the Unblocker on", `{"url":"https://example.com"}`, true},
+		// A proxy_pool schema default would let that pool decide and drop this toggle.
+		{"unblocker true", `{"url":"https://example.com","unblocker":true}`, true},
 		{"unblocker false", `{"url":"https://example.com","unblocker":false}`, false},
 		{"asp false", `{"url":"https://example.com","asp":false}`, false},
 		{"asp true beats unblocker false", `{"url":"https://example.com","asp":true,"unblocker":false}`, true},
