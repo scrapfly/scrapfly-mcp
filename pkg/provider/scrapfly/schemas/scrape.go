@@ -252,15 +252,19 @@ const (
 	ProxyPoolUnblocker      = "unblocker"
 	ProxyPoolUnblockerUltra = "unblocker_ultra"
 	ProxyPoolAuto           = "auto"
+	// ProxyPoolTor is the Tor network pool. A current pool that keeps its
+	// name, not one of the names written before the proxy pools.
+	ProxyPoolTor = "public_tor_pool"
 )
 
-// legacyProxyPools is the list this schema accepted before the new pools.
-// Spelled out rather than read from go-scrapfly, whose enum gains the new
-// pools: the Cloud Browser schema must not offer them.
-var legacyProxyPools = []any{"public_datacenter_pool", "public_residential_pool", "public_tor_pool"}
+// legacyProxyPools are the pool names written before the proxy pools, still
+// accepted. Spelled out rather than read from go-scrapfly, whose enum gains
+// the new pools: the Cloud Browser schema must not offer them.
+var legacyProxyPools = []any{"public_datacenter_pool", "public_residential_pool"}
 
 // IsNewProxyPool reports whether pool is one of the four pools that set the
-// Unblocker themselves rather than a legacy pool name.
+// Unblocker themselves, rather than the Tor pool or a name written before the
+// proxy pools, which take it from asp.
 func IsNewProxyPool(pool string) bool {
 	switch pool {
 	case ProxyPoolBasic, ProxyPoolUnblocker, ProxyPoolUnblockerUltra, ProxyPoolAuto:
@@ -269,8 +273,9 @@ func IsNewProxyPool(pool string) bool {
 	return false
 }
 
-// MakeProxyPoolSchema is the scraping tools' proxy_pool: the new pools first,
-// then the legacy names pinned clients may still send.
+// MakeProxyPoolSchema is the scraping tools' proxy_pool: the four pools, the
+// Tor pool, then the names written before the pools that pinned clients may
+// still send.
 //
 // No `Default:` here: ApplyDefaults would bake the literal into every call
 // where the field was omitted, and since a new pool decides alone, a legacy
@@ -279,7 +284,7 @@ func IsNewProxyPool(pool string) bool {
 func MakeProxyPoolSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Type: "string",
-		Enum: append([]any{ProxyPoolBasic, ProxyPoolUnblocker, ProxyPoolUnblockerUltra, ProxyPoolAuto}, legacyProxyPools...),
+		Enum: append([]any{ProxyPoolBasic, ProxyPoolUnblocker, ProxyPoolUnblockerUltra, ProxyPoolAuto, ProxyPoolTor}, legacyProxyPools...),
 		Description: "Proxy pool. `basic`: datacenter proxies, Unblocker off. " +
 			"`unblocker`: residential proxies and the Unblocker, the anti-bot bypass. " +
 			"`unblocker_ultra`: residential proxies and the Unblocker, the only pool accepted by a target or an anti-bot protection with a price of its own (e.g. Cloudflare, Kasada): those refuse basic and unblocker with ERR::PROXY::UNBLOCKER_ULTRA_REQUIRED (422, not billed). " +
@@ -292,9 +297,10 @@ func MakeProxyPoolSchema() *jsonschema.Schema {
 	}
 }
 
-// cloudBrowserProxyPools are the short names the Cloud Browser documents,
-// then the legacy names it still accepts and pinned clients may still send.
-var cloudBrowserProxyPools = append([]any{"datacenter", "residential"}, legacyProxyPools...)
+// cloudBrowserProxyPools are the short names the Cloud Browser documents, the
+// Tor pool, then the names written before the pools it still accepts and
+// pinned clients may still send.
+var cloudBrowserProxyPools = append([]any{"datacenter", "residential", ProxyPoolTor}, legacyProxyPools...)
 
 // MakeCloudBrowserProxyPoolSchema keeps cloud_browser_open on the Cloud
 // Browser's own pool names: basic, unblocker, unblocker_ultra and auto are Web

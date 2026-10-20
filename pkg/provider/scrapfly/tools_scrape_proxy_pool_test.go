@@ -20,8 +20,10 @@ import (
 )
 
 var (
-	newProxyPools   = []string{"basic", "unblocker", "unblocker_ultra", "auto"}
-	legacyPoolNames = []string{"public_datacenter_pool", "public_residential_pool", "public_tor_pool"}
+	newProxyPools = []string{"basic", "unblocker", "unblocker_ultra", "auto"}
+	// The Tor pool is a current pool, accepted everywhere the legacy names are.
+	torPool         = "public_tor_pool"
+	legacyPoolNames = []string{"public_datacenter_pool", "public_residential_pool"}
 )
 
 func TestScrapingSchemasAcceptNewAndLegacyPools(t *testing.T) {
@@ -39,7 +41,7 @@ func TestScrapingSchemasAcceptNewAndLegacyPools(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolve %s: %v", tool, err)
 		}
-		for _, value := range append(slices.Clone(newProxyPools), legacyPoolNames...) {
+		for _, value := range append(append(slices.Clone(newProxyPools), torPool), legacyPoolNames...) {
 			if err := resolved.Validate(map[string]any{"url": "https://example.com", "proxy_pool": value}); err != nil {
 				t.Errorf("%s rejects proxy_pool=%q: %v", tool, value, err)
 			}
@@ -64,7 +66,7 @@ func TestCloudBrowserOpenKeepsItsPoolNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range append([]string{"datacenter", "residential"}, legacyPoolNames...) {
+	for _, value := range append([]string{"datacenter", "residential", torPool}, legacyPoolNames...) {
 		if err := resolved.Validate(map[string]any{"url": "https://example.com", "proxy_pool": value}); err != nil {
 			t.Errorf("cloud_browser_open rejects proxy_pool=%q: %v", value, err)
 		}
