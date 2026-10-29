@@ -755,7 +755,7 @@
                         },
                         {
                             "name": "method",
-                            "description": "How the browser solved (or attempted to solve) this captcha \u2014\none of: \"slider\" | \"checkbox\" | \"managed\" | \"hold\" | \"token\" |\n\"coords\" | \"rotate\" | \"invisible\". Empty string while pending.",
+                            "description": "How the browser solved (or attempted to solve) this captcha \u2014\none of: \"slider\" | \"checkbox\" | \"managed\" | \"hold\" | \"token\" |\n\"coords\" | \"rotate\" | \"invisible\" | \"cleared\". Empty string while\npending.",
                             "optional": true,
                             "type": "string"
                         },
@@ -1755,14 +1755,14 @@
                         },
                         {
                             "name": "method",
-                            "description": "How the browser will solve: \"slider\" | \"checkbox\" | \"managed\" |\n\"hold\" | \"token\" | \"coords\" | \"rotate\" | \"invisible\".",
+                            "description": "How the browser will solve: \"slider\" | \"checkbox\" | \"managed\" |\n\"hold\" | \"token\" | \"coords\" | \"rotate\" | \"invisible\" | \"cleared\".",
                             "type": "string"
                         }
                     ]
                 },
                 {
                     "name": "captchaSolved",
-                    "description": "Emitted when a captcha is solved. For interaction-based solves\n(slider, checkbox, managed, hold, coords) the token field is empty; for\ntoken solves delegated to a remote solver it contains the response token.\n\"invisible\" means the vendor passed the browser without showing a\nchallenge (Arkose suppression); the token is then the vendor's session\ntoken.",
+                    "description": "Emitted when a captcha is solved. For interaction-based solves\n(slider, checkbox, managed, hold, coords) the token field is empty; for\ntoken solves delegated to a remote solver it contains the response token.\n\"invisible\" means the vendor passed the browser without showing a\nchallenge (Arkose suppression); the token is then the vendor's session\ntoken. \"cleared\" means the challenge left with its page before the\nbrowser answered it: the client navigated away, or the vendor let the\nbrowser through on its own. The page that replaced it showed no\nchallenge, so nothing was solved; captchaSolvingStarted went out just\nbefore, with the same method unless the solve had already begun.",
                     "parameters": [
                         {
                             "name": "detectionId",
@@ -1774,7 +1774,7 @@
                         },
                         {
                             "name": "method",
-                            "description": "How the captcha was solved: \"slider\" | \"checkbox\" | \"managed\" |\n\"hold\" | \"token\" | \"coords\" | \"rotate\" | \"invisible\".",
+                            "description": "How the captcha was solved: \"slider\" | \"checkbox\" | \"managed\" |\n\"hold\" | \"token\" | \"coords\" | \"rotate\" | \"invisible\" | \"cleared\".",
                             "type": "string"
                         },
                         {
@@ -5191,6 +5191,24 @@
                             "name": "session",
                             "description": "base64 SSL_SESSION_to_bytes output.",
                             "type": "string"
+                        },
+                        {
+                            "name": "transport",
+                            "description": "The cache the session lives in: \"tcp\" (the default, TLS over TCP) or\n\"quic\", the one importTlsSessions files the row in. Omitted on export\nwhen it is \"tcp\".",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "quicTransportParameters",
+                            "description": "QUIC only, required to import one: base64 of the server's transport\nparameters (RFC 9000 section 18), which a resumed connection starts from.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "quicApplicationState",
+                            "description": "QUIC only: base64 of the server's HTTP/3 SETTINGS, which 0-RTT resumes\nagainst. Without them the session resumes without early data.",
+                            "optional": true,
+                            "type": "string"
                         }
                     ]
                 }
@@ -5713,6 +5731,12 @@
                             "description": "BrowserContext to export from. When omitted, the default one is used.",
                             "optional": true,
                             "$ref": "BrowserContextID"
+                        },
+                        {
+                            "name": "includeQuic",
+                            "description": "Also export the QUIC session cache's rows (transport \"quic\"): a caller\nthat does not know them would keep them as TCP rows.",
+                            "optional": true,
+                            "type": "boolean"
                         }
                     ],
                     "returns": [
@@ -5722,6 +5746,12 @@
                             "items": {
                                 "$ref": "TlsSession"
                             }
+                        },
+                        {
+                            "name": "includesQuic",
+                            "description": "True when the QUIC rows were asked for and exported. A browser that\npredates them leaves it out: its caller keeps its own QUIC rows.",
+                            "optional": true,
+                            "type": "boolean"
                         }
                     ]
                 }
