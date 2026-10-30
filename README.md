@@ -19,6 +19,30 @@
 
 ---
 
+## At a glance
+
+| | |
+|---|---|
+| **Remote server** | `https://mcp.scrapfly.io/mcp` (streamable HTTP, nothing to install) |
+| **Self-hosted** | Go binary (stdio or `-http`) or the Docker image of this repo, see Self-Hosted below |
+| **stdio-only clients** | `npx mcp-remote https://mcp.scrapfly.io/mcp` |
+| **Authentication** | OAuth2 sign-in on the remote server, or a Scrapfly API key (`SCRAPFLY_API_KEY`, `Authorization: Bearer <key>`) |
+| **Tools** | **62**: web scraping (5), account (2), Cloud Browser sessions (9), page interaction (17), WebMCP (2), credential vaults (15), alerts (12). Full list under Available Tools below. |
+
+Add it to any MCP client:
+
+```json
+{
+  "mcpServers": {
+    "scrapfly": { "type": "http", "url": "https://mcp.scrapfly.io/mcp" }
+  }
+}
+```
+
+Tools that fetch pages need no setup beyond the key: `web_get_page` (quick fetch), `web_scrape` (full control: JS rendering, proxy pool, country, extraction) and `screenshot`.
+
+---
+
 ## What is Scrapfly MCP?
 
 The **Scrapfly MCP Server** connects your AI assistants to live web data through the [Model Context Protocol](https://modelcontextprotocol.io). Transform your AI from being limited by training data to having real-time access to **any website**.
@@ -291,15 +315,66 @@ Add to `~/.config/opencode/opencode.json`:
 
 ## 🛠️ Available Tools
 
-The Scrapfly MCP Server provides **5 powerful tools** covering 99% of web scraping use cases:
+The Scrapfly MCP Server exposes **62 tools** in seven groups. Most tasks need only the first group.
+
+### Web scraping (5)
+
+Stateless, one call per page.
 
 | Tool | Description | Use Case |
 |------|-------------|----------|
-| `scraping_instruction_enhanced` | Cheat-sheet of the scraping options | Optional — when the right options are unclear |
+| `scraping_instruction_enhanced` | Cheat-sheet of the scraping options | Optional, when the right options are unclear |
 | `web_get_page` | Quick page fetch with smart defaults | Simple scraping tasks |
-| `web_scrape` | Full control with browser automation | Complex scraping, login flows |
-| `screenshot` | Capture page screenshots | Visual analysis, monitoring |
-| `info_account` | Check usage & quota | Account management |
+| `web_scrape` | Full control: headers, JS rendering, country, proxy pool, extraction | Complex scraping, login flows |
+| `screenshot` | One-shot PNG of a URL | Visual analysis, monitoring |
+| `check_if_blocked` | Decide whether a scrape result is a block page | Retry or escalate the proxy pool |
+
+### Account (2)
+
+| Tool | Description |
+|------|-------------|
+| `info_account` | Subscription plan, API credit usage, concurrency |
+| `info_api_key` | The API key this server is authenticated with |
+
+### Cloud Browser sessions (9)
+
+A stateful real browser, kept between calls.
+
+| Tool | Description |
+|------|-------------|
+| `cloud_browser_open` | Start a session at a URL |
+| `browser_unblock` | Same, through the anti-bot bypass first |
+| `cloud_browser_navigate` | Load a new URL in the open session |
+| `cloud_browser_sessions` | List active sessions |
+| `cloud_browser_close` | Close the session |
+| `cloud_browser_screenshot` | PNG of the session, optionally of a CSS selector |
+| `cloud_browser_eval` | Run JavaScript and return its value |
+| `cloud_browser_downloads` | Files downloaded during the session |
+| `cloud_browser_performance` | PageSpeed-style lab run with mobile throttling |
+
+### Page interaction (17)
+
+Act on the open Cloud Browser session. Elements are addressed by the `uid` that `take_snapshot` returns.
+
+`take_snapshot`, `take_screenshot`, `find_elements`, `get_page_url`, `evaluate_script`, `click`, `hover`, `drag`, `fill`, `type_text`, `press_key`, `select_option`, `dropdown_options`, `scroll`, `scroll_to_text`, `go_back`, `wait`
+
+### WebMCP (2)
+
+For pages that register their own tools with `navigator.modelContext`.
+
+`list_webmcp_tools`, `call_webmcp_tool`
+
+### Credential vaults (15)
+
+Store logins for Cloud Browser sessions, optionally mirrored from 1Password.
+
+`cloud_browser_vault_create`, `cloud_browser_vault_list`, `cloud_browser_vault_get`, `cloud_browser_vault_update`, `cloud_browser_vault_delete`, `cloud_browser_vault_rotate`, `cloud_browser_vault_item_create`, `cloud_browser_vault_item_list`, `cloud_browser_vault_item_update`, `cloud_browser_vault_item_delete`, `cloud_browser_vault_service_link`, `cloud_browser_vault_service_update`, `cloud_browser_vault_service_sync`, `cloud_browser_vault_service_test`, `cloud_browser_vault_service_unlink`
+
+### Alerts (12)
+
+Create, test and snooze alert rules on your account metrics. Writes take a confirm step.
+
+`alert_metric_families`, `alert_preview`, `alert_create`, `alert_update`, `alert_delete`, `alert_get`, `alert_list`, `alert_count_active`, `alert_series`, `alert_test`, `alert_snooze`, `alert_unsnooze`
 
 > 📖 **Full reference**: [Tools & API Specification](https://scrapfly.io/docs/mcp/tools)
 
