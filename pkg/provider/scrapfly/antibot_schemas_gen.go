@@ -149,7 +149,7 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 		},
 	},
 	"showCursor": {
-		description: "Injects a debug cursor overlay (red dot + trail) for visual testing. Persists across navigations — re-injected automatically on page load.",
+		description: "Injects a debug cursor overlay (red dot + trail) for visual testing. Persists across navigations — re-injected automatically on page load.  The dot is the pointer, so a scroll leaves it under the p...",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

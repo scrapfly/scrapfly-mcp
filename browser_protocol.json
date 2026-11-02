@@ -1213,7 +1213,7 @@
                 },
                 {
                     "name": "showCursor",
-                    "description": "Injects a debug cursor overlay (red dot + trail) for visual testing.\nPersists across navigations \u2014 re-injected automatically on page load.",
+                    "description": "Injects a debug cursor overlay (red dot + trail) for visual testing.\nPersists across navigations \u2014 re-injected automatically on page load.\n\nThe dot is the pointer, so a scroll leaves it under the pointer. The trail,\nthe click marks, the path preview and the target brackets are places on the\npage, so they scroll with it: a path drawn before a scroll moves up with the\ncontent, and the movement after it is drawn where the pointer now is, not\nover the old path. A scroll under a still pointer extends the trail, because\nthe pointer has travelled over the page. This follows the page's own scroll,\nnot the scroll of an element inside it.",
                     "parameters": [
                         {
                             "name": "keepHistory",
@@ -5752,6 +5752,42 @@
                             "description": "True when the QUIC rows were asked for and exported. A browser that\npredates them leaves it out: its caller keeps its own QUIC rows.",
                             "optional": true,
                             "type": "boolean"
+                        }
+                    ]
+                },
+                {
+                    "name": "preconnect",
+                    "description": "Opens connections to the origin of a URL without requesting anything, as\n<link rel=preconnect> does, so the first request that needs one finds it\nconnected. Chrome keeps the requests that send credentials and the anonymous\nones (crossorigin scripts and fonts, fetch with credentials omitted) on\nseparate connections: allowCredentials picks the one to warm. Resolves\nnothing about the page. Returns before anything has connected. A connection\nnobody asks for stays in the socket pool until the server closes it, or\nuntil the pool is next used after it has been idle for 60 seconds.\n[Scrapfly extension]",
+                    "experimental": true,
+                    "parameters": [
+                        {
+                            "name": "url",
+                            "description": "An https URL; its origin is what is connected.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "numStreams",
+                            "description": "How many connections, 1 to 6. Default 1.",
+                            "optional": true,
+                            "type": "integer"
+                        },
+                        {
+                            "name": "allowCredentials",
+                            "description": "Warm the connection of requests that send cookies. Default false: the\nanonymous one.",
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "topFrameSite",
+                            "description": "A URL whose site is the top frame the connection is for. A connection\nis only found by a request of the same top frame site: the socket pool\ngroup names it (pm/https://host <https://top-site same_site>). When\nomitted, the site of url itself, which a page of another site never matches.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "browserContextId",
+                            "description": "BrowserContext to connect in. Each context has its own socket pools, so a\ntab made with Target.createBrowserContext only finds a connection that\nnames its context. When omitted, the default one is used, which is where\na tab made by Target.createTarget without a context lives.",
+                            "optional": true,
+                            "$ref": "BrowserContextID"
                         }
                     ]
                 }
@@ -14744,6 +14780,13 @@
                         {
                             "name": "requestMode",
                             "description": "The request's fetch mode: \"cors\", \"no-cors\", \"same-origin\" or \"navigate\".\n\nWith requestInitiatorOrigin it tells whether the network stack will\nattach an Origin header, which requestPaused cannot show: a GET carries\none in cors mode to another origin, and none in no-cors mode, the mode a\nplain <script>, <link> or <img> is fetched in. A cache keying a\nVary: Origin response has to store that no-Origin answer as its own\nvariant, and cannot tell it apart from a cors fetch without this.",
+                            "experimental": true,
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "responseProtocol",
+                            "description": "The protocol of the response, named as Network.Response.protocol names it:\n\"h2\", \"h3\", \"http/1.1\". Only at the response stage.\n\nNetwork.responseReceived fires once the response is continued, and never\nfor a request with no networkId, so a client keeping a response it read\nhere cannot learn it anywhere else.",
                             "experimental": true,
                             "optional": true,
                             "type": "string"
@@ -25778,6 +25821,34 @@
                             "items": {
                                 "$ref": "FetchRedirectEntry"
                             }
+                        }
+                    ]
+                },
+                {
+                    "name": "capture",
+                    "description": "Captures the page as an MHTML archive and returns it as an IO stream. The archive comes\nfrom the engine behind chrome.pageCapture.saveAsMHTML and captureSnapshot, so it holds\nwhat they hold: the DOM as it is now, with its iframes, stylesheets and images; no\nscripts and no web fonts. The browser neither holds it in memory nor sends it as one\nprotocol message: read it with IO.read until eof, then release it with IO.close.\nDo not overlap captures of one page: the renderer serves one archive job per frame, so\na capture started while another runs fails the one that ran first (\"Failed to generate\nMHTML\"). A tab whose renderer is gone answers \"Frame is not live\".",
+                    "experimental": true,
+                    "parameters": [
+                        {
+                            "name": "format",
+                            "description": "Format (defaults to mhtml).",
+                            "optional": true,
+                            "type": "string",
+                            "enum": [
+                                "mhtml"
+                            ]
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "stream",
+                            "description": "A handle of the stream that holds the snapshot.",
+                            "$ref": "IO.StreamHandle"
+                        },
+                        {
+                            "name": "size",
+                            "description": "Size of the snapshot in bytes.",
+                            "type": "integer"
                         }
                     ]
                 },
