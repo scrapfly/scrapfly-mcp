@@ -58,7 +58,7 @@ type CloudBrowserOpenInput struct {
 	Cache             bool   `json:"cache,omitempty" jsonschema:"Cache static resources (CSS, JS, fonts, images)."`
 	OptimizeBandwidth bool   `json:"optimize_bandwidth,omitempty" jsonschema:"Enable all bandwidth optimizations (block images, styles, fonts, media, trackers + cache). Shortcut for setting all stub and cache options to true."`
 	Debug             bool   `json:"debug,omitempty" jsonschema:"Enable session recording for replay."`
-	Vault             string `json:"vault,omitempty" jsonschema:"Credential vault name. Items are decrypted server-side and filled into matching origins through Scrapium's password manager before the session yields. Requires vault_key."`
+	Vault             string `json:"vault,omitempty" jsonschema:"Credential vault name. Items are decrypted server-side and filled into matching origins by the browser's password manager before the session yields. Requires vault_key."`
 	VaultKey          string `json:"vault_key,omitempty" jsonschema:"Customer-held key for the named vault, emitted once at vault creation. Scrapfly stores no copy, so a lost key cannot be recovered and the session fails with ERR::BROWSER::VAULT_KEY_INVALID."`
 }
 

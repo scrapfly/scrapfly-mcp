@@ -740,7 +740,7 @@
                         },
                         {
                             "name": "frameUrl",
-                            "description": "URL of the frame the captcha was detected in. Challenges that render\ninline in the host document have no frame of their own, so they carry\na synthetic `<scheme>:<page-url>` value instead \u2014 one of\n`perimeterx-dom:`, `aws-waf:` or `cs-captcha:`. Clients that parse this\nas a URL must tolerate those.",
+                            "description": "URL of the frame the captcha was detected in. Challenges that render\ninline in the host document have no frame of their own, so they carry\na `<scheme>:<page-url>` value instead, with a scheme of its own per\nchallenge.\nClients that parse this as a URL must tolerate those.",
                             "type": "string"
                         },
                         {
@@ -767,7 +767,7 @@
                         },
                         {
                             "name": "errorMessage",
-                            "description": "Populated when status == \"failed\" \u2014 the same coarse, solver-agnostic\nreason the captchaError event carried.",
+                            "description": "Populated when status == \"failed\": the same reason the captchaError\nevent carried.",
                             "optional": true,
                             "type": "string"
                         }
@@ -834,7 +834,7 @@
                         },
                         {
                             "name": "frameUrl",
-                            "description": "Optional frame URL glob pattern to restrict search (e.g. \"*cloudflare.com*\").",
+                            "description": "Optional frame URL glob pattern to restrict search (e.g. \"*example.com*\").",
                             "optional": true,
                             "type": "string"
                         }
@@ -871,7 +871,7 @@
                 },
                 {
                     "name": "moveTo",
-                    "description": "Moves mouse to target with human-like Bezier curve trajectory.\nIncludes natural jitter and distortion to mimic hand tremor.\nFor non-steady moves greater than 50px, there is a 30% chance of\novershooting by 3-12px then correcting back.\nSupports all selector types except bottom.",
+                    "description": "Moves mouse to target along a human-like path. A longer move may\ngo slightly past the target, then come back to it.\nSupports all selector types except bottom.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -891,7 +891,7 @@
                         },
                         {
                             "name": "steady",
-                            "description": "If true, reduces curve deviation and distortion, and disables overshoot.\nUse for small or precise targets where accuracy matters. Default: false.",
+                            "description": "If true, moves along a straighter path and never goes past the target.\nUse for small or precise targets where accuracy matters. Default: false.",
                             "optional": true,
                             "type": "boolean"
                         }
@@ -954,7 +954,7 @@
                 },
                 {
                     "name": "dragAndDrop",
-                    "description": "Drag from source to destination with human-like Bezier movement.\nSupports all selector types except bottom.",
+                    "description": "Drag from source to destination with human-like movement.\nSupports all selector types except bottom.",
                     "parameters": [
                         {
                             "name": "from",
@@ -991,7 +991,7 @@
                 },
                 {
                     "name": "clickAndHold",
-                    "description": "Moves to target element, presses mouse down, holds for a minimum time,\nthen releases. Used for captcha puzzles requiring long-press interactions.\nSupports all selector types except bottom.",
+                    "description": "Moves to target element, presses mouse down, holds for a minimum time,\nthen releases. For controls that need a long press.\nSupports all selector types except bottom.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1016,7 +1016,7 @@
                         },
                         {
                             "name": "frameUrl",
-                            "description": "Frame URL glob pattern to restrict element search to matching frames.\nUses shell-style wildcards (e.g. \"*cloudflare.com*\", \"*recaptcha*\").",
+                            "description": "Frame URL glob pattern to restrict element search to matching frames.\nUses shell-style wildcards (e.g. \"*example.com*\", \"*/widget/*\").\nApplies to css, xpath, backendNodeId and pierce selectors: any other\ntype with frameUrl is refused as invalid params.",
                             "optional": true,
                             "type": "string"
                         }
@@ -1035,7 +1035,7 @@
                 },
                 {
                     "name": "clickAndSlide",
-                    "description": "Moves to target element, presses mouse down, slides the mouse\nto a target position, then releases.\nUsed for slider captcha puzzles.\nSupports all selector types except bottom.\n\nTwo modes:\n1. Fixed distance: provide \"distance\" in CSS pixels.\n2. Target selector: provide \"target\" selector \u2014 the command resolves\n   both source and target positions and computes the slide distance\n   automatically with slight human-like imprecision.\nAt least one of \"distance\" or \"target\" must be provided.",
+                    "description": "Moves to target element, presses mouse down, slides the mouse\nto a target position, then releases.\nFor slider controls.\nSupports all selector types except bottom.\n\nTwo modes:\n1. Fixed distance: provide \"distance\" in CSS pixels.\n2. Target selector: provide \"target\" selector. The command slides from\n   the source to the target, landing near it as a human hand would.\nAt least one of \"distance\" or \"target\" must be provided.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1054,7 +1054,7 @@
                         },
                         {
                             "name": "target",
-                            "description": "Target element selector \u2014 the command slides from \"selector\" to \"target\".\nDistance is computed automatically with human-like imprecision.",
+                            "description": "Target element selector: the command slides from \"selector\" to \"target\",\nlanding near it rather than exactly on it.",
                             "optional": true,
                             "$ref": "Selector"
                         },
@@ -1078,13 +1078,13 @@
                         },
                         {
                             "name": "frameUrl",
-                            "description": "Frame URL glob pattern to restrict element search to matching frames.\nUses shell-style wildcards (e.g. \"*captcha*\").",
+                            "description": "Frame URL glob pattern to restrict element search to matching frames.\nUses shell-style wildcards (e.g. \"*example.com*\").",
                             "optional": true,
                             "type": "string"
                         },
                         {
                             "name": "overshoot",
-                            "description": "If true, overshoot past the destination on the X axis by 5-15px then\ncorrect back. Simulates a human dragging past the slider endpoint\n(captcha sites typically clamp the slider position). Default: false.",
+                            "description": "If true, goes a few pixels past the destination on the X axis, then\ncomes back to it, as a hand dragging past a slider's end. Default: false.",
                             "optional": true,
                             "type": "boolean"
                         }
@@ -1103,7 +1103,7 @@
                 },
                 {
                     "name": "scroll",
-                    "description": "Human-like scroll. Three modes:\n\n1. Element into view: provide selector (css/xpath/axNodeId/coord/role).\n   Scrolls until element is within 20% of viewport center, using wheel\n   events in 3-8 steps. Skips if already visible near center.\n\n2. Scroll to bottom: provide selector {type:\"bottom\", query:\"\"}.\n   Scrolls 0.5-0.9x viewport height per step, 3-8 wheel events with\n   50-150ms delays. If mouse is near origin, first moves it to a random\n   position with a Bezier curve. Returns atBottom=true when scrollY is\n   within 5px of the maximum scroll offset.\n\n3. Manual delta: provide delta (no selector). Scrolls by the given pixel\n   offset using 3-8 wheel steps.\n\nSupports all selector types including bottom.",
+                    "description": "Human-like scroll. Three modes:\n\n1. Element into view: provide selector (css/xpath/axNodeId/coord/role).\n   Scrolls with mouse wheel steps until the element is near the viewport\n   center. Does nothing if it is already visible near the center.\n\n2. Scroll to bottom: provide selector {type:\"bottom\", query:\"\"}.\n   Scrolls down by part of a viewport height per call: call again until\n   atBottom. Moves the mouse into the viewport first when it is outside.\n   Returns atBottom=true when scrollY is within 5px of the maximum scroll\n   offset.\n\n3. Manual delta: provide delta (no selector). Scrolls by the given pixel\n   offset in several mouse wheel steps.\n\nSupports all selector types including bottom.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1113,7 +1113,7 @@
                         },
                         {
                             "name": "delta",
-                            "description": "Manual scroll delta in CSS viewport pixels. Follows the DOM\nwindow.scrollBy(x, y) convention: positive y = scroll DOWN\n(toward the bottom of the page), positive x = scroll RIGHT.\nBlink's wheel events carry the opposite sign, so the handler\nnegates internally, for EVERY persona \u2014 the conversion is a\nBlink convention, not a platform one, and a synthesised wheel\nnever passes through the OS step where macOS natural-scroll\nwould be applied. The external contract is therefore the same\non every spoofed OS.",
+                            "description": "Manual scroll delta in CSS viewport pixels. Follows the DOM\nwindow.scrollBy(x, y) convention: positive y = scroll DOWN\n(toward the bottom of the page), positive x = scroll RIGHT.\nThe same on every platform.",
                             "optional": true,
                             "$ref": "Coordinate"
                         }
@@ -1138,7 +1138,7 @@
                 },
                 {
                     "name": "typeText",
-                    "description": "Types text character by character with human WPM timing model.\nUses profile-aware keyboard mapping for correct key codes.\nTiming: base_delay = 60 / (wpm * 5) seconds per keystroke, with\nper-character random variation, common bigram speedup, space pauses,\nand shift penalty for uppercase characters.",
+                    "description": "Types text character by character with human-like typing speed,\nset in words per minute. Each character is sent with the key codes\nof the browser's keyboard layout.",
                     "parameters": [
                         {
                             "name": "text",
@@ -1146,7 +1146,7 @@
                         },
                         {
                             "name": "wpm",
-                            "description": "Words per minute. Default: 60. Typical human range: 30-80.\nAt 60 WPM: ~200ms base delay between keystrokes.\nAt 30 WPM: ~400ms. At 120 WPM: ~100ms.",
+                            "description": "Words per minute, a word being five characters. Default: 60.\nTypical human range: 30-80. Higher is faster.",
                             "optional": true,
                             "type": "number"
                         }
@@ -1194,7 +1194,7 @@
                         },
                         {
                             "name": "paste",
-                            "description": "Simulate paste instead of keystroke typing. When true, writes the text\nto the system clipboard then fires Ctrl+V (Cmd+V on macOS) with real\nkeyboard events (kFromDebugger = isTrusted true) so the browser treats\nit as genuine user input and dispatches paste + input events with the\nexpected clipboardData. Much faster than typing for long strings;\nuseful for passwords, tokens, or pre-filled data.\nDefault: false.",
+                            "description": "Paste the text instead of typing it. When true, the text replaces the\nclipboard content and is pasted into the field: the page receives the\npaste and input events of a user paste, with the text in\nclipboardData. Much faster than typing for long strings;\nuseful for passwords, tokens, or pre-filled data.\nDefault: false.",
                             "optional": true,
                             "type": "boolean"
                         }
@@ -1213,11 +1213,11 @@
                 },
                 {
                     "name": "showCursor",
-                    "description": "Injects a debug cursor overlay (red dot + trail) for visual testing.\nPersists across navigations \u2014 re-injected automatically on page load.\n\nThe dot is the pointer, so a scroll leaves it under the pointer. The trail,\nthe click marks, the path preview and the target brackets are places on the\npage, so they scroll with it: a path drawn before a scroll moves up with the\ncontent, and the movement after it is drawn where the pointer now is, not\nover the old path. A scroll under a still pointer extends the trail, because\nthe pointer has travelled over the page. This follows the page's own scroll,\nnot the scroll of an element inside it.",
+                    "description": "Shows a cursor overlay (red dot and trail) for visual debugging.\nStays on across navigations.\n\nThe dot is the pointer, so a scroll leaves it under the pointer. The trail,\nthe click marks, the path preview and the target brackets are places on the\npage, so they scroll with it: a path drawn before a scroll moves up with the\ncontent, and the movement after it is drawn where the pointer now is, not\nover the old path. A scroll under a still pointer extends the trail, because\nthe pointer has travelled over the page. This follows the page's own scroll,\nnot the scroll of an element inside it.",
                     "parameters": [
                         {
                             "name": "keepHistory",
-                            "description": "When true, the cursor trail retains its FULL movement history at\nconstant opacity instead of the default rolling ~60-point fading\ntrail. This makes a single screenshot show the entire path the\ncursor took (approach + tremor), not just its current position \u2014\nuse it to debug movement trajectories. Default: false.",
+                            "description": "When true, the cursor trail retains its FULL movement history at\nconstant opacity instead of the default rolling ~60-point fading\ntrail. This makes a single screenshot show the entire path the\ncursor took, not just its current position. Default: false.",
                             "optional": true,
                             "type": "boolean"
                         }
@@ -1236,7 +1236,7 @@
                 },
                 {
                     "name": "highlightTarget",
-                    "description": "Highlights a target element on the debug cursor overlay: four corner\nbrackets painted around the element's bounding box in a kind-specific\ncolor, auto-expiring after ttlMs. Use to signal what the agent is\nABOUT to interact with (focus paint before dispatch) so an operator\nreplaying the screencast can see intent, not just outcome.\n\nNo-op when showCursor hasn't been called for this session \u2014 the\npaint pipeline only runs while the cursor overlay is enabled.\n\nBounds resolution is the same Mojo path QuerySelectorBounds uses\n(no JS execution, no DOM mutation). Out-of-viewport or hidden\nelements still receive a paint when their layout box is non-empty \u2014\nthe corner brackets may sit off-screen in that case, which is the\ntruthful representation of where the element is.\n\nSelector types: same set as moveTo (css / xpath / axNodeId / coord\n/ backendNodeId). For backendNodeId, the query is the integer\nBackendNodeId as a decimal string.",
+                    "description": "Highlights a target element on the debug cursor overlay: four corner\nbrackets painted around the element's bounding box in a kind-specific\ncolor, auto-expiring after ttlMs. Use it to show what is ABOUT to be\ninteracted with, so a screencast shows the intent, not just the outcome.\n\nNo-op when showCursor hasn't been called for this session: the\nbrackets are drawn only while the cursor overlay is enabled.\n\nRuns no script in the page and does not change the DOM. Elements out\nof the viewport or hidden are still bracketed when their layout box is\nnot empty, so the brackets may then sit off-screen, where the element is.\n\nSelector types: same set as moveTo (every type except bottom). For\nbackendNodeId, the query is the integer BackendNodeId as a decimal\nstring.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1244,7 +1244,7 @@
                         },
                         {
                             "name": "kind",
-                            "description": "Color kind. Single ASCII character. Recognized:\n  \"C\" \u2014 click hint (amber, about-to-act)\n  \"T\" \u2014 type / fill hint (blue)\n  \"V\" \u2014 vault-resolved credential fill (teal-cyan)\n  \"H\" \u2014 hover hint (lavender)\n  \"S\" \u2014 scroll-into-view hint (purple)\n  \"O\" \u2014 outcome: success (green, post-action flash)\n  \"X\" \u2014 outcome: failure (red, post-action flash)\nUnknown values fall back to amber. Pass \"\" or omit to clear.",
+                            "description": "Color kind. Single ASCII character, case-insensitive. Recognized:\n  \"C\" \u2014 click hint (amber, about-to-act)\n  \"T\" \u2014 type / fill hint (blue)\n  \"V\" \u2014 credential fill hint (teal-cyan)\n  \"H\" \u2014 hover hint (lavender)\n  \"S\" \u2014 scroll-into-view hint (purple)\n  \"O\" \u2014 outcome: success (green, post-action flash)\n  \"X\" \u2014 outcome: failure (red, post-action flash)\nUnknown values fall back to amber. Omitted or \"\" is the hover hint.",
                             "optional": true,
                             "type": "string"
                         },
@@ -1269,7 +1269,7 @@
                 },
                 {
                     "name": "previewMousePath",
-                    "description": "Paints a \"going there next\" preview line on the cursor overlay: a\nthin semi-transparent straight segment from the current tracked\ncursor position to the target element's center. Use just before\nfiring a click/move to telegraph intent \u2014 the operator sees WHERE\nthe cursor is about to travel before any motion begins.\n\nThe straight line is intentional: it represents intent, not the\nactual Bezier trajectory the human-input model will draw (which\nis randomized per-call and shouldn't be teased before it runs).\n\nNo-op when showCursor isn't enabled. Fire-and-forget \u2014 agents call\nthis in parallel with the real click/move dispatch and never await\nthe response.",
+                    "description": "Paints a \"going there next\" preview line on the cursor overlay: a\nthin semi-transparent straight segment from the current tracked\ncursor position to the target element's center. Use just before\na click or move to show WHERE the cursor is about to travel before\nany motion begins.\n\nThe line shows the destination only: the move itself follows its\nown path.\n\nNo-op when showCursor isn't enabled. It can be sent alongside the\nclick or move without waiting for its response.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1296,7 +1296,7 @@
                 },
                 {
                     "name": "getFrames",
-                    "description": "Returns all frames including OOPIFs with their metadata.\nUses ForEachRenderFrameHost to enumerate every frame in the page,\nincluding cross-origin out-of-process iframes.",
+                    "description": "Returns all frames including OOPIFs with their metadata: every frame\nin the page, cross-origin out-of-process iframes included.",
                     "returns": [
                         {
                             "name": "frames",
@@ -1429,7 +1429,7 @@
                 },
                 {
                     "name": "waitForElement",
-                    "description": "Waits for a selector to appear in any frame (main + iframes/OOPIFs).\nPolls natively via Mojo every 200ms (no JS execution). Searches main\nframe first, then child frames on each poll cycle.\nSupports css, xpath, axNodeId, coord, and role selector types (not bottom).",
+                    "description": "Waits for a selector to appear in any frame (main + iframes/OOPIFs), or to\nstop matching with hidden. Checks repeatedly until the timeout and runs no\nscript in the page. Searches main frame first, then child frames each time.\nA frame removed while it is asked, and a css selector that does not parse,\nmatch nothing.\nSupports css, xpath, axNodeId, backendNodeId, coord, role and pierce\nselector types (not bottom).",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1511,7 +1511,7 @@
                 },
                 {
                     "name": "isFocused",
-                    "description": "Checks whether the currently focused element matches the selector.\nOnly \"css\" and \"xpath\" selector types are supported. Searches the\nmain frame first, then iframes/OOPIFs \u2014 focus may be inside an OOPIF.\nUseful as a pre-flight check before sending keystrokes blindly to\nthe focused element: e.g. PasswordManager.prefillChoice uses this\nto confirm the password field is still focused before typing.",
+                    "description": "Checks whether the currently focused element matches the selector.\nOnly \"css\" and \"xpath\" selector types are supported. Searches the\nmain frame first, then iframes/OOPIFs \u2014 focus may be inside an OOPIF.\nUseful as a pre-flight check before sending keystrokes to the\nfocused element, e.g. to confirm a password field still has focus\nbefore typing into it.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1535,7 +1535,7 @@
                 },
                 {
                     "name": "pressKey",
-                    "description": "Sends a single key press with human-like timing (keyDown + keyUp,\n30-70ms hold duration).\n\nSpecial key names (case-insensitive):\n  \"Enter\", \"Tab\", \"Escape\" (or \"Esc\"), \"Backspace\", \"Delete\",\n  \"Space\", \"Home\", \"End\", \"PageUp\", \"PageDown\",\n  \"ArrowUp\" (or \"Up\"), \"ArrowDown\" (or \"Down\"),\n  \"ArrowLeft\" (or \"Left\"), \"ArrowRight\" (or \"Right\")\n\nSingle characters: any single character (e.g. \"a\", \"A\", \"1\", \"@\").\nShift is applied automatically when the character requires it.\n\nModifier combos: prefix with \"Ctrl+\", \"Shift+\", \"Alt+\", or \"Meta+\"\n(case-insensitive). One modifier prefix per call.\nExamples: \"Ctrl+a\", \"Ctrl+c\", \"Ctrl+v\", \"Shift+Tab\", \"Alt+F4\"",
+                    "description": "Sends a single key press with human-like timing (keyDown, then keyUp\na short moment later).\n\nSpecial key names (case-insensitive):\n  \"Enter\", \"Tab\", \"Escape\" (or \"Esc\"), \"Backspace\", \"Delete\",\n  \"Space\", \"Home\", \"End\", \"PageUp\", \"PageDown\",\n  \"ArrowUp\" (or \"Up\"), \"ArrowDown\" (or \"Down\"),\n  \"ArrowLeft\" (or \"Left\"), \"ArrowRight\" (or \"Right\")\n\nSingle characters: any single character (e.g. \"a\", \"A\", \"1\", \"@\").\nShift is applied automatically when the character requires it.\n\nModifier combos: prefix with \"Ctrl+\", \"Shift+\", \"Alt+\", or \"Meta+\"\n(case-insensitive). One modifier prefix per call.\nExamples: \"Ctrl+a\", \"Ctrl+c\", \"Ctrl+v\", \"Shift+Tab\", \"Alt+F4\"",
                     "parameters": [
                         {
                             "name": "key",
@@ -1647,7 +1647,7 @@
                 },
                 {
                     "name": "captchaEnable",
-                    "description": "Enables automatic captcha detection AND solving. While enabled, the\nbrowser scans the frame tree after each navigation, emits\ncaptchaDetected for recognized challenges, and then immediately drives\nthe solve (slider / checkbox interaction, or remote solver for token types)\nserialized one-at-a-time. Clients observe progress via the\ncaptchaSolvingStarted / captchaSolved / captchaError events. No-op\nif already enabled. Disable with captchaDisable."
+                    "description": "Enables automatic captcha detection AND solving. While enabled, the\nbrowser emits captchaDetected for each challenge it recognizes on the\npages it loads, then solves it right away, one captcha at a time.\nClients observe progress via the\ncaptchaSolvingStarted / captchaSolved / captchaError events. No-op\nif already enabled. Disable with captchaDisable.\nAfter 20 automatic solve attempts, detection and solving stop for the\nsession and a captchaError says so; calling captchaEnable again turns\nthem back on with a new count."
                 },
                 {
                     "name": "captchaDisable",
@@ -1655,7 +1655,7 @@
                 },
                 {
                     "name": "getSolvedCaptchas",
-                    "description": "Returns the full list of captchas seen this session, including ones\nthat failed and ones still pending. Preserved across captchaDisable\nso billing / telemetry can retrieve it at shutdown.",
+                    "description": "Returns the full list of captchas seen this session, including ones\nthat failed and ones still pending. Kept after captchaDisable, so it\ncan still be read before the session ends.",
                     "returns": [
                         {
                             "name": "records",
@@ -1668,7 +1668,7 @@
                 },
                 {
                     "name": "solveCaptcha",
-                    "description": "Requests the browser to solve a previously detected captcha.\n\nRemote-solver credentials and the egress the solver dials are configured\nbrowser-side, not through CDP \u2014 so they are never exposed on this\nchannel. Types that need the remote solver (turnstile token, datadome\ntoken, recaptcha, geetest, a visible funcaptcha challenge) fail with\ncaptchaError when it is not configured. A funcaptcha detection whose\nchallenge Arkose has not rendered is refused: there is nothing to solve\nuntil Arkose decides, and an invisible pass resolves it on its own.\n\nFor turnstile_checkbox and datadome_slider nothing is needed \u2014 the\nbrowser solves these via the existing Antibot interaction primitives.",
+                    "description": "Requests the browser to solve a previously detected captcha. Needs\ncaptchaEnable first. Refused for an unknown detectionId, one already\nsolved or failed, and while another solve is in progress. Answers once\nthe solve ends, with the outcome captchaSolved carries, or fails with\nthe reason captchaError carries.\n\nA captcha that cannot be solved at the moment ends in captchaError.\nWithout detectionId, a funcaptcha detection whose challenge Arkose has\nnot shown is skipped: a pass without a challenge resolves it on its own.\n\nA datadome detection always ends in captchaError (see CaptchaType).",
                     "parameters": [
                         {
                             "name": "detectionId",
@@ -1678,7 +1678,7 @@
                         },
                         {
                             "name": "timeout",
-                            "description": "Seconds to wait for the remote solve (default 120). Clamped to\n[20, 600]; the poll interval is 10s, so below the floor the solve\ngets no chance to complete.",
+                            "description": "Seconds the solve may take (default 120). Clamped to [20, 600]. A\nchallenge answered in several rounds gets this time for each round;\nsome types end sooner under a limit of their own.",
                             "optional": true,
                             "type": "integer"
                         }
@@ -1711,7 +1711,7 @@
             "events": [
                 {
                     "name": "captchaDetected",
-                    "description": "Emitted when the browser detects a captcha challenge on the page\n(Turnstile widget, DataDome slider/interstitial, reCAPTCHA, GeeTest).\nOnce captchaEnable has been called, the browser autonomously solves\nthe challenge (interaction for slider/checkbox, remote solver delegation\nfor token types) and then emits captchaSolvingStarted / captchaSolved\n(or captchaError on failure) \u2014 the client does not need to call\nsolveCaptcha. solveCaptcha remains available as an explicit escape\nhatch for manual re-trigger.",
+                    "description": "Emitted when the browser detects a captcha challenge on the page\n(Turnstile widget, DataDome slider/interstitial, reCAPTCHA, GeeTest...).\nOnce captchaEnable has been called, the browser solves the challenge on\nits own and emits captchaSolvingStarted, then captchaSolved (or\ncaptchaError on failure): the client does not need to call\nsolveCaptcha. solveCaptcha remains available to trigger a solve again.",
                     "parameters": [
                         {
                             "name": "detectionId",
@@ -1743,7 +1743,7 @@
                 },
                 {
                     "name": "captchaSolvingStarted",
-                    "description": "Emitted when the browser starts solving a captcha (either via direct\ninteraction or by dispatching a job to the remote solver). Useful for UI spinners\n/ timing instrumentation on the client side.",
+                    "description": "Emitted when the browser starts solving a captcha. Useful for UI spinners\n/ timing instrumentation on the client side.",
                     "parameters": [
                         {
                             "name": "detectionId",
@@ -1762,7 +1762,7 @@
                 },
                 {
                     "name": "captchaSolved",
-                    "description": "Emitted when a captcha is solved. For interaction-based solves\n(slider, checkbox, managed, hold, coords) the token field is empty; for\ntoken solves delegated to a remote solver it contains the response token.\n\"invisible\" means the vendor passed the browser without showing a\nchallenge (Arkose suppression); the token is then the vendor's session\ntoken. \"cleared\" means the challenge left with its page before the\nbrowser answered it: the client navigated away, or the vendor let the\nbrowser through on its own. The page that replaced it showed no\nchallenge, so nothing was solved; captchaSolvingStarted went out just\nbefore, with the same method unless the solve had already begun.",
+                    "description": "Emitted when a captcha is solved. For methods slider, checkbox, managed,\nhold and rotate the token field is empty; for \"token\" it contains the\nresponse token; for \"coords\" it contains the response token the captcha\nwrote into the page once it accepted the answer, or none when the page\ntook the token and navigated before it was read.\n\"invisible\" means Arkose let the browser through without showing a\nchallenge; the token is then Arkose's session\ntoken. \"cleared\" means the challenge left with its page before the\nbrowser answered it: the client navigated away, or the site let the\nbrowser through on its own. The page that replaced it showed no\nchallenge, so nothing was solved; captchaSolvingStarted went out just\nbefore, with the same method unless the solve had already begun.",
                     "parameters": [
                         {
                             "name": "detectionId",
@@ -1779,7 +1779,7 @@
                         },
                         {
                             "name": "token",
-                            "description": "Solution token for remote-solver-backed solves. Empty/missing for\ninteraction-based solves (slider, checkbox).",
+                            "description": "Response token for \"token\", the captcha's own response token for\n\"coords\", Arkose's session token for \"invisible\". Missing for\nthe other methods (slider, checkbox, managed, hold, rotate, cleared).",
                             "optional": true,
                             "type": "string"
                         }
@@ -1787,7 +1787,7 @@
                 },
                 {
                     "name": "captchaError",
-                    "description": "Emitted when a captcha cannot be solved (timeout, remote solver\nunavailable, challenge not solvable, DOM element not found, etc.).",
+                    "description": "Emitted when a captcha cannot be solved (timeout, solving unavailable,\nchallenge not supported, challenge element not found, etc.).",
                     "parameters": [
                         {
                             "name": "detectionId",
@@ -1799,7 +1799,7 @@
                         },
                         {
                             "name": "errorMessage",
-                            "description": "Human-readable failure reason. Deliberately coarse: it says whether\nthe solve is worth retrying elsewhere or the identity should be\nrotated, and never carries solver-side detail.",
+                            "description": "Human-readable failure reason. It says whether a retry is worth it or\na new session should be started instead.",
                             "type": "string"
                         }
                     ]
@@ -5118,13 +5118,13 @@
                 },
                 {
                     "id": "TlsSession",
-                    "description": "One TLS session as it crosses between Scrapfly's two TLS stacks (this\nbrowser and curlium). Both pin the same BoringSSL revision, so `session`\nis portable between them with no transcoding. [Scrapfly extension]\n\nexportTlsSessions emits the canonical form: every optional field is omitted\nwhen importTlsSessions would derive that exact value from what remains, so\none cache row is one record no matter which of the two stacks minted it, and\nexport(import(record)) returns the record unchanged. A row that is not at\nthe defaults still spells out what it is keyed by. A record that spells a\ndefault out is still accepted; it comes back canonical, not verbatim.\n\nThere is no `alpn` property: the negotiated ALPN already travels inside\n`session` (BoringSSL stores it on the SSL_SESSION for TLS 1.3 and reads it\nback to decide whether 0-RTT may be offered), so a value minted by curl\nsurvives the round trip without a field of its own.",
+                    "description": "One cached TLS session, as exportTlsSessions returns it and importTlsSessions\ntakes it. [Scrapfly extension]\n\nexportTlsSessions emits the canonical form: every optional field is omitted\nwhen importTlsSessions would derive that exact value from what remains, so\none cache entry always gives the same record, and export(import(record))\nreturns the record unchanged. An entry that is not at the defaults still\nspells out what it is keyed by. A record that spells a default out is still\naccepted; it comes back canonical, not verbatim.\n\nThere is no `alpn` property: the negotiated ALPN is part of `session` and\nsurvives the round trip with it.",
                     "experimental": true,
                     "type": "object",
                     "properties": [
                         {
                             "name": "host",
-                            "description": "Host the session belongs to; one cache row per host.",
+                            "description": "Host the session belongs to. Must not be empty.",
                             "type": "string"
                         },
                         {
@@ -5165,7 +5165,7 @@
                         },
                         {
                             "name": "sessionUsage",
-                            "description": "\"destination\" (the default, a session with the host itself) or \"proxy\"\n(a session with a proxy endpoint that carries traffic elsewhere).\nOmitted on export when it is \"destination\".",
+                            "description": "\"destination\" (the default, a session with the host itself) or \"proxy\"\n(a session negotiated with a proxy rather than with the host).\nOmitted on export when it is \"destination\".",
                             "optional": true,
                             "type": "string"
                         },
@@ -5189,7 +5189,7 @@
                         },
                         {
                             "name": "session",
-                            "description": "base64 SSL_SESSION_to_bytes output.",
+                            "description": "The serialized session, base64. Opaque: pass it back as exported.",
                             "type": "string"
                         },
                         {
@@ -5622,7 +5622,7 @@
                 },
                 {
                     "name": "enable",
-                    "description": "Enables Browser-domain Scrapfly events for this session. Currently emits\nrestorableSessionDetected if the last run ended in a crash and a session is\navailable to restore (the CDP equivalent of Chromium showing the \"Restore\npages?\" bubble). No-op for the upstream Browser commands. [Scrapfly extension]",
+                    "description": "Enables Browser-domain Scrapfly events for this session. Currently emits\nrestorableSessionDetected if the last run ended in a crash and a session is\navailable to restore (the CDP equivalent of Chromium showing the \"Restore\npages?\" bubble). The standard Browser commands work without it. [Scrapfly extension]",
                     "experimental": true
                 },
                 {
@@ -5660,7 +5660,7 @@
                 },
                 {
                     "name": "flushProfile",
-                    "description": "Flush all in-memory profile state to disk (cookies, DOM storage, trust tokens, etc).\nUsed before profile backup to ensure all data is persisted to SQLite/LevelDB.",
+                    "description": "Writes the profile state held in memory to disk. Cookies are on disk when it\nreplies; the writes of DOM storage and of the HTTP server properties are\nstarted and may still be running.",
                     "experimental": true,
                     "parameters": [
                         {
@@ -5673,24 +5673,24 @@
                     "returns": [
                         {
                             "name": "cookieCount",
-                            "description": "Number of cookies flushed to disk.",
+                            "description": "Number of cookies in the cookie store when it was flushed.",
                             "type": "integer"
                         },
                         {
                             "name": "localStorageOriginCount",
-                            "description": "Number of localStorage origins flushed.",
+                            "description": "Always 0: localStorage origins are not counted.",
                             "type": "integer"
                         },
                         {
                             "name": "pstCount",
-                            "description": "Number of private state tokens flushed.",
+                            "description": "Always 0: private state tokens are not counted.",
                             "type": "integer"
                         }
                     ]
                 },
                 {
                     "name": "importTlsSessions",
-                    "description": "Injects TLS sessions minted elsewhere into this browser's TLS session cache,\nso the next handshake to each host resumes with a PSK instead of looking\nlike a first-ever visitor. [Scrapfly extension]",
+                    "description": "Adds TLS sessions, as exportTlsSessions returned them, to this browser's TLS\nsession cache, so the next connection to each host resumes that session\ninstead of starting a full handshake. At most 1024 sessions per call, each\nsession at most 64 KiB once decoded. A call over either limit, or with an\ninvalid field, fails as a whole and imports nothing. A \"quic\" session must\nhave sessionUsage \"destination\". [Scrapfly extension]",
                     "experimental": true,
                     "parameters": [
                         {
@@ -5710,14 +5710,14 @@
                     "returns": [
                         {
                             "name": "importedCount",
-                            "description": "How many entries are now in the cache. Counts stored rows, not parsed\nones, so a caller may compare it against the number it sent: an entry\nwhose session does not deserialize, and one dropped because memory\npressure has shrunk the cache to nothing, are both missing from it.",
+                            "description": "How many of the sessions sent were stored, so a caller may compare it\nagainst the number it sent: a session that does not deserialize, and\none dropped because the browser has emptied its cache under memory\npressure, are both missing from it.",
                             "type": "integer"
                         }
                     ]
                 },
                 {
                     "name": "exportTlsSessions",
-                    "description": "Serializes this browser's cached TLS sessions, one entry per host. Peeks\nrather than consumes: the sessions stay resumable here too.\n[Scrapfly extension]",
+                    "description": "Serializes this browser's cached TLS sessions, one entry per cached session.\nPeeks rather than consumes: the sessions stay resumable here too.\n[Scrapfly extension]",
                     "experimental": true,
                     "parameters": [
                         {
@@ -5734,7 +5734,7 @@
                         },
                         {
                             "name": "includeQuic",
-                            "description": "Also export the QUIC session cache's rows (transport \"quic\"): a caller\nthat does not know them would keep them as TCP rows.",
+                            "description": "Also export the sessions of HTTP/3 connections, with transport \"quic\".\nDefault false: only sessions of TLS over TCP are returned.",
                             "optional": true,
                             "type": "boolean"
                         }
@@ -5749,7 +5749,7 @@
                         },
                         {
                             "name": "includesQuic",
-                            "description": "True when the QUIC rows were asked for and exported. A browser that\npredates them leaves it out: its caller keeps its own QUIC rows.",
+                            "description": "True when includeQuic was set and the HTTP/3 sessions are in the list.\nAbsent otherwise.",
                             "optional": true,
                             "type": "boolean"
                         }
@@ -5779,7 +5779,7 @@
                         },
                         {
                             "name": "topFrameSite",
-                            "description": "A URL whose site is the top frame the connection is for. A connection\nis only found by a request of the same top frame site: the socket pool\ngroup names it (pm/https://host <https://top-site same_site>). When\nomitted, the site of url itself, which a page of another site never matches.",
+                            "description": "A URL whose site is the top frame the connection is for. A connection\nis only used by a request whose top frame has the same site. When\nomitted, the site of url itself, which a page of another site never matches.",
                             "optional": true,
                             "type": "string"
                         },
@@ -14529,7 +14529,7 @@
                         },
                         {
                             "name": "alpnNegotiatedProtocol",
-                            "description": "ALPN protocol to report as nextHopProtocol (e.g. \"h2\", \"h3\", \"http/1.1\").",
+                            "description": "ALPN protocol to report as nextHopProtocol (e.g. \"h2\", \"h3\", \"http/1.1\").\nWith fromCache and \"h2\" or \"h3\", the response has no status text.",
                             "optional": true,
                             "type": "string"
                         }
@@ -14582,7 +14582,7 @@
                 },
                 {
                     "name": "continueRequestConditional",
-                    "description": "Scrapium: continues the request unchanged as a conditional revalidation of\na response the client holds. The network stack adds If-None-Match and\nIf-Modified-Since where Chrome's own HTTP cache adds them (after Cookie), on\nthe request's own connection. A 304 pauses at the response stage so the\nclient answers it with its stored body; any other response is delivered to\nthe page without a pause unless interceptModifiedResponse is set. A missing\nor unusable validator is dropped and the request continued as is: the\ncommand never leaves the request paused.",
+                    "description": "Continues the request unchanged as a conditional revalidation of a response\nthe client holds: the browser adds If-None-Match and If-Modified-Since as\nits own HTTP cache does when it revalidates. A 304 pauses at the response\nstage so the client answers it with its stored body; any other response is\ndelivered to the page without a pause unless interceptModifiedResponse is\nset. A missing or unusable validator is dropped and the request continued\nas is: the command never leaves the request paused. [Scrapfly extension]",
                     "experimental": true,
                     "parameters": [
                         {
@@ -14772,14 +14772,14 @@
                         },
                         {
                             "name": "requestInitiatorOrigin",
-                            "description": "Serialized origin of whatever initiated this request, absent when there is\nnone or it is opaque (sandboxed frame, data: document).\n\nThis is the origin the network stack derives the Origin header from, and\nit is not otherwise observable here: requestPaused fires BEFORE the wire\nheaders exist, so request.headers carries no Origin for a subresource. A\nclient that needs it \u2014 a cache keying a Vary: Origin response, say \u2014 would\notherwise have to reconstruct it from the frame tree and hope it agrees.",
+                            "description": "Serialized origin of whatever initiated this request, absent when there is\nnone or it is opaque (sandboxed frame, data: document).\n\nThis is the origin the browser derives the Origin header from, and it is\nnot otherwise observable here: requestPaused fires before the request\nheaders are final, so request.headers carries no Origin for a subresource.\nA client that needs it, such as a cache keying a Vary: Origin response,\nwould otherwise have to reconstruct it from the frame tree.",
                             "experimental": true,
                             "optional": true,
                             "type": "string"
                         },
                         {
                             "name": "requestMode",
-                            "description": "The request's fetch mode: \"cors\", \"no-cors\", \"same-origin\" or \"navigate\".\n\nWith requestInitiatorOrigin it tells whether the network stack will\nattach an Origin header, which requestPaused cannot show: a GET carries\none in cors mode to another origin, and none in no-cors mode, the mode a\nplain <script>, <link> or <img> is fetched in. A cache keying a\nVary: Origin response has to store that no-Origin answer as its own\nvariant, and cannot tell it apart from a cors fetch without this.",
+                            "description": "The request's fetch mode: \"cors\", \"no-cors\", \"same-origin\" or \"navigate\".\n\nWith requestInitiatorOrigin it tells whether the browser will\nattach an Origin header, which requestPaused cannot show: a GET carries\none in cors mode to another origin, and none in no-cors mode, the mode a\nplain <script>, <link> or <img> is fetched in. A cache keying a\nVary: Origin response has to store that no-Origin answer as its own\nvariant, and cannot tell it apart from a cors fetch without this.",
                             "experimental": true,
                             "optional": true,
                             "type": "string"
@@ -20904,7 +20904,7 @@
                 },
                 {
                     "name": "setResolvedDNS",
-                    "description": "Sets pre-resolved DNS entries for a hostname.\nThese entries take priority over profile-based and system DNS resolution.\nCall with empty entries array to remove a hostname's override.",
+                    "description": "Sets pre-resolved DNS entries for a hostname.\nWhen the browser resolves that hostname, it uses these entries instead of a\nDNS lookup. The override applies to every browser context. Fails when an ip\nis not an IPv4 or IPv6 literal or does not match its type.\nCall with empty entries array to remove a hostname's override.",
                     "experimental": true,
                     "parameters": [
                         {
@@ -20922,7 +20922,7 @@
                 },
                 {
                     "name": "getResolvedDNS",
-                    "description": "Returns all dynamically set DNS resolution entries.",
+                    "description": "Returns every hostname the browser has resolved since it started, with each\naddress it resolved to, and every hostname set with setResolvedDNS, with\nthe entries set for it in place of what it resolved to.",
                     "experimental": true,
                     "returns": [
                         {
@@ -25709,7 +25709,7 @@
                         },
                         {
                             "name": "format",
-                            "description": "Output format for text content: \"html\" (default) or \"markdown\".\n\"markdown\" converts the rendered HTML to GitHub-flavored Markdown\nin the browser process (using the Gumbo HTML5 parser). Relative URLs\nin links and images are resolved against the main frame URL.\nIgnored for binary content types.",
+                            "description": "Output format for text content: \"html\" (default) or \"markdown\".\n\"markdown\" converts the rendered HTML to GitHub-flavored Markdown.\nRelative URLs in links and images are resolved against the main frame\nURL.\nIgnored for binary content types.",
                             "optional": true,
                             "type": "string"
                         }
@@ -27465,7 +27465,7 @@
                 },
                 {
                     "id": "FormType",
-                    "description": "Form-level semantic, derived from autofill::FormData parsing.",
+                    "description": "What a credential form is for, as detected by the browser's autofill.",
                     "type": "string",
                     "enum": [
                         "login",
@@ -27485,7 +27485,7 @@
                         },
                         {
                             "name": "selector",
-                            "description": "Best-effort CSS selector resolved from the FormFieldData\n(autocomplete attribute > name > id > renderer ID fallback).",
+                            "description": "Best-effort CSS selector for the field, built from its autocomplete\nattribute, else its name, else its id. \":focus\" when the field is\nthe focused element and has none of these.",
                             "type": "string"
                         },
                         {
@@ -27518,7 +27518,7 @@
                 },
                 {
                     "id": "CredentialChoice",
-                    "description": "One offered credential in the picker. Only the username is sent\nover the wire \u2014 the password stays in the browser's PasswordStore\nuntil the agent calls prefillChoice with the matching choiceId,\nat which point the handler reads the password from the store and\nfills it via Antibot. This avoids ever exposing the cleartext\npassword to the CDP client.",
+                    "description": "One saved credential offered for the form. Only the username is sent:\nthe password stays in the browser, and prefillChoice with the matching\nchoiceId fills it, so the client never sees the password.",
                     "type": "object",
                     "properties": [
                         {
@@ -27575,7 +27575,7 @@
                 },
                 {
                     "id": "StoredCookieSummary",
-                    "description": "One cookie returned by listCookies. Mirrors Network.Cookie minus the\ninternals the vault doesn't care about (priority, partitionKey,\nsourcePort, sourceScheme).",
+                    "description": "One cookie returned by listCookies. Same fields as Network.Cookie\nwithout priority, partitionKey, sourcePort and sourceScheme.",
                     "type": "object",
                     "properties": [
                         {
@@ -27619,22 +27619,22 @@
                 },
                 {
                     "id": "StoredTotpSummary",
-                    "description": "One TOTP returned by listTotps. The seed is NEVER sent over the wire\non read paths \u2014 Scrapium's listTotps response carries metadata only\n(origin, account, issuer, algorithm/digits/period). Customer-side\ncode that needs the seed must keep its own copy.",
+                    "description": "One TOTP returned by listTotps. The seed is never returned, only\norigin, account, issuer, algorithm, digits and period. A client that\nneeds the seed must keep its own copy.",
                     "type": "object",
                     "properties": [
                         {
                             "name": "origin",
-                            "description": "eTLD+1 / domain the TOTP applies to. Same matching rules as the\nPasswordStore: a credential filled on a page whose effective\norigin matches this value will trigger TOTP autofill into the\nform's `otp` field, if present.",
+                            "description": "Host the TOTP applies to (e.g. \"login.example.com\"), not a URL. A\ncredential filled on a page whose host equals this value gets the\ncurrent code typed into the form's one-time code field, if present.",
                             "type": "string"
                         },
                         {
                             "name": "account",
-                            "description": "Account label (typically the username on the login form). The\nhandler matches (origin, account) to pair this TOTP with the\nright password item when both are registered.",
+                            "description": "Account label (typically the username on the login form).\n(origin, account) pairs this TOTP with the password filled for\nthat username.",
                             "type": "string"
                         },
                         {
                             "name": "issuer",
-                            "description": "Display-only issuer label (e.g. \"GitHub\"). Surfaced in logs and\nthe dashboard preview; doesn't participate in matching.",
+                            "description": "Display-only issuer label (e.g. \"GitHub\"). Not used for matching.",
                             "optional": true,
                             "type": "string"
                         },
@@ -27662,7 +27662,7 @@
             "events": [
                 {
                     "name": "credentialsRequested",
-                    "description": "Emitted when a credential form is detected OR when the native\npassword-manager UI would normally appear (e.g. user focused a\nsaved-credential field). Fired once per (frame, formId, trigger) tuple.\nThe CDP client looks up the vault by `origin` and replies with\nprovideCredentials or declineRequest. If neither is called within\nthe configured timeout, the request is discarded and the form is\nleft untouched.\n\nWhen trigger == userFocus, Chrome's native password-manager dropdown\nis suppressed for the duration of this request \u2014 the agent owns the\npicker decision. If the agent declines, the dropdown is NOT re-shown\n(this avoids racing the user with the native UI).",
+                    "description": "Emitted when the browser would show its saved-password dropdown: the\npage focused a login field of a site the browser has a credential\nsaved for (see registerCredential). Each time this happens a new\nrequest with its own requestId is emitted. The client looks up its\ncredential by `origin` and replies with prefillChoice,\nprovideCredentials or declineRequest. A request left unanswered is\ndiscarded after 5 to 6 minutes and the form is left untouched. Not\nemitted on pages that are not https (localhost excepted) or have a\ncertificate error.\n\nWhen trigger is userFocus, the browser's own saved-password dropdown is\nnot shown for this request, and it is not shown again if the client\ndeclines.",
                     "parameters": [
                         {
                             "name": "requestId",
@@ -27679,12 +27679,12 @@
                         },
                         {
                             "name": "origin",
-                            "description": "eTLD+1 of the form's origin \u2014 the vault lookup key. Matches Chrome's\naffiliation rules so credentials saved for \"login.foo.com\" are\noffered on \"foo.com\".",
+                            "description": "Host of the form's origin (e.g. \"login.example.com\"), the key to\nlook the credential up by.",
                             "type": "string"
                         },
                         {
                             "name": "formId",
-                            "description": "Stable form_renderer_id within the frame's lifetime. Used by\nfillCredentials to target the same form without re-detection.",
+                            "description": "Id of the form, stable while the frame lives.",
                             "type": "string"
                         },
                         {
@@ -27705,7 +27705,7 @@
                         },
                         {
                             "name": "choices",
-                            "description": "Credentials Chrome's PasswordStore already has for this origin\n(matches the native dropdown's options). Empty when the trigger\nis `formDetected` (no store lookup yet) or when the store has\nno entry. Passwords are NOT sent over the wire \u2014 only the\nopaque choiceId + username are surfaced; the password is read\nfrom the store at fill time inside the browser process.",
+                            "description": "Credentials the browser already has saved for this origin (the\noptions its own dropdown would show). Empty when the trigger is\n`formDetected` or nothing is saved. Passwords are never sent: each\nchoice carries an opaque choiceId and the username, and\nprefillChoice fills the password.",
                             "type": "array",
                             "items": {
                                 "$ref": "CredentialChoice"
@@ -27715,7 +27715,7 @@
                 },
                 {
                     "name": "passkeyRequested",
-                    "description": "Emitted when navigator.credentials.get() runs (passkey assertion) and the\nCDP client should provide a credential. The reply (providePasskey)\ninjects the credential into a session-scoped virtual authenticator,\nletting the in-flight WebAuthn call resolve naturally.",
+                    "description": "Emitted when navigator.credentials.get() runs (passkey assertion) and the\nclient should provide a credential. Reserved: not emitted yet. Until it\nis, add passkeys ahead of time with registerPasskey.",
                     "parameters": [
                         {
                             "name": "requestId",
@@ -27747,7 +27747,7 @@
                 },
                 {
                     "name": "passkeyRegistrationRequested",
-                    "description": "Emitted when navigator.credentials.create() runs (passkey registration).\nThe CDP client should mint a credential, store it in the vault, and reply\nwith providePasskey using the newly-generated keypair.",
+                    "description": "Emitted when navigator.credentials.create() runs (passkey registration),\nfor the client to create the credential and keep a copy of its key.\nReserved: not emitted yet.",
                     "parameters": [
                         {
                             "name": "requestId",
@@ -27788,7 +27788,7 @@
             "commands": [
                 {
                     "name": "prefillChoice",
-                    "description": "Reply to credentialsRequested by selecting one of the offered\n`choices`. The handler reads the matching credential's password\nfrom Chrome's PasswordStore and fills it via the Antibot pipeline\n(Bezier mouse, WPM typing) \u2014 the password never crosses the CDP\nwire. Use this when the agent wants to act on what Chrome already\nhas saved (the native-dropdown replacement flow).\n\nUse provideCredentials instead when the agent's vault has its own\ncredentials it wants to fill (the password the agent supplies\nIS sent over CDP \u2014 that's the trade-off).\n\nSpecify either `choiceId` or `username` (not both). When `username`\nis set, the handler finds the matching choice in the originating\ncredentialsRequested event \u2014 agents that already know which login\nthey want don't have to scan the choice list.",
+                    "description": "Reply to credentialsRequested by selecting one of the offered\n`choices`. The browser fills the saved password itself with human-like\ntyping, so the password is never sent to the client. Use this to fill\nwhat the browser already has saved.\n\nUse provideCredentials instead to fill a credential the client\nsupplies (that password is sent in the command).\n\nSpecify either `choiceId` or `username` (not both). With `username`,\nthe matching choice of the originating credentialsRequested event is\nused, so a client that knows the login it wants need not scan the list.\n\nFails on pages that are not https (localhost excepted) or have a\ncertificate error. When the request came from a focused field (trigger\nuserFocus), fails with \"focus lost\" if no password field is focused\nany more.",
                     "parameters": [
                         {
                             "name": "requestId",
@@ -27833,7 +27833,7 @@
                 },
                 {
                     "name": "listCredentials",
-                    "description": "List credentials saved in Chrome's PasswordStore, optionally\nfiltered by origin. Returns the username and origin for each entry\n\u2014 passwords are intentionally omitted (the agent doesn't get to\nexfiltrate them via CDP, only fill them via prefillChoice).",
+                    "description": "List credentials saved in the browser's password store, optionally\nfiltered by origin. Returns the origin and username of each entry.\nPasswords are never returned: fill them with prefillChoice.",
                     "parameters": [
                         {
                             "name": "originFilter",
@@ -27854,7 +27854,7 @@
                 },
                 {
                     "name": "deleteCredential",
-                    "description": "Remove a credential from Chrome's PasswordStore. Both `url` (the\nURL it was registered for) and `username` must match an existing\nentry. URL is matched on origin (scheme+host+port) \u2014 the path is\nignored, so deleting works regardless of which path was originally\nused to register.",
+                    "description": "Remove a credential from the browser's password store. Both `url` (the\nURL it was registered for) and `username` must match an existing\nentry. `url` is matched on its origin (scheme+host+port): the path is\nignored, so deleting works whatever path was used to register.",
                     "parameters": [
                         {
                             "name": "url",
@@ -27879,7 +27879,7 @@
                 },
                 {
                     "name": "registerPasskey",
-                    "description": "Register a passkey for an rpId. The passkey is stored on the\nsession-scoped virtual authenticator and will be offered when the\npage calls navigator.credentials.get() against the same rpId.\n\nEncoding: `credentialId`, `privateKey` and `userHandle` are\nbase64-encoded (standard base64 with padding). Same format as\nWebAuthn.Credential.* fields \u2014 agents that already have those\nvalues can pass them through unchanged. base64url and unpadded\nspellings are also accepted; `credentialId` is stored and listed\nback byte-for-byte as it was sent, never re-encoded.",
+                    "description": "Register a passkey for an rpId. The passkey is stored on the\nsession's authenticator and is offered when the page calls\nnavigator.credentials.get() for the same rpId.\n\nEncoding: `credentialId`, `privateKey` and `userHandle` are\nbase64-encoded (standard base64 with padding). Same format as the\nWebAuthn.Credential fields, so values taken from there can be passed\nunchanged. base64url and unpadded\nspellings are also accepted; `credentialId` is stored and listed\nback byte-for-byte as it was sent, never re-encoded.",
                     "parameters": [
                         {
                             "name": "rpId",
@@ -27971,7 +27971,7 @@
                 },
                 {
                     "name": "registerCookie",
-                    "description": "Insert a cookie into the browser profile's CookieStore. The cookie\nis visible to subsequent navigations and to any in-flight fetch on\na matching origin. Mirrors Network.setCookies({cookies: [{\u2026}]}) but\naccepts one cookie per call to keep the command symmetric with\nregisterCredential / registerPasskey.\n\nRequired: name, value, domain. Domain carries the same meaning as in\nNetwork.setCookie: a leading dot (\"the standard subdomain-spread\nshape\") stores a domain cookie sent to every subdomain, a bare\nhostname stores a host-only cookie sent to that host alone.\nPath defaults to \"/\". Secure/HttpOnly default to false. SameSite\ndefaults to Lax (Chrome's 2026 default). Expires=0 (or omitted)\nproduces a session cookie.",
+                    "description": "Insert a cookie into the browser profile's cookie store. The cookie\nis sent with every later navigation and request to a matching host.\nLike Network.setCookies({cookies: [{...}]}) but\none cookie per call, like registerCredential and registerPasskey.\n\nRequired: name, value, domain. Domain carries the same meaning as in\nNetwork.setCookie: a leading dot (\".example.com\") stores a domain\ncookie sent to every subdomain, a bare hostname stores a host-only\ncookie sent to that host alone.\nPath defaults to \"/\". Secure/HttpOnly default to false. SameSite\ndefaults to Lax. Expires=0 (or omitted) produces a session cookie.",
                     "parameters": [
                         {
                             "name": "name",
@@ -28070,7 +28070,7 @@
                 },
                 {
                     "name": "registerTotp",
-                    "description": "Register a TOTP seed. The seed is base32-encoded as it appears\ninside an otpauth:// URI (RFC 4648). Algorithm, digits, period are\noptional and default to SHA1/6/30.\n\nThe handler indexes the entry by (origin, account). A subsequent\nprovideCredentials/fillCredentials targeting the same origin+account\nwith an `otp` field in the form will get the current code typed\nautomatically. If no `otp` field is detected, the TOTP is left\nalone \u2014 the agent can also force a code computation via getTotpCode\nfor headless test scenarios.",
+                    "description": "Register a TOTP seed. The seed is base32-encoded as it appears\ninside an otpauth:// URI (RFC 4648). Algorithm, digits, period are\noptional and default to SHA1/6/30.\n\nThe entry is keyed by (origin, account), and registering the same pair\nagain replaces it. A later provideCredentials for the same origin and\naccount on a form with an `otp` field, or fillCredentials with a\ntotpSelector, gets the current code typed automatically. Without such\na field the TOTP is not used; getTotpCode returns the current code on\ndemand.",
                     "parameters": [
                         {
                             "name": "origin",
@@ -28123,7 +28123,7 @@
                 },
                 {
                     "name": "listTotps",
-                    "description": "List TOTPs saved on the session vault, optionally filtered by\norigin. Seeds are NEVER returned \u2014 this surface is for management\nUIs that need to know what's registered without taking on the\nblast radius of holding seeds. The dashboard reads + decrypts\nseeds via the same WebCrypto path it uses for other vault items.",
+                    "description": "List TOTPs saved for the session, optionally filtered by origin (exact\nmatch on the registered value). Seeds are never returned.",
                     "parameters": [
                         {
                             "name": "originFilter",
@@ -28168,7 +28168,7 @@
                 },
                 {
                     "name": "getTotpCode",
-                    "description": "Compute the current TOTP code for a registered (origin, account)\nwithout doing any form fill. Useful for headless test fixtures and\nfor agent-driven flows that want to type the code via their own\ninput primitives.",
+                    "description": "Compute the current TOTP code for a registered (origin, account)\nwithout doing any form fill. Useful for tests and for clients that\ntype the code with their own input commands.",
                     "parameters": [
                         {
                             "name": "origin",
@@ -28199,7 +28199,7 @@
                 },
                 {
                     "name": "registerCredential",
-                    "description": "Insert a credential into Chrome's PasswordStore for an explicit\nURL. Used by the agent to seed the vault before navigating to a\nlogin page \u2014 once registered, navigating to a matching URL will\nfire credentialsRequested with the credential surfaced in choices.\n\nURL matching: only scheme + host + path are used as the\nsignon_realm. Query string and fragment are stripped so credentials\nsaved for `https://example.com/login?ref=foo` also match\n`https://example.com/login`. The store still keys by origin\n(scheme+host+port), so a credential registered for\nhttps://example.com/login will be offered on any page on\nhttps://example.com/.\n\nResolves after the PasswordStore has acknowledged the write \u2014\ncallers don't need a sleep before navigating.",
+                    "description": "Save a credential in the browser's password store for an explicit\nURL. Use it to seed credentials before navigating to a login page:\nonce saved, focusing the login form on a matching page fires\ncredentialsRequested with the credential in `choices`.\n\nURL matching: the query string and fragment are ignored, so\ncredentials saved for `https://example.com/login?ref=foo` also match\n`https://example.com/login`. Credentials are looked up by origin\n(scheme+host+port), so a credential registered for\nhttps://example.com/login is offered on any page on\nhttps://example.com/.\n\nResolves once the credential is saved: no wait is needed before\nnavigating.",
                     "parameters": [
                         {
                             "name": "url",
@@ -28229,7 +28229,7 @@
                 },
                 {
                     "name": "provideCredentials",
-                    "description": "Reply to credentialsRequested. Browser fills the form using Antibot\nprimitives \u2014 Bezier-curve mouse to each field, WPM typing into it,\noptional Tab between fields. Submit (if requested) is a click on the\nform's submit button or Enter on the password field.",
+                    "description": "Reply to credentialsRequested with a credential the client supplies.\nThe browser moves to each field and types into it with human-like\ninput. When `username` is set, the credential is also saved in the\nbrowser's password store for the page, so later visits offer it in\n`choices`. Fails on pages that are not https (localhost excepted) or\nhave a certificate error.",
                     "parameters": [
                         {
                             "name": "requestId",
@@ -28258,7 +28258,7 @@
                         },
                         {
                             "name": "wpm",
-                            "description": "Words-per-minute for the typing pass. Forwarded to Antibot.fill.\nDefault: 60.",
+                            "description": "Words-per-minute for the typing pass, as in Antibot.fill.\nDefault: 60.",
                             "optional": true,
                             "type": "number"
                         }
@@ -28301,7 +28301,7 @@
                         },
                         {
                             "name": "signCount",
-                            "description": "Defaults to 0 for new registrations; should match the vault's\ntracked counter for assertions to avoid backend rejection.",
+                            "description": "Defaults to 0 for new registrations. For assertions, pass the\ncounter you keep for this passkey, or the site may reject it.",
                             "optional": true,
                             "type": "integer"
                         }
@@ -28328,7 +28328,7 @@
                         },
                         {
                             "name": "reason",
-                            "description": "Optional \u2014 surfaced in browser logs only.",
+                            "description": "Optional, informational only: not passed to the page.",
                             "optional": true,
                             "type": "string"
                         }
@@ -28336,7 +28336,7 @@
                 },
                 {
                     "name": "fillCredentials",
-                    "description": "Agent-driven fill \u2014 skip the event roundtrip. Use when the agent has\nalready located the form (e.g. via Antibot.waitForElement) and wants to\nprovide credentials directly. Either formId (from a prior\ncredentialsRequested) OR explicit selectors must be supplied.",
+                    "description": "Fill a form without waiting for credentialsRequested. Use when the\nclient has already located the form (e.g. with Antibot.waitForElement)\nand wants to provide credentials directly. passwordSelector is\nrequired. When `username` is set, the credential is also saved in the\nbrowser's password store for the page. Fails when the page is not\nhttps (localhost excepted) or has a certificate error.",
                     "parameters": [
                         {
                             "name": "frameId",
@@ -28406,7 +28406,7 @@
                 },
                 {
                     "name": "enable",
-                    "description": "Enables credentialsRequested / passkeyRequested event emission. The\nbrowser starts observing the autofill driver and the WebAuthn dispatcher\nfor credential-shaped activity. No-op if already enabled.\n\nWhen nativeUi is true, the domain runs in native-UI (VNC) mode: the\nsuggestion interceptor is NOT registered, so Chrome's real password-\nmanager dropdown renders on screen for a human driving the session over\nVNC. credentialsRequested/prefillChoice are not used in this mode;\nregisterCredential still stages credentials into the PasswordStore and\nform-filling is forced to fill-on-account-select so Chrome waits for the\nuser's pick instead of silently autofilling on page load. Defaults to\nfalse (the existing CDP-intercept behaviour).",
+                    "description": "Enables the domain and credentialsRequested event emission. The other\ncommands of this domain fail until enable is called. Calling it again\nsets the nativeUi mode anew (omitted means false).\n\nWhen nativeUi is true, the browser shows its own saved-password\ndropdown on screen instead, for a person driving the session through\nthe live view (VNC). credentialsRequested and prefillChoice are not\nused in this mode; registerCredential still saves credentials, and a\nsaved credential is filled only when the person picks it in the\ndropdown, never automatically on page load. Defaults to false.",
                     "parameters": [
                         {
                             "name": "nativeUi",
@@ -30856,7 +30856,7 @@
                         },
                         {
                             "name": "body",
-                            "description": "Base64-encoded RR body.",
+                            "description": "Base64-encoded redemption record body.",
                             "type": "string"
                         },
                         {

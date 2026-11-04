@@ -307,17 +307,14 @@ var cloudBrowserProxyPools = append([]any{"datacenter", "residential", ProxyPool
 // Scraping API pools, which the Cloud Browser refuses.
 //
 // No `Default:` here. ApplyDefaults bakes the literal into every tool
-// call where the field was not explicitly provided, which previously
-// forced cloud_browser_open through the datacenter pool unconditionally
-// — fine in prod, but breaks any deployment where that pool's upstream
-// proxy credentials aren't configured. When omitted, the
+// call where the field was not explicitly provided. When omitted, the
 // SDK's `if config.ProxyPool != ""` guard in CloudBrowser() simply does
-// not append the query param, so the upstream picks its own default.
+// not append the query param, so the API picks its own default.
 func MakeCloudBrowserProxyPoolSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Type:        "string",
 		Enum:        cloudBrowserProxyPools,
-		Description: "The proxy pool to use: datacenter or residential. When omitted, the upstream picks its default. public_datacenter_pool and public_residential_pool are deprecated; the migration guide covers them: https://scrapfly.io/new-pricing#legacy-spellings",
+		Description: "The proxy pool to use: datacenter or residential. When omitted, the API picks its default. public_datacenter_pool and public_residential_pool are deprecated; the migration guide covers them: https://scrapfly.io/new-pricing#legacy-spellings",
 	}
 }
 

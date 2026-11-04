@@ -4,16 +4,16 @@ package scrapflyprovider
 
 // selectorSchema is the JSON Schema for the Antibot Selector type.
 var selectorSchema = map[string]any{
-	"type": "object",
+	"type":        "object",
 	"description": "Element selector. Use {type:\"axNodeId\", query:\"<id>\"} with the id from cloud_browser_snapshot (preferred). Also supports css, xpath, role, coord.",
 	"properties": map[string]any{
 		"type": map[string]any{
-			"type": "string",
-			"enum": []string{"axNodeId", "css", "xpath", "role", "coord"},
+			"type":        "string",
+			"enum":        []string{"axNodeId", "css", "xpath", "role", "coord"},
 			"description": "Selector type. Use axNodeId with id from snapshot (most reliable).",
 		},
 		"query": map[string]any{
-			"type": "string",
+			"type":        "string",
 			"description": "For axNodeId: the id from snapshot (e.g. 28). For css: CSS selector. For xpath: XPath. For coord: x,y.",
 		},
 	},
@@ -41,14 +41,14 @@ func withDesc(schema map[string]any, desc string) map[string]any {
 // Generated from the Antibot domain in browser_protocol.json.
 var antibotToolSchemas = map[string]antibotToolOverride{
 	"moveTo": {
-		description: "Moves mouse to target with human-like Bezier curve trajectory. Includes natural jitter and distortion to mimic hand tremor. For non-steady moves greater than 50px, there is a 30% chance of overshoo... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Moves mouse to target along a human-like path. A longer move may go slightly past the target, then come back to it. Supports all selector types except bottom. Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector": selectorSchema,
+				"selector":         selectorSchema,
 				"relativePosition": coordinateSchema,
-				"absoluteOffset": map[string]any{"type": "boolean", "description": "For \"coord\" selector type only: if true, treat the query coordinates as an offset from the current mouse position r..."},
-				"steady": map[string]any{"type": "boolean", "description": "If true, reduces curve deviation and distortion, and disables overshoot. Use for small or precise targets where accur..."},
+				"absoluteOffset":   map[string]any{"type": "boolean", "description": "For \"coord\" selector type only: if true, treat the query coordinates as an offset from the current mouse position r..."},
+				"steady":           map[string]any{"type": "boolean", "description": "If true, moves along a straighter path and never goes past the target. Use for small or precise targets where accurac..."},
 			},
 			"required": []string{"selector"},
 		},
@@ -58,77 +58,77 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector": selectorSchema,
+				"selector":         selectorSchema,
 				"relativePosition": coordinateSchema,
-				"button": map[string]any{"type": "string", "description": "Mouse button: \"left\", \"right\", or \"middle\". Default: \"left\"."},
-				"clickDuration": map[string]any{"type": "number", "description": "Hold duration in seconds between mousedown and mouseup. Default: random between 0.1 and 0.4 seconds."},
-				"clickCount": map[string]any{"type": "integer", "description": "Number of clicks (e.g. 2 for double-click). Default: 1."},
+				"button":           map[string]any{"type": "string", "description": "Mouse button: \"left\", \"right\", or \"middle\". Default: \"left\"."},
+				"clickDuration":    map[string]any{"type": "number", "description": "Hold duration in seconds between mousedown and mouseup. Default: random between 0.1 and 0.4 seconds."},
+				"clickCount":       map[string]any{"type": "integer", "description": "Number of clicks (e.g. 2 for double-click). Default: 1."},
 			},
 			"required": []string{"selector"},
 		},
 	},
 	"dragAndDrop": {
-		description: "Drag from source to destination with human-like Bezier movement. Supports all selector types except bottom. Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Drag from source to destination with human-like movement. Supports all selector types except bottom. Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"from": selectorSchema,
-				"to": selectorSchema,
+				"from":                 selectorSchema,
+				"to":                   selectorSchema,
 				"fromRelativePosition": coordinateSchema,
-				"toRelativePosition": coordinateSchema,
+				"toRelativePosition":   coordinateSchema,
 			},
 			"required": []string{"from", "to"},
 		},
 	},
 	"clickAndHold": {
-		description: "Moves to target element, presses mouse down, holds for a minimum time, then releases. Used for captcha puzzles requiring long-press interactions. Supports all selector types except bottom. Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Moves to target element, presses mouse down, holds for a minimum time, then releases. For controls that need a long press. Supports all selector types except bottom. Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector": selectorSchema,
+				"selector":         selectorSchema,
 				"relativePosition": coordinateSchema,
-				"holdTime": map[string]any{"type": "number", "description": "Minimum hold duration in seconds. Default: random between 1.0 and 3.0."},
-				"button": map[string]any{"type": "string", "description": "Mouse button: \"left\", \"right\", or \"middle\". Default: \"left\"."},
-				"frameUrl": map[string]any{"type": "string", "description": "Frame URL glob pattern to restrict element search to matching frames. Uses shell-style wildcards (e.g. \"*cloudflare...."},
+				"holdTime":         map[string]any{"type": "number", "description": "Minimum hold duration in seconds. Default: random between 1.0 and 3.0."},
+				"button":           map[string]any{"type": "string", "description": "Mouse button: \"left\", \"right\", or \"middle\". Default: \"left\"."},
+				"frameUrl":         map[string]any{"type": "string", "description": "Frame URL glob pattern to restrict element search to matching frames. Uses shell-style wildcards (e.g. \"*example.com..."},
 			},
 			"required": []string{"selector"},
 		},
 	},
 	"clickAndSlide": {
-		description: "Moves to target element, presses mouse down, slides the mouse to a target position, then releases. Used for slider captcha puzzles. Supports all selector types except bottom.  Two modes: 1. Fixed d... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Moves to target element, presses mouse down, slides the mouse to a target position, then releases. For slider controls. Supports all selector types except bottom.  Two modes: 1. Fixed distance: pro... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector": selectorSchema,
-				"relativePosition": coordinateSchema,
-				"distance": map[string]any{"type": "number", "description": "Horizontal slide distance in CSS pixels (positive = right, negative = left)."},
-				"target": selectorSchema,
+				"selector":               selectorSchema,
+				"relativePosition":       coordinateSchema,
+				"distance":               map[string]any{"type": "number", "description": "Horizontal slide distance in CSS pixels (positive = right, negative = left)."},
+				"target":                 selectorSchema,
 				"targetRelativePosition": coordinateSchema,
-				"verticalOffset": map[string]any{"type": "number", "description": "Vertical slide offset in CSS pixels. Default: 0 (horizontal only)."},
-				"button": map[string]any{"type": "string", "description": "Mouse button: \"left\", \"right\", or \"middle\". Default: \"left\"."},
-				"frameUrl": map[string]any{"type": "string", "description": "Frame URL glob pattern to restrict element search to matching frames. Uses shell-style wildcards (e.g. \"*captcha*\")."},
-				"overshoot": map[string]any{"type": "boolean", "description": "If true, overshoot past the destination on the X axis by 5-15px then correct back. Simulates a human dragging past th..."},
+				"verticalOffset":         map[string]any{"type": "number", "description": "Vertical slide offset in CSS pixels. Default: 0 (horizontal only)."},
+				"button":                 map[string]any{"type": "string", "description": "Mouse button: \"left\", \"right\", or \"middle\". Default: \"left\"."},
+				"frameUrl":               map[string]any{"type": "string", "description": "Frame URL glob pattern to restrict element search to matching frames. Uses shell-style wildcards (e.g. \"*example.com..."},
+				"overshoot":              map[string]any{"type": "boolean", "description": "If true, goes a few pixels past the destination on the X axis, then comes back to it, as a hand dragging past a slide..."},
 			},
 			"required": []string{"selector"},
 		},
 	},
 	"scroll": {
-		description: "Human-like scroll. Three modes:  1. Element into view: provide selector (css/xpath/axNodeId/coord/role).    Scrolls until element is within 20% of viewport center, using wheel    events in 3-8 step... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Human-like scroll. Three modes:  1. Element into view: provide selector (css/xpath/axNodeId/coord/role).    Scrolls with mouse wheel steps until the element is near the viewport    center. Does not... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"selector": selectorSchema,
-				"delta": coordinateSchema,
+				"delta":    coordinateSchema,
 			},
 		},
 	},
 	"typeText": {
-		description: "Types text character by character with human WPM timing model. Uses profile-aware keyboard mapping for correct key codes. Timing: base_delay = 60 / (wpm * 5) seconds per keystroke, with per-charact...",
+		description: "Types text character by character with human-like typing speed, set in words per minute. Each character is sent with the key codes of the browser's keyboard layout.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"text": map[string]any{"type": "string"},
-				"wpm": map[string]any{"type": "number", "description": "Words per minute. Default: 60. Typical human range: 30-80. At 60 WPM: ~200ms base delay between keystrokes. At 30 WPM..."},
+				"wpm":  map[string]any{"type": "number", "description": "Words per minute, a word being five characters. Default: 60. Typical human range: 30-80. Higher is faster."},
 			},
 			"required": []string{"text"},
 		},
@@ -138,18 +138,18 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector": selectorSchema,
-				"text": map[string]any{"type": "string"},
+				"selector":         selectorSchema,
+				"text":             map[string]any{"type": "string"},
 				"relativePosition": coordinateSchema,
-				"clear": map[string]any{"type": "boolean", "description": "Clear existing content first by sending Ctrl+A then Backspace. Default: false."},
-				"wpm": map[string]any{"type": "number", "description": "Words per minute for typing. Default: 60. See typeText for timing details."},
-				"paste": map[string]any{"type": "boolean", "description": "Simulate paste instead of keystroke typing. When true, writes the text to the system clipboard then fires Ctrl+V (Cmd..."},
+				"clear":            map[string]any{"type": "boolean", "description": "Clear existing content first by sending Ctrl+A then Backspace. Default: false."},
+				"wpm":              map[string]any{"type": "number", "description": "Words per minute for typing. Default: 60. See typeText for timing details."},
+				"paste":            map[string]any{"type": "boolean", "description": "Paste the text instead of typing it. When true, the text replaces the clipboard content and is pasted into the field:..."},
 			},
 			"required": []string{"selector", "text"},
 		},
 	},
 	"showCursor": {
-		description: "Injects a debug cursor overlay (red dot + trail) for visual testing. Persists across navigations — re-injected automatically on page load.  The dot is the pointer, so a scroll leaves it under the p...",
+		description: "Shows a cursor overlay (red dot and trail) for visual debugging. Stays on across navigations.  The dot is the pointer, so a scroll leaves it under the pointer. The trail, the click marks, the path ...",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -158,16 +158,16 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 		},
 	},
 	"getFrames": {
-		description: "Returns all frames including OOPIFs with their metadata. Uses ForEachRenderFrameHost to enumerate every frame in the page, including cross-origin out-of-process iframes.",
-		schema: map[string]any{"type": "object", "properties": map[string]any{}},
+		description: "Returns all frames including OOPIFs with their metadata: every frame in the page, cross-origin out-of-process iframes included.",
+		schema:      map[string]any{"type": "object", "properties": map[string]any{}},
 	},
 	"locateElement": {
 		description: "Locates an element in a specific frame and returns its bounding box in main-frame viewport coordinates (CSS pixels). This allows clicking on elements inside OOPIFs with correct screen-space coordin... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"frameId": map[string]any{"type": "string"},
-				"selector": selectorSchema,
+				"frameId":          map[string]any{"type": "string"},
+				"selector":         selectorSchema,
 				"relativePosition": coordinateSchema,
 			},
 			"required": []string{"frameId", "selector"},
@@ -178,27 +178,27 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector": selectorSchema,
+				"selector":         selectorSchema,
 				"relativePosition": coordinateSchema,
 			},
 			"required": []string{"selector"},
 		},
 	},
 	"waitForElement": {
-		description: "Waits for a selector to appear in any frame (main + iframes/OOPIFs). Polls natively via Mojo every 200ms (no JS execution). Searches main frame first, then child frames on each poll cycle. Supports... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Waits for a selector to appear in any frame (main + iframes/OOPIFs), or to stop matching with hidden. Checks repeatedly until the timeout and runs no script in the page. Searches main frame first, ... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"selector": selectorSchema,
-				"timeout": map[string]any{"type": "integer", "description": "Timeout in milliseconds. Default: 10000 (10s)."},
-				"visible": map[string]any{"type": "boolean", "description": "If true, also checks that the element has non-zero bounding box dimensions (width > 0 and height > 0). Note: does NOT..."},
+				"timeout":  map[string]any{"type": "integer", "description": "Timeout in milliseconds. Default: 10000 (10s)."},
+				"visible":  map[string]any{"type": "boolean", "description": "If true, also checks that the element has non-zero bounding box dimensions (width > 0 and height > 0). Note: does NOT..."},
 			},
 			"required": []string{"selector"},
 		},
 	},
 	"getMousePosition": {
 		description: "Returns the current tracked mouse position in CSS viewport pixels.",
-		schema: map[string]any{"type": "object", "properties": map[string]any{}},
+		schema:      map[string]any{"type": "object", "properties": map[string]any{}},
 	},
 	"isElementVisible": {
 		description: "Checks whether an element is visible in the viewport. Only \"css\" and \"xpath\" selector types are supported. Searches main frame first, then child frames (iframes/OOPIFs). Visibility is determine... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
@@ -211,7 +211,7 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 		},
 	},
 	"pressKey": {
-		description: "Sends a single key press with human-like timing (keyDown + keyUp, 30-70ms hold duration).  Special key names (case-insensitive):   \"Enter\", \"Tab\", \"Escape\" (or \"Esc\"), \"Backspace\", \"Dele...",
+		description: "Sends a single key press with human-like timing (keyDown, then keyUp a short moment later).  Special key names (case-insensitive):   \"Enter\", \"Tab\", \"Escape\" (or \"Esc\"), \"Backspace\", \"De...",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -225,9 +225,9 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector": selectorSchema,
+				"selector":         selectorSchema,
 				"relativePosition": coordinateSchema,
-				"holdTime": map[string]any{"type": "integer", "description": "How long to hold the hover position in milliseconds. Default: random between 500 and 1500ms."},
+				"holdTime":         map[string]any{"type": "integer", "description": "How long to hold the hover position in milliseconds. Default: random between 500 and 1500ms."},
 			},
 			"required": []string{"selector"},
 		},
@@ -237,10 +237,10 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector": selectorSchema,
-				"value": map[string]any{"type": "string", "description": "Select by option value attribute. Native <select> only."},
-				"text": map[string]any{"type": "string", "description": "Select by visible text content (whitespace-stripped comparison)."},
-				"index": map[string]any{"type": "integer", "description": "Select by 0-based index among options."},
+				"selector":       selectorSchema,
+				"value":          map[string]any{"type": "string", "description": "Select by option value attribute. Native <select> only."},
+				"text":           map[string]any{"type": "string", "description": "Select by visible text content (whitespace-stripped comparison)."},
+				"index":          map[string]any{"type": "integer", "description": "Select by 0-based index among options."},
 				"optionSelector": map[string]any{"type": "string", "description": "CSS selector for option elements in a custom dropdown. When provided, triggers click-based selection flow: 1. Click t..."},
 			},
 			"required": []string{"selector"},
