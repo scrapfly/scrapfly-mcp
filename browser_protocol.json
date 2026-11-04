@@ -617,12 +617,13 @@
                         "backendNodeId",
                         "coord",
                         "role",
+                        "pierce",
                         "bottom"
                     ]
                 },
                 {
                     "id": "Selector",
-                    "description": "Element selector \u2014 a type + query pair.\nThe query format depends on the type:\n  css      \u2014 CSS selector, e.g. \"#btn\", \"input[name='email']\"\n  xpath    \u2014 XPath expression, e.g. \"//div[@id='main']\"\n  axNodeId \u2014 integer AX node ID as string, e.g. \"42\"\n  coord    \u2014 \"x,y\" comma-separated CSS viewport pixels, e.g. \"450,600\"\n  role     \u2014 AX role name (case-insensitive), e.g. \"checkbox\", \"button\"\n  bottom   \u2014 no query needed (pass \"\"). Only valid for scroll.\nNot all commands support all selector types; see each command's docs.",
+                    "description": "Element selector \u2014 a type + query pair.\nThe query format depends on the type:\n  css      \u2014 CSS selector, e.g. \"#btn\", \"input[name='email']\"\n  xpath    \u2014 XPath expression, e.g. \"//div[@id='main']\"\n  axNodeId \u2014 integer AX node ID as string, e.g. \"42\"\n  coord    \u2014 \"x,y\" comma-separated CSS viewport pixels, e.g. \"450,600\"\n  role     \u2014 AX role name (case-insensitive), e.g. \"checkbox\", \"button\"\n  pierce   \u2014 host css >>> css, through shadow roots, e.g. \"my-widget >>> [role=button]\"\n  bottom   \u2014 no query needed (pass \"\"). Only valid for scroll.\nNot all commands support all selector types; see each command's docs.",
                     "type": "object",
                     "properties": [
                         {
@@ -755,7 +756,7 @@
                         },
                         {
                             "name": "method",
-                            "description": "How the browser solved (or attempted to solve) this captcha \u2014\none of: \"slider\" | \"checkbox\" | \"managed\" | \"hold\" | \"token\" |\n\"coords\" | \"rotate\" | \"invisible\" | \"cleared\". Empty string while\npending.",
+                            "description": "How the captcha was solved (or attempted), as in captchaSolved:\none of: \"slider\" | \"checkbox\" | \"managed\" | \"hold\" | \"token\" |\n\"coords\" | \"rotate\" | \"invisible\" | \"cleared\". Empty string while\npending.",
                             "optional": true,
                             "type": "string"
                         },
@@ -777,7 +778,7 @@
             "commands": [
                 {
                     "name": "performAction",
-                    "description": "Performs an accessibility action on a node identified by AXNodeId.\nRetries automatically (up to 10 times at 200ms intervals) for OOPIFs\nwhere the browser-side AX tree may take time to populate.",
+                    "description": "Performs an accessibility action on a node identified by AXNodeId.\nWhen the node is not found yet (an OOPIF's accessibility tree can take\na moment to be ready), keeps looking for about 2 seconds before failing.",
                     "parameters": [
                         {
                             "name": "axNodeId",
@@ -796,6 +797,7 @@
                         },
                         {
                             "name": "metadata",
+                            "description": "Ignored.",
                             "optional": true,
                             "type": "string"
                         }
@@ -814,7 +816,7 @@
                 },
                 {
                     "name": "findAndPerformAction",
-                    "description": "Searches the browser-side AX tree across ALL frames (including OOPIFs)\nfor a node matching the selector, then performs the specified action.\nOnly \"role\" and \"axNodeId\" selector types are supported.\nFor \"role\" type, query is the AX role (e.g. \"checkbox\", \"button\")\nand the browser walks all frames' AX trees. This works for OOPIF\nframes where CDP Accessibility.getFullAXTree cannot reach\ncross-process nodes.\nRetries up to 40 times at 300ms intervals (~12s) if no match found.",
+                    "description": "Searches the accessibility tree of ALL frames (including OOPIFs)\nfor a node matching the selector, then performs the specified action.\nOnly \"role\" and \"axNodeId\" selector types are supported.\nFor \"role\" type, query is the AX role (e.g. \"checkbox\", \"button\")\nand every frame's accessibility tree is searched. This works for OOPIF\nframes where CDP Accessibility.getFullAXTree cannot reach\ncross-process nodes.\nKeeps looking for about 12 seconds when nothing matches yet.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -894,6 +896,12 @@
                             "description": "If true, moves along a straighter path and never goes past the target.\nUse for small or precise targets where accuracy matters. Default: false.",
                             "optional": true,
                             "type": "boolean"
+                        },
+                        {
+                            "name": "frameUrl",
+                            "description": "URL glob of the frames to look the element up in (e.g.\n\"*checkout.example.com*\"): an element of the page or of another\nframe that the selector also matches is left out. The element is\nscrolled into view, then reached in page coordinates. Applies to css,\nxpath, backendNodeId and pierce selectors: any other type with\nframeUrl is refused as invalid params. Default: every frame.",
+                            "optional": true,
+                            "type": "string"
                         }
                     ],
                     "returns": [
@@ -938,6 +946,12 @@
                             "description": "Number of clicks (e.g. 2 for double-click). Default: 1.",
                             "optional": true,
                             "type": "integer"
+                        },
+                        {
+                            "name": "frameUrl",
+                            "description": "URL glob of the frames to look the element up in, as for moveTo: the\nclick lands on the element of a matching frame. Applies to css, xpath,\nbackendNodeId and pierce selectors: any other type with frameUrl is\nrefused as invalid params. Default: every frame.",
+                            "optional": true,
+                            "type": "string"
                         }
                     ],
                     "returns": [
@@ -1078,7 +1092,7 @@
                         },
                         {
                             "name": "frameUrl",
-                            "description": "Frame URL glob pattern to restrict element search to matching frames.\nUses shell-style wildcards (e.g. \"*example.com*\").",
+                            "description": "Frame URL glob pattern to restrict element search to matching frames.\nUses shell-style wildcards (e.g. \"*example.com*\"). Applies to css, xpath,\nbackendNodeId and pierce selectors, for selector and target: any other\ntype with frameUrl is refused as invalid params.",
                             "optional": true,
                             "type": "string"
                         },
@@ -1165,7 +1179,7 @@
                 },
                 {
                     "name": "fill",
-                    "description": "Clicks on element, optionally clears it, then types text with human timing.\nSupports all selector types except bottom.",
+                    "description": "Clicks on element, optionally clears it, then types text with human timing.\nWithout clear, the text goes after the content already in the field.\nSupports all selector types except bottom.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1188,7 +1202,7 @@
                         },
                         {
                             "name": "wpm",
-                            "description": "Words per minute for typing. Default: 60. See typeText for timing details.",
+                            "description": "Words per minute for typing. Default: 60. See typeText.",
                             "optional": true,
                             "type": "number"
                         },
@@ -1250,7 +1264,7 @@
                         },
                         {
                             "name": "ttlMs",
-                            "description": "Time in milliseconds the brackets remain visible before fading.\nDefault 1500ms. Clamped server-side to [0, 30000].",
+                            "description": "Time in milliseconds the brackets remain visible before fading.\nDefault 1500ms. Clamped to [0, 30000]. 0 clears the brackets.",
                             "optional": true,
                             "type": "integer"
                         }
@@ -1277,7 +1291,7 @@
                         },
                         {
                             "name": "ttlMs",
-                            "description": "Time in milliseconds the preview line remains visible before\nfading. Should be slightly longer than the expected mouse-move\nduration so the line is still visible while the cursor is in\ntransit. Default 500ms. Clamped server-side to [0, 5000].",
+                            "description": "Time in milliseconds the preview line remains visible before\nfading. Should be slightly longer than the expected mouse-move\nduration so the line is still visible while the cursor is in\ntransit. Default 500ms. Clamped to [0, 5000].",
                             "optional": true,
                             "type": "integer"
                         }
@@ -1446,6 +1460,18 @@
                             "description": "If true, also checks that the element has non-zero bounding box\ndimensions (width > 0 and height > 0). Note: does NOT check CSS\nvisibility, display, or opacity properties.\nDefault: false (just checks existence in the DOM).",
                             "optional": true,
                             "type": "boolean"
+                        },
+                        {
+                            "name": "frameUrl",
+                            "description": "URL glob of the frames to search, e.g. \"*checkout.example.com*\".\nApplies to css, xpath, backendNodeId and pierce: any other type with\nframeUrl is refused as invalid params. No frame matching counts as no\nmatch. Default: every frame.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "hidden",
+                            "description": "If true, answers once the selector stops matching (with visible, once\nthe match has no box) instead of once it matches. Default: false.",
+                            "optional": true,
+                            "type": "boolean"
                         }
                     ],
                     "returns": [
@@ -1467,6 +1493,53 @@
                     ]
                 },
                 {
+                    "name": "waitForCookie",
+                    "description": "Waits for a cookie to be written: answers once a cookie of that name the jar\nsends to url holds a value other than previousValue (any value when it is\nomitted), written by a script (document.cookie, CookieStore) or by a\nresponse's Set-Cookie. Unpartitioned cookies only. Read from the page's\ncookie jar: nothing runs in the page, which sees nothing of the wait.\n\nNo write is missed, whatever its order against the command: a write made\nbefore the command is found in the jar (alreadyWritten), and one made after\nit is reported as it happens. A timeout is an answer, written false, not an\nerror.",
+                    "parameters": [
+                        {
+                            "name": "name",
+                            "description": "Cookie name.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "url",
+                            "description": "The URL the cookie is sent to: its domain, path and scheme pick the\ncookies as for a request to it (a secure one needs https).",
+                            "type": "string"
+                        },
+                        {
+                            "name": "previousValue",
+                            "description": "The value the cookie held before the write waited for. A jar that holds\nanother one already answers at once.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "timeout",
+                            "description": "Timeout in milliseconds. Default: 10000 (10s).",
+                            "optional": true,
+                            "type": "integer"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "written",
+                            "description": "True once the cookie is written, false when the timeout passed first.",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "value",
+                            "description": "The value written. Set when written.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "alreadyWritten",
+                            "description": "True when the jar held it as the command arrived: the write came before\nthe command. Set when written.",
+                            "optional": true,
+                            "type": "boolean"
+                        }
+                    ]
+                },
+                {
                     "name": "getMousePosition",
                     "description": "Returns the current tracked mouse position in CSS viewport pixels.",
                     "returns": [
@@ -1482,7 +1555,7 @@
                 },
                 {
                     "name": "isElementVisible",
-                    "description": "Checks whether an element is visible in the viewport.\nOnly \"css\" and \"xpath\" selector types are supported.\nSearches main frame first, then child frames (iframes/OOPIFs).\nVisibility is determined by the renderer (checks display, opacity,\ndimensions, and viewport intersection).",
+                    "description": "Checks whether an element is visible in the viewport.\nOnly \"css\" and \"xpath\" selector types are supported.\nSearches main frame first, then child frames (iframes/OOPIFs).\nVisibility checks display, opacity, dimensions, and viewport\nintersection.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1503,7 +1576,7 @@
                         },
                         {
                             "name": "reason",
-                            "description": "Human-readable reason when not visible (e.g. \"zero size\", \"off viewport\").",
+                            "description": "Human-readable reason when not visible (e.g. \"zero size\", \"off viewport\");\n\"selector did not parse\" for a css selector that does not parse.",
                             "optional": true,
                             "type": "string"
                         }
@@ -1651,7 +1724,7 @@
                 },
                 {
                     "name": "captchaDisable",
-                    "description": "Disables captcha detection. The session history of detected captchas\n(and their solve/error outcomes) is preserved \u2014 retrieve it with\ngetSolvedCaptchas. Events already in flight (from captchaEnable) may\nstill arrive."
+                    "description": "Disables captcha detection. The session history of detected captchas\n(and their solve/error outcomes) is preserved \u2014 retrieve it with\ngetSolvedCaptchas. A solve under way is stopped. Events already in\nflight (from captchaEnable) may still arrive."
                 },
                 {
                     "name": "getSolvedCaptchas",
@@ -1729,7 +1802,7 @@
                         },
                         {
                             "name": "siteKey",
-                            "description": "Site key (Turnstile, reCAPTCHA, hCaptcha), GeeTest gt value or Arkose\npublic key.",
+                            "description": "Site key (Turnstile, reCAPTCHA, hCaptcha) or Arkose public key.",
                             "optional": true,
                             "type": "string"
                         },
@@ -5622,12 +5695,12 @@
                 },
                 {
                     "name": "enable",
-                    "description": "Enables Browser-domain Scrapfly events for this session. Currently emits\nrestorableSessionDetected if the last run ended in a crash and a session is\navailable to restore (the CDP equivalent of Chromium showing the \"Restore\npages?\" bubble). The standard Browser commands work without it. [Scrapfly extension]",
+                    "description": "Enables the Browser-domain events of this session. Currently emits\nrestorableSessionDetected, during this call, when the tab's profile keeps\nits last session and is set to restore it. Send it on a session attached\nto a tab: on the browser target it emits nothing. The standard Browser\ncommands work without it. [Scrapfly extension]",
                     "experimental": true
                 },
                 {
                     "name": "restoreSession",
-                    "description": "Reopens the previous browsing session's tabs \u2014 the programmatic equivalent\nof clicking \"Restore\" on the \"Chromium didn't shut down correctly\" bubble.\nRequires a profile with a persisted last session (a reused user-data-dir).\nRestores asynchronously; the response is sent once the browser/tabs have\nbeen created (not necessarily finished loading). [Scrapfly extension]",
+                    "description": "Reopens the previous browsing session's tabs, as clicking \"Restore\" on the\n\"Chromium didn't shut down correctly\" bubble does. Requires a profile that\nkept its last session (a profile reused from an earlier run). Send it on a\nsession attached to a tab; the tabs open in that tab's window.\nRestores asynchronously; the response is sent once the browser/tabs have\nbeen created (not necessarily finished loading). It fails (success false,\nwith errorMessage) when there is nothing to restore, a restore is already\nrunning, or the restore has not finished after 30 seconds.\n[Scrapfly extension]",
                     "experimental": true,
                     "parameters": [
                         {
@@ -5757,7 +5830,7 @@
                 },
                 {
                     "name": "preconnect",
-                    "description": "Opens connections to the origin of a URL without requesting anything, as\n<link rel=preconnect> does, so the first request that needs one finds it\nconnected. Chrome keeps the requests that send credentials and the anonymous\nones (crossorigin scripts and fonts, fetch with credentials omitted) on\nseparate connections: allowCredentials picks the one to warm. Resolves\nnothing about the page. Returns before anything has connected. A connection\nnobody asks for stays in the socket pool until the server closes it, or\nuntil the pool is next used after it has been idle for 60 seconds.\n[Scrapfly extension]",
+                    "description": "Opens connections to the origin of a URL without requesting anything, as\n<link rel=preconnect> does, so the first request that needs one finds it\nconnected. Chrome keeps the requests that send credentials and the anonymous\nones (crossorigin scripts and fonts, fetch with credentials omitted) on\nseparate connections: allowCredentials picks the one to warm. Resolves\nnothing about the page. Returns before anything has connected. A connection\nnobody uses stays open until the server closes it, or until the browser\nnext opens a connection after it has been idle for 60 seconds.\n[Scrapfly extension]",
                     "experimental": true,
                     "parameters": [
                         {
@@ -5785,7 +5858,7 @@
                         },
                         {
                             "name": "browserContextId",
-                            "description": "BrowserContext to connect in. Each context has its own socket pools, so a\ntab made with Target.createBrowserContext only finds a connection that\nnames its context. When omitted, the default one is used, which is where\na tab made by Target.createTarget without a context lives.",
+                            "description": "BrowserContext to connect in. Each context has its own connections, so a\ntab made with Target.createBrowserContext only uses a connection opened\nin its context. When omitted, the default one is used, which is where\na tab made by Target.createTarget without a context lives.",
                             "optional": true,
                             "$ref": "BrowserContextID"
                         }
@@ -5861,7 +5934,7 @@
                 },
                 {
                     "name": "restorableSessionDetected",
-                    "description": "Emitted (after Browser.enable) when the previous run ended uncleanly and a\nsession is available to restore \u2014 i.e. exactly when Chromium would surface\nthe \"Chromium didn't shut down correctly / Restore pages?\" bubble in the UI.\nThe client can react by calling Browser.restoreSession. [Scrapfly extension]",
+                    "description": "Emitted by Browser.enable when the tab's profile keeps its last session and\nis set to restore it, whether or not the previous run crashed. The client\ncan react by calling Browser.restoreSession, with requireCrashedState to\nrestore only after a crash. [Scrapfly extension]",
                     "experimental": true
                 }
             ]
@@ -25698,7 +25771,7 @@
                 },
                 {
                     "name": "getRenderedContent",
-                    "description": "Returns the full rendered content of the page.\nFor text-serializable types (HTML, XML, JSON, etc.), returns rendered HTML\nwith iframe content inlined. For binary types (PDF, images, etc.), returns\nthe raw body bytes as base64.",
+                    "description": "Returns the full rendered content of the page.\nFor text-serializable types (HTML, XML, JSON, etc.), returns rendered HTML\nwith iframe content inlined. For binary types (PDF, images, etc.), returns\nthe raw body bytes as base64.\n\nThe command blocks until the page's document is ready, `timeout` at most:\na navigation of the page in progress has committed, and the committed\ndocument is parsed (DOMContentLoaded). The load event, and the images,\nscripts and frames it waits for, are not waited for. The command fails at\nonce, with the network error (`net::ERR_...`), when the navigation fails\nor when the document's own load fails (its connection reset, closed or\nlost while the body loads). A document whose load was stopped\n(window.stop(), Page.stopLoading) is returned at once, as far as it got.\nAt the timeout it returns the document the page shows, with `ready`\nfalse: the one before a navigation that has not committed, or a document\nstill being parsed, as far as the parser got.",
                     "experimental": true,
                     "parameters": [
                         {
@@ -25712,6 +25785,12 @@
                             "description": "Output format for text content: \"html\" (default) or \"markdown\".\n\"markdown\" converts the rendered HTML to GitHub-flavored Markdown.\nRelative URLs in links and images are resolved against the main frame\nURL.\nIgnored for binary content types.",
                             "optional": true,
                             "type": "string"
+                        },
+                        {
+                            "name": "timeout",
+                            "description": "How long the command waits for the document to be ready, in\nmilliseconds. Default 30000. 0 reads the document as it is now.",
+                            "optional": true,
+                            "type": "integer"
                         }
                     ],
                     "returns": [
@@ -25724,6 +25803,11 @@
                             "name": "type",
                             "description": "\"text\" for HTML, \"markdown\" for converted Markdown, \"binary\" for non-text.",
                             "type": "string"
+                        },
+                        {
+                            "name": "ready",
+                            "description": "False when the content was not read from a ready document: the timeout\nended the wait before the document was ready, the page did not answer\nin time, or its renderer went away. The content may then be empty or\nstale and is not the page.",
+                            "type": "boolean"
                         }
                     ]
                 },
@@ -25742,14 +25826,14 @@
                         },
                         {
                             "name": "isErrorPage",
-                            "description": "True when the committed document is an error page. Without this a caller\ncannot tell a navigation that FAILED from one still in flight: both yield\na chain carrying no committed final response, and reading the failure as\n\"still loading\" reports it as a timeout.",
+                            "description": "True when the committed document is an error page, that is the\nnavigation failed. A failed navigation and one still in flight both\nreturn a chain with no final response: this field tells them apart.",
                             "type": "boolean"
                         }
                     ]
                 },
                 {
                     "name": "fetch",
-                    "description": "Makes an HTTP request from the browser process using the page's cookie jar\nand network context. Follows redirects by default and returns the full\nredirect chain alongside the final response.",
+                    "description": "Makes an HTTP request from the browser, outside the page, with the page's\ncookies and network settings. Follows redirects by default and returns the\nfull redirect chain alongside the final response.",
                     "experimental": true,
                     "parameters": [
                         {
@@ -25780,6 +25864,17 @@
                             "description": "Whether to follow redirects. Default: true.",
                             "optional": true,
                             "type": "boolean"
+                        },
+                        {
+                            "name": "credentials",
+                            "description": "The cookies of the page's cookie jar the request carries, as the Fetch API's credentials: those of any URL (include,\nthe default), only those of the page's origin (same-origin), or none (omit).",
+                            "optional": true,
+                            "type": "string",
+                            "enum": [
+                                "include",
+                                "same-origin",
+                                "omit"
+                            ]
                         }
                     ],
                     "returns": [
@@ -25826,7 +25921,7 @@
                 },
                 {
                     "name": "capture",
-                    "description": "Captures the page as an MHTML archive and returns it as an IO stream. The archive comes\nfrom the engine behind chrome.pageCapture.saveAsMHTML and captureSnapshot, so it holds\nwhat they hold: the DOM as it is now, with its iframes, stylesheets and images; no\nscripts and no web fonts. The browser neither holds it in memory nor sends it as one\nprotocol message: read it with IO.read until eof, then release it with IO.close.\nDo not overlap captures of one page: the renderer serves one archive job per frame, so\na capture started while another runs fails the one that ran first (\"Failed to generate\nMHTML\"). A tab whose renderer is gone answers \"Frame is not live\".",
+                    "description": "Captures the page as an MHTML archive and returns it as an IO stream. The archive comes\nfrom the engine behind chrome.pageCapture.saveAsMHTML and captureSnapshot, so it holds\nwhat they hold: the DOM as it is now, with its iframes, stylesheets and images; no\nscripts and no web fonts. The browser neither holds it in memory nor sends it as one\nprotocol message: read it with IO.read until eof, then release it with IO.close.\nDo not overlap captures of one page: a page serves one capture at a time, so a capture\nstarted while another runs fails the one that ran first (\"Failed to generate MHTML\").\nA tab that crashed answers \"Frame is not live\".",
                     "experimental": true,
                     "parameters": [
                         {
@@ -27028,7 +27123,7 @@
                 },
                 {
                     "name": "navigationResponseReceived",
-                    "description": "Fired when the main-frame navigation commits a NON-redirect response (the\nreal final document). Redirect hops do NOT fire this event on their own, so a\nnavigation that is still bouncing through redirects (or being stalled by an\nanti-bot at a redirect target) simply never emits it. `loaderId` lets the\nconsumer correlate the committed response with the navigation request it\nalready tracks (and reconstruct the redirect chain from that request).\n`timestamp` is in the same monotonic domain as CDP Network response\ntimestamps, so it can be ordered against a received Network response to\ndecide whether a newer navigation response is still pending.",
+                    "description": "Fired when the main-frame navigation commits a non-redirect response (the\nfinal document). Redirect hops do not fire this event, so a navigation that\nis still going through redirects, or held at a redirect target, does not\nemit it yet. Requires Page.enable. `loaderId` lets the consumer\ncorrelate the committed response with the navigation request it\nalready tracks (and reconstruct the redirect chain from that request).\n`timestamp` is in the same monotonic domain as CDP Network response\ntimestamps, so it can be ordered against a received Network response to\ndecide whether a newer navigation response is still pending.",
                     "experimental": true,
                     "parameters": [
                         {
@@ -27452,7 +27547,7 @@
             "types": [
                 {
                     "id": "CredentialFieldType",
-                    "description": "Field semantic role, derived from the renderer's autofill classification.",
+                    "description": "What a form field is for, as detected by the browser's autofill.",
                     "type": "string",
                     "enum": [
                         "username",
@@ -27541,7 +27636,7 @@
                     "properties": [
                         {
                             "name": "origin",
-                            "description": "eTLD+1 of the origin the credential was saved for.",
+                            "description": "Origin the credential was saved for (e.g. \"https://example.com/\").",
                             "type": "string"
                         },
                         {
@@ -27558,7 +27653,7 @@
                     "properties": [
                         {
                             "name": "rpId",
-                            "description": "Relying-party identifier (eTLD+1 of the origin).",
+                            "description": "Relying-party id the passkey was registered for.",
                             "type": "string"
                         },
                         {
@@ -27568,7 +27663,7 @@
                         },
                         {
                             "name": "credentialId",
-                            "description": "Opaque credential id, exactly as it was passed to\nregisterPasskey \u2014 the store never re-spells it, so a client can\nmatch on the string it sent. Echo back to deletePasskey.",
+                            "description": "Opaque credential id, exactly as it was passed to\nregisterPasskey (never re-encoded), so a client can match on the\nstring it sent.",
                             "type": "string"
                         }
                     ]
@@ -27584,7 +27679,7 @@
                         },
                         {
                             "name": "value",
-                            "description": "Cookie value. Cleartext \u2014 the cookie is already plaintext at\nrest in the network stack so there's no defense gained by\nhiding it on the wire here.",
+                            "description": "Cookie value, in clear text.",
                             "type": "string"
                         },
                         {
@@ -27605,7 +27700,7 @@
                         },
                         {
                             "name": "sameSite",
-                            "description": "\"Strict\" | \"Lax\" | \"None\" \u2014 empty when unset.",
+                            "description": "\"Strict\" | \"Lax\" | \"None\"; empty when unset.",
                             "optional": true,
                             "type": "string"
                         },
@@ -27646,7 +27741,7 @@
                         },
                         {
                             "name": "digits",
-                            "description": "Default 6. The RFC allows 6-8; we accept 6-10 with a wider\nceiling for issuers that emit 10-digit codes.",
+                            "description": "Number of digits, 6 to 10. Default 6.",
                             "optional": true,
                             "type": "integer"
                         },
@@ -27666,7 +27761,7 @@
                     "parameters": [
                         {
                             "name": "requestId",
-                            "description": "UUID \u2014 pass back via provideCredentials/declineRequest.",
+                            "description": "UUID to pass back to prefillChoice, provideCredentials or\ndeclineRequest.",
                             "type": "string"
                         },
                         {
@@ -27808,7 +27903,7 @@
                         },
                         {
                             "name": "submit",
-                            "description": "Submit the form after filling. Default: false.",
+                            "description": "Reserved: the form is not submitted yet, whatever the value.\nSubmit it with Antibot.clickOn or Antibot.pressKey.",
                             "optional": true,
                             "type": "boolean"
                         },
@@ -27901,7 +27996,7 @@
                         },
                         {
                             "name": "userHandle",
-                            "description": "Optional base64-encoded user handle (defaults to a hash of\n`username` when omitted).",
+                            "description": "Optional base64-encoded user handle (defaults to the bytes of\n`username` when omitted).",
                             "optional": true,
                             "type": "string"
                         },
@@ -27926,7 +28021,7 @@
                 },
                 {
                     "name": "listPasskeys",
-                    "description": "List passkeys saved on the session-scoped authenticator.\n`rpIdFilter` restricts to a specific relying party.",
+                    "description": "List passkeys saved on the session's authenticator.\n`rpIdFilter` restricts to a specific relying party.",
                     "parameters": [
                         {
                             "name": "rpIdFilter",
@@ -28045,7 +28140,7 @@
                 },
                 {
                     "name": "deleteCookie",
-                    "description": "Delete a cookie by (name, domain). The domain matches the cookie's\nhost exactly and dot-insensitively \u2014 the same rule listCookies'\ndomainFilter uses, so whatever a filtered list shows for a domain is\nwhat a delete for that domain removes, and nothing else. Returns\nsuccess=false when no matching entry was found.",
+                    "description": "Delete cookies by (name, domain): every cookie with that name on that\ndomain is removed, whatever its path. The domain is matched as\nlistCookies' domainFilter matches it (case-insensitive, with or\nwithout a leading dot), so a delete removes exactly the cookies of\nthat name a filtered list shows for the domain. Returns\nsuccess=false when no matching entry was found.",
                     "parameters": [
                         {
                             "name": "name",
@@ -28098,13 +28193,13 @@
                         },
                         {
                             "name": "digits",
-                            "description": "Defaults to 6.",
+                            "description": "Number of digits, 6 to 10. Defaults to 6.",
                             "optional": true,
                             "type": "integer"
                         },
                         {
                             "name": "period",
-                            "description": "Defaults to 30.",
+                            "description": "Seconds, 5 to 300. Defaults to 30.",
                             "optional": true,
                             "type": "integer"
                         }
@@ -28203,7 +28298,7 @@
                     "parameters": [
                         {
                             "name": "url",
-                            "description": "Full URL the credential is associated with (query+fragment\nignored). Must be http:// or https://.",
+                            "description": "Full URL the credential is associated with (query+fragment\nignored). Must be https:// (http:// is accepted for localhost only).",
                             "type": "string"
                         },
                         {
@@ -28246,13 +28341,13 @@
                         },
                         {
                             "name": "totp",
-                            "description": "TOTP \u2014 typed into the field tagged `otp` if one was detected,\nelse ignored. Use fillCredentials with totpSelector for explicit\nplacement.",
+                            "description": "TOTP code, typed into the `otp` field if one was detected, else\nignored. When omitted, a code registered with registerTotp for\nthis origin and username is used. Use fillCredentials with\ntotpSelector for explicit placement.",
                             "optional": true,
                             "type": "string"
                         },
                         {
                             "name": "submit",
-                            "description": "Submit the form after filling. Default: false.",
+                            "description": "Reserved: the form is not submitted yet, whatever the value.\nSubmit it with Antibot.clickOn or Antibot.pressKey.",
                             "optional": true,
                             "type": "boolean"
                         },
@@ -28277,7 +28372,7 @@
                 },
                 {
                     "name": "providePasskey",
-                    "description": "Reply to passkeyRequested or passkeyRegistrationRequested. Adds the\ncredential to a session-scoped virtual authenticator (auto-created on\nfirst call) so the in-flight navigator.credentials call resolves.",
+                    "description": "Reply to passkeyRequested or passkeyRegistrationRequested. Reserved:\nthose events are not emitted yet, and this command always returns\nsuccess=false. Use registerPasskey to add a passkey before the page\nasks for it.",
                     "parameters": [
                         {
                             "name": "requestId",
@@ -28320,7 +28415,7 @@
                 },
                 {
                     "name": "declineRequest",
-                    "description": "Acknowledge a credentialsRequested or passkeyRequested event without\nfilling. The form is left as-is; no further events will fire for the\nsame requestId.",
+                    "description": "Answer a credentialsRequested event without filling. The form is left\nas-is and the requestId can no longer be used.",
                     "parameters": [
                         {
                             "name": "requestId",
@@ -28340,25 +28435,25 @@
                     "parameters": [
                         {
                             "name": "frameId",
-                            "description": "Frame containing the form. Defaults to the main frame.",
+                            "description": "Reserved: ignored for now. The selectors are matched in every frame\nof the page.",
                             "optional": true,
                             "$ref": "Page.FrameId"
                         },
                         {
                             "name": "formId",
-                            "description": "If provided, resolves the form via the renderer's autofill data\n(same path as event-driven fills). selectors below are ignored.",
+                            "description": "Reserved: not supported yet, a call that sets it fails. Pass the\nselectors below instead.",
                             "optional": true,
                             "type": "string"
                         },
                         {
                             "name": "usernameSelector",
-                            "description": "CSS selectors for explicit-placement mode. usernameSelector is\noptional (signup forms with email-only first step, etc.).",
+                            "description": "CSS selector of the username field. Optional (e.g. a step that\nasks for the password only); the username is typed only when both\nthis and `username` are set.",
                             "optional": true,
                             "type": "string"
                         },
                         {
                             "name": "passwordSelector",
-                            "description": "Required when formId is not provided.",
+                            "description": "CSS selector of the password field. Required.",
                             "optional": true,
                             "type": "string"
                         },
@@ -28373,21 +28468,25 @@
                         },
                         {
                             "name": "totpSelector",
+                            "description": "CSS selector of the one-time code field.",
                             "optional": true,
                             "type": "string"
                         },
                         {
                             "name": "totp",
+                            "description": "Code typed into totpSelector. When omitted and `username` is set,\nthe current code of a TOTP registered for this page's host and\nthat username is used.",
                             "optional": true,
                             "type": "string"
                         },
                         {
                             "name": "submit",
+                            "description": "Reserved: the form is not submitted yet, whatever the value.\nSubmit it with Antibot.clickOn or Antibot.pressKey.",
                             "optional": true,
                             "type": "boolean"
                         },
                         {
                             "name": "wpm",
+                            "description": "Words-per-minute for the typing pass, as in Antibot.fill.\nDefault: 60.",
                             "optional": true,
                             "type": "number"
                         }
@@ -28417,7 +28516,7 @@
                 },
                 {
                     "name": "disable",
-                    "description": "Disables event emission. Pending requests are discarded \u2014 any in-flight\nWebAuthn assertion will fail with NotAllowedError."
+                    "description": "Disables the domain and event emission. Pending requests are\ndiscarded, and the session's passkeys, its authenticator and its TOTPs\nare removed. Credentials saved in the password store and cookies are\nkept."
                 }
             ]
         },

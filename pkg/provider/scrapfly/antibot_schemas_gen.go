@@ -49,6 +49,7 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 				"relativePosition": coordinateSchema,
 				"absoluteOffset":   map[string]any{"type": "boolean", "description": "For \"coord\" selector type only: if true, treat the query coordinates as an offset from the current mouse position r..."},
 				"steady":           map[string]any{"type": "boolean", "description": "If true, moves along a straighter path and never goes past the target. Use for small or precise targets where accurac..."},
+				"frameUrl":         map[string]any{"type": "string", "description": "URL glob of the frames to look the element up in (e.g. \"*checkout.example.com*\"): an element of the page or of anot..."},
 			},
 			"required": []string{"selector"},
 		},
@@ -63,6 +64,7 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 				"button":           map[string]any{"type": "string", "description": "Mouse button: \"left\", \"right\", or \"middle\". Default: \"left\"."},
 				"clickDuration":    map[string]any{"type": "number", "description": "Hold duration in seconds between mousedown and mouseup. Default: random between 0.1 and 0.4 seconds."},
 				"clickCount":       map[string]any{"type": "integer", "description": "Number of clicks (e.g. 2 for double-click). Default: 1."},
+				"frameUrl":         map[string]any{"type": "string", "description": "URL glob of the frames to look the element up in, as for moveTo: the click lands on the element of a matching frame. ..."},
 			},
 			"required": []string{"selector"},
 		},
@@ -134,7 +136,7 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 		},
 	},
 	"fill": {
-		description: "Clicks on element, optionally clears it, then types text with human timing. Supports all selector types except bottom. Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Clicks on element, optionally clears it, then types text with human timing. Without clear, the text goes after the content already in the field. Supports all selector types except bottom. Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -142,7 +144,7 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 				"text":             map[string]any{"type": "string"},
 				"relativePosition": coordinateSchema,
 				"clear":            map[string]any{"type": "boolean", "description": "Clear existing content first by sending Ctrl+A then Backspace. Default: false."},
-				"wpm":              map[string]any{"type": "number", "description": "Words per minute for typing. Default: 60. See typeText for timing details."},
+				"wpm":              map[string]any{"type": "number", "description": "Words per minute for typing. Default: 60. See typeText."},
 				"paste":            map[string]any{"type": "boolean", "description": "Paste the text instead of typing it. When true, the text replaces the clipboard content and is pasted into the field:..."},
 			},
 			"required": []string{"selector", "text"},
@@ -192,6 +194,8 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 				"selector": selectorSchema,
 				"timeout":  map[string]any{"type": "integer", "description": "Timeout in milliseconds. Default: 10000 (10s)."},
 				"visible":  map[string]any{"type": "boolean", "description": "If true, also checks that the element has non-zero bounding box dimensions (width > 0 and height > 0). Note: does NOT..."},
+				"frameUrl": map[string]any{"type": "string", "description": "URL glob of the frames to search, e.g. \"*checkout.example.com*\". Applies to css, xpath, backendNodeId and pierce: a..."},
+				"hidden":   map[string]any{"type": "boolean", "description": "If true, answers once the selector stops matching (with visible, once the match has no box) instead of once it matche..."},
 			},
 			"required": []string{"selector"},
 		},
@@ -201,7 +205,7 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 		schema:      map[string]any{"type": "object", "properties": map[string]any{}},
 	},
 	"isElementVisible": {
-		description: "Checks whether an element is visible in the viewport. Only \"css\" and \"xpath\" selector types are supported. Searches main frame first, then child frames (iframes/OOPIFs). Visibility is determine... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Checks whether an element is visible in the viewport. Only \"css\" and \"xpath\" selector types are supported. Searches main frame first, then child frames (iframes/OOPIFs). Visibility checks displ... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
