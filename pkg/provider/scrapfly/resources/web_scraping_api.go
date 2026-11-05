@@ -288,6 +288,8 @@ components:
             ` + "`" + `{"wait_for_selector": {"selector": "#results", "timeout": 5000}}` + "`" + `
         *   **` + "`" + `wait_for_navigation` + "`" + `**: Waits for the page to navigate to a new URL.
             ` + "`" + `{"wait_for_navigation": {}}` + "`" + `
+        *   **` + "`" + `solve_captcha` + "`" + `**: Solves the captcha on the page, 5 to 20 API credits per captcha solved depending on its type, 5 steps per scenario at most.
+            ` + "`" + `{"solve_captcha": {"timeout": 25000}}` + "`" + `
         *   **` + "`" + `condition` + "`" + `**: Executes a set of actions only if a selector exists.
             ` + "`" + `{"condition": {"selector": "#gdpr-banner", "actions": [{"click": {"selector": "#accept-cookies"}}]}}` + "`" + `
         *   **` + "`" + `execute` + "`" + `**: Executes a raw JavaScript snippet.
