@@ -75,6 +75,13 @@ func (p *ScrapflyToolProvider) Screenshot(
 	if err != nil {
 		return ToolErrFromError("screenshot", err), nil, err
 	}
+	// A screenshot with a webhook is queued: the image goes to the webhook, the call returns its job.
+	if screenshotResult.JobUUID != "" {
+		queued := &mcp.TextContent{
+			Text: fmt.Sprintf("Screenshot of %s queued for webhook %s, job %s.", config.URL, config.Webhook, screenshotResult.JobUUID),
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{queued}}, nil, nil
+	}
 	content := &mcp.ImageContent{
 		Data:     screenshotResult.Image,
 		MIMEType: fmt.Sprintf("image/%s", screenshotResult.Metadata.ExtensionName),
