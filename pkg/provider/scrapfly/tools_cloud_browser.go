@@ -3,6 +3,7 @@ package scrapflyprovider
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -457,19 +458,24 @@ func (p *ScrapflyToolProvider) CloudBrowserScreenshot(
 		return ToolErrf("cloud_browser_screenshot: empty screenshot data"), nil, nil
 	}
 
+	image, err := base64.StdEncoding.DecodeString(screenshot.Data)
+	if err != nil {
+		return ToolErrf("cloud_browser_screenshot: decode image: %v", err), nil, nil
+	}
+
 	// Return a TextContent sidecar alongside the image. ADK's
 	// mcptoolset drops image-only results and errors with "no text
 	// content in tool response"; the text makes the call succeed for
 	// the LLM while UI clients still receive the PNG.
-	textSummary := fmt.Sprintf("Screenshot captured (PNG, %d bytes base64).", len(screenshot.Data))
+	textSummary := fmt.Sprintf("Screenshot captured (PNG, %d bytes).", len(image))
 	if input.Selector != "" {
-		textSummary = fmt.Sprintf("Screenshot of %q captured (PNG, %d bytes base64).", input.Selector, len(screenshot.Data))
+		textSummary = fmt.Sprintf("Screenshot of %q captured (PNG, %d bytes).", input.Selector, len(image))
 	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: textSummary},
 			&mcp.ImageContent{
-				Data:     []byte(screenshot.Data),
+				Data:     image,
 				MIMEType: "image/png",
 			},
 		},

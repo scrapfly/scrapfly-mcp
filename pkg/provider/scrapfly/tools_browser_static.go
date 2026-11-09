@@ -6,6 +6,7 @@ package scrapflyprovider
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -249,13 +250,17 @@ func browserInteractionTools(provider *ScrapflyToolProvider) tools.HandledToolSe
 			Data string `json:"data"`
 		}
 		json.Unmarshal(result, &ss)
+		image, err := base64.StdEncoding.DecodeString(ss.Data)
+		if err != nil {
+			return ToolErrf("take_screenshot: decode image: %v", err), nil, nil
+		}
 		// TextContent sidecar: ADK's mcptoolset drops image-only tool
 		// responses and errors with "no text content in tool response".
 		// The text is what the LLM sees; the image goes to UI clients.
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Screenshot captured (PNG, %d bytes base64).", len(ss.Data))},
-				&mcp.ImageContent{Data: []byte(ss.Data), MIMEType: "image/png"},
+				&mcp.TextContent{Text: fmt.Sprintf("Screenshot captured (PNG, %d bytes).", len(image))},
+				&mcp.ImageContent{Data: image, MIMEType: "image/png"},
 			},
 		}, nil, nil
 	})

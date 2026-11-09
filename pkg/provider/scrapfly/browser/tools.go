@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
@@ -44,13 +45,17 @@ func RegisterCDPTools(
 			Data string `json:"data"`
 		}
 		json.Unmarshal(result, &ss)
+		image, err := base64.StdEncoding.DecodeString(ss.Data)
+		if err != nil {
+			return toolErrf("take_screenshot: decode image: %v", err), nil
+		}
 		// TextContent sidecar: ADK's mcptoolset drops image-only tool
 		// responses. Emit a short text summary alongside the PNG so the
 		// LLM sees a non-empty reply.
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Screenshot captured (PNG, %d bytes base64).", len(ss.Data))},
-				&mcp.ImageContent{Data: []byte(ss.Data), MIMEType: "image/png"},
+				&mcp.TextContent{Text: fmt.Sprintf("Screenshot captured (PNG, %d bytes).", len(image))},
+				&mcp.ImageContent{Data: image, MIMEType: "image/png"},
 			},
 		}, nil
 	})
