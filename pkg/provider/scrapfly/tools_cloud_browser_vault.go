@@ -829,7 +829,7 @@ func cloudBrowserVaultTools(provider *ScrapflyToolProvider) tools.HandledToolSet
 		Description: "Rename a vault or change its description. Items, the vault key and any linked service stay as they are. A rename breaks session configs that select the vault by its old name. Use cloud_browser_vault_service_update for 1Password selection rules. Two-step confirmation.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser Vault — Update",
-			DestructiveHint: &falseBool,
+			DestructiveHint: &trueBool,
 			ReadOnlyHint:    false,
 			IdempotentHint:  true,
 			OpenWorldHint:   &trueBool,
@@ -899,7 +899,7 @@ func cloudBrowserVaultTools(provider *ScrapflyToolProvider) tools.HandledToolSet
 		Description: "Patch one vault item. Fields you send overwrite the row. Sending secret replaces the stored secret with no way back and requires the vault key; a label, origin, username or metadata patch does not. Items owned by a linked service are refused with a conflict. Two-step confirmation.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser Vault — Update Item",
-			DestructiveHint: &falseBool,
+			DestructiveHint: &trueBool,
 			ReadOnlyHint:    false,
 			IdempotentHint:  true,
 			OpenWorldHint:   &trueBool,
@@ -942,7 +942,7 @@ func cloudBrowserVaultTools(provider *ScrapflyToolProvider) tools.HandledToolSet
 		Description: "Change a linked vault's 1Password selection rules, rotate its service-account token, or both. linked_service_data replaces the stored document wholesale, so send every field you want kept. The vault key is required only when a token is sent, and token_item_id in the body is ignored. Two-step confirmation.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser Vault — Update Link",
-			DestructiveHint: &falseBool,
+			DestructiveHint: &trueBool,
 			ReadOnlyHint:    false,
 			IdempotentHint:  true,
 			OpenWorldHint:   &trueBool,
@@ -970,7 +970,7 @@ func cloudBrowserVaultTools(provider *ScrapflyToolProvider) tools.HandledToolSet
 		Description: "Sync a linked vault from 1Password now, bypassing the freshness window and the one hour back-off a failed run leaves behind. Needs the vault key to open the sealed token. Returns imported, updated, deleted, skipped, unmirrored, status and warnings. The server budget is 25 seconds.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Cloud Browser Vault — Sync Now",
-			DestructiveHint: &falseBool,
+			DestructiveHint: &trueBool,
 			ReadOnlyHint:    false,
 			IdempotentHint:  false,
 			OpenWorldHint:   &trueBool,

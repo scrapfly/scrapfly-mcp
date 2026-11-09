@@ -63,6 +63,45 @@ func TestToolAnnotationsCarryDirectoryHints(t *testing.T) {
 	}
 }
 
+func TestToolAnnotationsOfStateChangingTools(t *testing.T) {
+	set := staticTools(NewScrapflyToolProvider(nil, nil, nil))
+	for _, name := range []string{
+		"web_scrape",
+		"screenshot",
+		"cloud_browser_open",
+		"cloud_browser_eval",
+		"click",
+		"fill",
+		"type_text",
+		"press_key",
+		"select_option",
+		"drag",
+		"evaluate_script",
+		"call_webmcp_tool",
+		"cloud_browser_vault_update",
+		"cloud_browser_vault_item_update",
+		"cloud_browser_vault_service_update",
+		"cloud_browser_vault_service_sync",
+	} {
+		handled := set[name]
+		if handled == nil {
+			t.Errorf("tool %q: not in the toolset", name)
+			continue
+		}
+		a := handled.Tool.Annotations
+		if a.ReadOnlyHint || !*a.DestructiveHint {
+			t.Errorf("tool %q: readOnlyHint=%v destructiveHint=%v", name, a.ReadOnlyHint, *a.DestructiveHint)
+		}
+	}
+	if set["web_scrape"].Tool.Annotations.IdempotentHint {
+		t.Error("web_scrape: idempotentHint=true")
+	}
+	page := set["web_get_page"].Tool.Annotations
+	if !page.ReadOnlyHint || *page.DestructiveHint {
+		t.Errorf("web_get_page: readOnlyHint=%v destructiveHint=%v", page.ReadOnlyHint, *page.DestructiveHint)
+	}
+}
+
 // The bool hints only reach the wire because the go-sdk in go.mod dropped
 // `omitempty` from them. Pin that: a downgrade silently strips
 // readOnlyHint:false from every mutating tool.
