@@ -39,7 +39,7 @@ func scrapingToolSchemas() map[string]*jsonschema.Schema {
 	}
 }
 
-// Only ScrapeToolInput exposes the legacy toggle; web_get_page keeps the
+// Only ScrapeToolInput exposes the anti-bot toggle; web_get_page keeps the
 // Unblocker on without a new pool and declares neither name.
 func unblockerToolSchemas() map[string]*jsonschema.Schema {
 	return map[string]*jsonschema.Schema{
@@ -177,7 +177,7 @@ func TestResolveUnblockerPrecedence(t *testing.T) {
 
 // The resolved value must reach scrapfly.ScrapeConfig.ASP, which serialises to
 // the `asp` query parameter, next to the resolved pool. A new pool goes out
-// alone; any other call, a legacy pool name or none, carries the toggle.
+// alone; any other call, a public pool name or none, carries the toggle.
 func TestScrapeConfigCarriesResolvedUnblocker(t *testing.T) {
 	yes, no := true, false
 	for _, tc := range []struct {
@@ -188,10 +188,10 @@ func TestScrapeConfigCarriesResolvedUnblocker(t *testing.T) {
 	}{
 		{"omitted keeps the Unblocker on", ScrapeToolInput{URL: "https://example.com"}, true, ""},
 		{"unblocker false", ScrapeToolInput{URL: "https://example.com", Unblocker: &no}, false, ""},
-		{"unblocker true alone stays legacy", ScrapeToolInput{URL: "https://example.com", Unblocker: &yes}, true, ""},
+		{"unblocker true alone", ScrapeToolInput{URL: "https://example.com", Unblocker: &yes}, true, ""},
 		{"asp false beats unblocker true", ScrapeToolInput{URL: "https://example.com", ASP: &no, Unblocker: &yes}, false, ""},
 		{"asp true beats unblocker false", ScrapeToolInput{URL: "https://example.com", ASP: &yes, Unblocker: &no}, true, ""},
-		{"legacy pool alone keeps the toggle on", ScrapeToolInput{URL: "https://example.com", ProxyPool: "public_residential_pool"}, true, "public_residential_pool"},
+		{"public pool alone keeps the toggle on", ScrapeToolInput{URL: "https://example.com", ProxyPool: "public_residential_pool"}, true, "public_residential_pool"},
 		{"new pool wins over unblocker false", ScrapeToolInput{URL: "https://example.com", ProxyPool: "unblocker", Unblocker: &no}, false, "unblocker"},
 		{"new pool wins over asp true", ScrapeToolInput{URL: "https://example.com", ProxyPool: "basic", ASP: &yes}, false, "basic"},
 		{"unblocker_ultra", ScrapeToolInput{URL: "https://example.com", ProxyPool: "unblocker_ultra"}, false, "unblocker_ultra"},

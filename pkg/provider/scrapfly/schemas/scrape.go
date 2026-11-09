@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"reflect"
+	"slices"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/scrapfly/go-scrapfly"
@@ -127,33 +128,28 @@ func MakeScreenshotsSchema() *jsonschema.Schema {
 	return schema
 }
 
-// deprecatedUnblockerInput is the whole description of `unblocker` and `asp`:
-// what they do is explained by the migration guide only.
-const deprecatedUnblockerInput = "Deprecated: use proxy_pool (unblocker_ultra for the Unblocker)."
-
-// MakeUnblockerSchema declares the deprecated `unblocker` toggle. It stays
-// declared: the scraping input schemas are closed (additionalProperties:
-// false), so removing the property is a hard call rejection for every pinned
-// client still sending it. Neither it nor its `asp` alias declares a schema
-// Default: the go-sdk applies schema defaults before unmarshal, so a default
-// on either name would land in every call where the caller omitted it, both
-// pointers would always be non-nil, and the presence-based precedence in
-// ResolveUnblocker would be destroyed.
+// `unblocker` is the only name presented to callers. Neither it nor its `asp`
+// alias declares a schema Default: the go-sdk applies schema defaults before
+// unmarshal, so a default on either name would land in every call where the
+// caller omitted it, both pointers would always be non-nil, and the
+// presence-based precedence in ResolveUnblocker would be destroyed. The
+// effective default (enabled) lives in that resolver instead.
 func MakeUnblockerSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
-		Title:       "Unblocker (legacy)",
+		Title:       "Unblocker",
 		Type:        "boolean",
-		Description: deprecatedUnblockerInput,
+		Description: "Enable the Unblocker: anti-bot bypass for WAF challenges, bot checks and CAPTCHAs. Enabled when omitted.",
 	}
 }
 
-// MakeDeprecatedASPSchema declares `asp`, the former name of `unblocker`,
-// kept declared for the same reason.
+// Deprecated alias of `unblocker`, declared permanently. The scraping input
+// schemas are closed (additionalProperties: false), so removing the property
+// is a hard call rejection for every pinned client still sending it.
 func MakeDeprecatedASPSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title:       "Unblocker, former name asp (deprecated)",
 		Type:        "boolean",
-		Description: deprecatedUnblockerInput,
+		Description: "Deprecated alias of `unblocker`, accepted for backward compatibility. Prefer `unblocker`. Supplied explicitly, it takes precedence over `unblocker`.",
 	}
 }
 
@@ -243,28 +239,26 @@ func MakeExtractionModelSchema() *jsonschema.Schema {
 	return s
 }
 
-// The Web Scraping API's proxy pools, each of which sets the Unblocker itself:
-// basic runs datacenter proxies without it, unblocker and unblocker_ultra
-// residential proxies with it, and auto lets the API pick the pool from the
-// target's profile.
+// Pools that set the Unblocker themselves: basic runs datacenter proxies
+// without it, unblocker and unblocker_ultra residential proxies with it, and
+// auto lets the API pick the pool from the target's profile. ResolveProxyPool
+// handles them; MakeProxyPoolSchema does not offer them.
 const (
 	ProxyPoolBasic          = "basic"
 	ProxyPoolUnblocker      = "unblocker"
 	ProxyPoolUnblockerUltra = "unblocker_ultra"
 	ProxyPoolAuto           = "auto"
-	// ProxyPoolTor is the Tor network pool. A current pool that keeps its
-	// name, not one of the names written before the proxy pools.
+	// ProxyPoolTor is the Tor network pool.
 	ProxyPoolTor = "public_tor_pool"
 )
 
-// legacyProxyPools are the pool names written before the proxy pools, still
-// accepted. Spelled out rather than read from go-scrapfly, whose enum gains
-// the new pools: the Cloud Browser schema must not offer them.
-var legacyProxyPools = []any{"public_datacenter_pool", "public_residential_pool"}
+// publicProxyPools are the datacenter and residential pools. Spelled out
+// rather than read from go-scrapfly, whose enum holds more pools than the
+// tools offer.
+var publicProxyPools = []any{"public_datacenter_pool", "public_residential_pool"}
 
 // IsNewProxyPool reports whether pool is one of the four pools that set the
-// Unblocker themselves, rather than the Tor pool or a name written before the
-// proxy pools, which take it from asp.
+// Unblocker themselves, rather than a pool that takes it from asp.
 func IsNewProxyPool(pool string) bool {
 	switch pool {
 	case ProxyPoolBasic, ProxyPoolUnblocker, ProxyPoolUnblockerUltra, ProxyPoolAuto:
@@ -273,38 +267,26 @@ func IsNewProxyPool(pool string) bool {
 	return false
 }
 
-// MakeProxyPoolSchema is the scraping tools' proxy_pool: the four pools, the
-// Tor pool, then the names written before the pools that pinned clients may
-// still send.
+// MakeProxyPoolSchema is the scraping tools' proxy_pool: the datacenter,
+// residential and Tor pools.
 //
 // No `Default:` here: ApplyDefaults would bake the literal into every call
-// where the field was omitted, and since a new pool decides alone, a legacy
-// call sending only `unblocker` would lose its toggle. Without a pool the call
-// keeps sending asp, see ResolveProxyPool.
+// where the field was omitted. Without a pool the call sends none, and the
+// API picks its default.
 func MakeProxyPoolSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
-		Type: "string",
-		Enum: append([]any{ProxyPoolBasic, ProxyPoolUnblocker, ProxyPoolUnblockerUltra, ProxyPoolAuto, ProxyPoolTor}, legacyProxyPools...),
-		Description: "Proxy pool. `basic`: datacenter proxies, Unblocker off. " +
-			"`unblocker`: residential proxies and the Unblocker, the anti-bot bypass. " +
-			"`unblocker_ultra`: residential proxies and the Unblocker, the only pool accepted by a target or an anti-bot protection with a price of its own (e.g. Cloudflare, Kasada): those refuse basic and unblocker with ERR::PROXY::UNBLOCKER_ULTRA_REQUIRED (422, not billed). " +
-			"`auto`: the API picks the pool before the request, from the target's profile: the Unblocker on datacenter proxies, or the pool the target needs. It is accepted on every target, the ones that require unblocker_ultra included, where their price is added, and priced as the pool it runs on. " +
-			"Pick the pool a site needs: basic where datacenter proxies get through, unblocker or unblocker_ultra where it needs residential proxies and the Unblocker, auto to let the API pick; on ERR::PROXY::UNBLOCKER_ULTRA_REQUIRED, resend with proxy_pool=unblocker_ultra or proxy_pool=auto. " +
-			"`public_tor_pool`: the Tor network (.onion). " +
-			"public_datacenter_pool and public_residential_pool are deprecated. " +
-			"Without a proxy_pool, the tool sends the API no pool and, by default, asp=true. " +
-			"The migration guide covers the deprecated names and that request: https://scrapfly.io/new-pricing#legacy-spellings",
+		Type:        "string",
+		Enum:        append(slices.Clone(publicProxyPools), ProxyPoolTor),
+		Description: "The proxy pool to use: public_datacenter_pool, public_residential_pool, or public_tor_pool for the Tor network (.onion). When omitted, the API picks its default.",
 	}
 }
 
 // cloudBrowserProxyPools are the short names the Cloud Browser documents, the
-// Tor pool, then the names written before the pools it still accepts and
-// pinned clients may still send.
-var cloudBrowserProxyPools = append([]any{"datacenter", "residential", ProxyPoolTor}, legacyProxyPools...)
+// Tor pool, then the public pool names it accepts too.
+var cloudBrowserProxyPools = append([]any{"datacenter", "residential", ProxyPoolTor}, publicProxyPools...)
 
 // MakeCloudBrowserProxyPoolSchema keeps cloud_browser_open on the Cloud
-// Browser's own pool names: basic, unblocker, unblocker_ultra and auto are Web
-// Scraping API pools, which the Cloud Browser refuses.
+// Browser's own pool names.
 //
 // No `Default:` here. ApplyDefaults bakes the literal into every tool
 // call where the field was not explicitly provided. When omitted, the
@@ -314,7 +296,7 @@ func MakeCloudBrowserProxyPoolSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Type:        "string",
 		Enum:        cloudBrowserProxyPools,
-		Description: "The proxy pool to use: datacenter or residential. When omitted, the API picks its default. public_datacenter_pool and public_residential_pool are deprecated; the migration guide covers them: https://scrapfly.io/new-pricing#legacy-spellings",
+		Description: "The proxy pool to use: datacenter or residential. When omitted, the API picks its default.",
 	}
 }
 

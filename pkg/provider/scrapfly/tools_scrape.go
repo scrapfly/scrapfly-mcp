@@ -18,7 +18,7 @@ type GetPageToolInput struct {
 	Country         string                    `json:"country,omitempty" jsonschema:"Optional: ISO code for proxy geolocation."`
 	Format          scrapfly.Format           `json:"format,omitempty" jsonschema:"For Scraped Content (not data extraction).Format to return the SCRAPED CONTENT in . Example: clean_html,markdown,text,raw"`
 	FormatOptions   []scrapfly.FormatOption   `json:"format_options,omitempty" jsonschema:"if format is either markdown or text, additional options to apply to the format (zero to all of 'no_links','no_images','only_content')"`
-	ProxyPool       scrapfly.ProxyPool        `json:"proxy_pool,omitempty" jsonschema:"Proxy pool: basic, unblocker, unblocker_ultra or auto."`
+	ProxyPool       scrapfly.ProxyPool        `json:"proxy_pool,omitempty" jsonschema:"Proxy pool to use (e.g., 'public_residential_pool', default: 'public_datacenter_pool')."`
 	RenderingWait   int                       `json:"rendering_wait,omitempty" jsonschema:"Wait for this number of milliseconds before returning the response."`
 	CapturePage     bool                      `json:"capture_page,omitempty" jsonschema:"If true, capture the page as a screenshot"`
 	CaptureFlags    []scrapfly.ScreenshotFlag `json:"capture_flags,omitempty" jsonschema:"Capture flags to use for the capture."`
@@ -69,11 +69,11 @@ type ScrapeToolInput struct {
 	Body             string                    `json:"body,omitempty" jsonschema:"Request body for POST/PUT/PATCH requests."`
 	Headers          map[string]string         `json:"headers,omitempty" jsonschema:"HTTP headers to send."`
 	Country          string                    `json:"country,omitempty" jsonschema:"ISO 3166-1 alpha-2 country code for proxy geolocation."`
-	ProxyPool        scrapfly.ProxyPool        `json:"proxy_pool,omitempty" jsonschema:"Proxy pool: basic, unblocker, unblocker_ultra or auto."`
+	ProxyPool        scrapfly.ProxyPool        `json:"proxy_pool,omitempty" jsonschema:"Proxy pool to use (e.g., 'public_residential_pool', default: 'public_datacenter_pool')."`
 	RenderJS         bool                      `json:"render_js,omitempty" jsonschema:"Enable JavaScript rendering with a headless browser."`
 	RenderingWait    int                       `json:"rendering_wait,omitempty" jsonschema:"Wait for this number of milliseconds before returning the response."`
-	Unblocker        *bool                     `json:"unblocker,omitempty" jsonschema:"Deprecated: use proxy_pool (unblocker_ultra for the Unblocker)."`
-	ASP              *bool                     `json:"asp,omitempty" jsonschema:"Deprecated: use proxy_pool (unblocker_ultra for the Unblocker)."`
+	Unblocker        *bool                     `json:"unblocker,omitempty" jsonschema:"(prefer true)Enable the Unblocker anti-bot bypass. Enabled when omitted."`
+	ASP              *bool                     `json:"asp,omitempty" jsonschema:"Deprecated alias of unblocker. Declared so callers written against an earlier version are not rejected by the closed schema."`
 	Cache            bool                      `json:"cache,omitempty" jsonschema:"Enable caching of the response."`
 	CacheTTL         int                       `json:"cache_ttl,omitempty" jsonschema:"Cache TTL in seconds when cache is true."`
 	CacheClear       bool                      `json:"cache_clear,omitempty" jsonschema:"If true, bypass & clear cache for this URL."`

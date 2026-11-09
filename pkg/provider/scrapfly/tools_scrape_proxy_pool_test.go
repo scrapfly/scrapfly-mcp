@@ -20,20 +20,20 @@ import (
 )
 
 var (
+	// Pools that set the Unblocker themselves. The resolution code handles
+	// them, the tool schemas do not offer them.
 	newProxyPools = []string{"basic", "unblocker", "unblocker_ultra", "auto"}
-	// The Tor pool is a current pool, accepted everywhere the legacy names are.
-	torPool         = "public_tor_pool"
-	legacyPoolNames = []string{"public_datacenter_pool", "public_residential_pool"}
+	torPool       = "public_tor_pool"
+	publicPools   = []string{"public_datacenter_pool", "public_residential_pool"}
 )
 
-func TestScrapingSchemasAcceptNewAndLegacyPools(t *testing.T) {
+func TestScrapingSchemasOfferThePublicPools(t *testing.T) {
 	for tool, schema := range scrapingToolSchemas() {
 		pool := schema.Properties["proxy_pool"]
 		if pool == nil {
 			t.Fatalf("%s declares no proxy_pool", tool)
 		}
-		// A default would be applied to every call that omits the pool, and a
-		// legacy call sending only `unblocker` would then lose its toggle to it.
+		// A default would be applied to every call that omits the pool.
 		if pool.Default != nil {
 			t.Errorf("%s proxy_pool carries a schema default %s", tool, pool.Default)
 		}
@@ -41,39 +41,38 @@ func TestScrapingSchemasAcceptNewAndLegacyPools(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolve %s: %v", tool, err)
 		}
-		for _, value := range append(append(slices.Clone(newProxyPools), torPool), legacyPoolNames...) {
+		for _, value := range append(slices.Clone(publicPools), torPool) {
 			if err := resolved.Validate(map[string]any{"url": "https://example.com", "proxy_pool": value}); err != nil {
 				t.Errorf("%s rejects proxy_pool=%q: %v", tool, value, err)
 			}
+			if !strings.Contains(pool.Description, value) {
+				t.Errorf("%s proxy_pool description never names %q", tool, value)
+			}
 		}
-		if err := resolved.Validate(map[string]any{"url": "https://example.com", "proxy_pool": "nonexistent_pool"}); err == nil {
-			t.Errorf("%s accepts an unknown proxy_pool", tool)
-		}
-		for _, name := range newProxyPools {
-			if !strings.Contains(pool.Description, name) {
-				t.Errorf("%s proxy_pool description never names %q", tool, name)
+		for _, value := range append(slices.Clone(newProxyPools), "nonexistent_pool") {
+			if err := resolved.Validate(map[string]any{"url": "https://example.com", "proxy_pool": value}); err == nil {
+				t.Errorf("%s accepts proxy_pool=%q", tool, value)
 			}
 		}
 	}
 }
 
-// basic, unblocker, unblocker_ultra and auto are Web Scraping API pools:
-// cloud_browser_open takes the Cloud Browser's short names and the legacy
-// names it has always taken.
+// cloud_browser_open takes the Cloud Browser's short names, the Tor pool and
+// the public pool names.
 func TestCloudBrowserOpenKeepsItsPoolNames(t *testing.T) {
 	schema := schemas.MustRefineCloudBrowserToolInputSchema[CloudBrowserOpenInput]()
 	resolved, err := schema.Resolve(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range append([]string{"datacenter", "residential", torPool}, legacyPoolNames...) {
+	for _, value := range append([]string{"datacenter", "residential", torPool}, publicPools...) {
 		if err := resolved.Validate(map[string]any{"url": "https://example.com", "proxy_pool": value}); err != nil {
 			t.Errorf("cloud_browser_open rejects proxy_pool=%q: %v", value, err)
 		}
 	}
 	for _, name := range newProxyPools {
 		if err := resolved.Validate(map[string]any{"url": "https://example.com", "proxy_pool": name}); err == nil {
-			t.Errorf("cloud_browser_open accepts the Web Scraping API pool %q", name)
+			t.Errorf("cloud_browser_open accepts proxy_pool=%q", name)
 		}
 	}
 	registered := staticTools(NewScrapflyToolProvider(nil, nil, nil))["cloud_browser_open"].Tool.InputSchema
@@ -82,7 +81,7 @@ func TestCloudBrowserOpenKeepsItsPoolNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	if strings.Contains(string(encoded), "unblocker_ultra") || strings.Contains(string(encoded), `"auto"`) {
-		t.Error("the registered cloud_browser_open schema offers the Web Scraping API pools")
+		t.Error("the registered cloud_browser_open schema offers unblocker_ultra or auto")
 	}
 }
 
@@ -192,19 +191,10 @@ func TestScrapingToolsSendTheResolvedPool(t *testing.T) {
 	}{
 		// Naming nothing sends what v1.4.0 sent: no pool, asp=true.
 		{"web_scrape", `{"url":"https://example.com"}`, "", "true"},
-		{"web_scrape", `{"url":"https://example.com","proxy_pool":"basic"}`, "basic", ""},
-		{"web_scrape", `{"url":"https://example.com","proxy_pool":"basic","asp":true}`, "basic", ""},
-		{"web_scrape", `{"url":"https://example.com","proxy_pool":"unblocker","unblocker":false}`, "unblocker", ""},
-		{"web_scrape", `{"url":"https://example.com","proxy_pool":"unblocker_ultra"}`, "unblocker_ultra", ""},
-		{"web_scrape", `{"url":"https://example.com","proxy_pool":"auto"}`, "auto", ""},
-		{"web_scrape", `{"url":"https://example.com","proxy_pool":"auto","unblocker":true}`, "auto", ""},
 		{"web_scrape", `{"url":"https://example.com","unblocker":true}`, "", "true"},
 		{"web_scrape", `{"url":"https://example.com","unblocker":false}`, "", ""},
 		{"web_scrape", `{"url":"https://example.com","proxy_pool":"public_residential_pool","asp":true}`, "public_residential_pool", "true"},
 		{"web_get_page", `{"url":"https://example.com"}`, "", "true"},
-		{"web_get_page", `{"url":"https://example.com","proxy_pool":"basic"}`, "basic", ""},
-		{"web_get_page", `{"url":"https://example.com","proxy_pool":"unblocker"}`, "unblocker", ""},
-		{"web_get_page", `{"url":"https://example.com","proxy_pool":"auto"}`, "auto", ""},
 	} {
 		t.Run(tc.tool+" "+tc.args, func(t *testing.T) {
 			client, err := scrapfly.New("test-key")
@@ -238,92 +228,36 @@ func TestScrapingToolsSendTheResolvedPool(t *testing.T) {
 	}
 }
 
-func TestScrapingToolsRejectAnUnknownPool(t *testing.T) {
-	client, err := scrapfly.New("test-key")
-	if err != nil {
-		t.Fatal(err)
-	}
-	transport := &recordingTransport{}
-	client.SetHTTPClient(&http.Client{Transport: transport})
-	set := staticTools(NewScrapflyToolProvider(client, GetDefaultScrapflyClient, log.New(io.Discard, "", 0)))
-	res, err := set["web_scrape"].Handler(context.Background(), &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{
-		Name:      "web_scrape",
-		Arguments: json.RawMessage(`{"url":"https://example.com","proxy_pool":"nonexistent_pool"}`),
-	}})
-	if err == nil && (res == nil || !res.IsError) {
-		t.Error("an unknown proxy_pool was accepted")
-	}
-	if len(transport.queries) != 0 {
-		t.Error("an unknown proxy_pool reached the API")
-	}
-}
-
-// The descriptions are what tells a model which pool a site needs. They name
-// the four pools and the error that asks for unblocker_ultra, and describe
-// no date switch and no order to try the pools in.
-func TestModelFacingTextNamesThePoolsWithoutALadder(t *testing.T) {
-	set := staticTools(NewScrapflyToolProvider(nil, nil, nil))
-	poolDescription := schemas.MakeProxyPoolSchema().Description
-	naming := map[string]string{
-		"web_scrape description":   set["web_scrape"].Tool.Description,
-		"web_get_page description": set["web_get_page"].Tool.Description,
-		"proxy_pool description":   poolDescription,
-		"instruction prompt":       resources.InstructionPromptString,
-		"OpenAPI resource":         resources.WebScrapingApi,
-	}
-	// auto excludes a hyphen on either side: the OpenAPI resource already says
-	// "auto-parse", which `\bauto\b` would take for the pool.
-	pools := map[string]*regexp.Regexp{
-		"basic":                                regexp.MustCompile(`\bbasic\b`),
-		"unblocker":                            regexp.MustCompile(`(^|[^_a-zA-Z])unblocker([^_a-zA-Z]|$)`),
-		"unblocker_ultra":                      regexp.MustCompile(`\bunblocker_ultra\b`),
-		"auto":                                 regexp.MustCompile(`(^|[^\w-])auto([^\w-]|$)`),
-		"ERR::PROXY::UNBLOCKER_ULTRA_REQUIRED": regexp.MustCompile(`ERR::PROXY::UNBLOCKER_ULTRA_REQUIRED`),
-	}
-	for name, text := range naming {
-		for want, pattern := range pools {
-			if !pattern.MatchString(text) {
-				t.Errorf("%s never names %q", name, want)
-			}
-		}
-	}
-
-	texts := map[string]string{
-		"proxy_pool description": poolDescription,
-		"unblocker description":  schemas.MakeUnblockerSchema().Description,
-		"asp description":        schemas.MakeDeprecatedASPSchema().Description,
-		"instruction prompt":     resources.InstructionPromptString,
-		"OpenAPI resource":       resources.WebScrapingApi,
-	}
-	for name, handled := range set {
-		if handled != nil && handled.Tool != nil {
-			texts["tool "+name+" description"] = handled.Tool.Description
-		}
-	}
-	date := regexp.MustCompile(`\b20\d\d-\d\d-\d\d\b`)
-	ladder := regexp.MustCompile(`(?i)\btiers?\b|start with|starting point|next step|step up|escalat|climb|ladder|cutover|then with|if still blocked`)
-	for name, text := range texts {
-		if found := date.FindString(text); found != "" {
-			t.Errorf("%s carries the date %q", name, found)
-		}
-		if found := ladder.FindString(text); found != "" {
-			t.Errorf("%s carries the ladder wording %q", name, found)
+// A pool the schema does not offer is refused before any request.
+func TestScrapingToolsRejectAPoolTheyDoNotOffer(t *testing.T) {
+	for _, tool := range []string{"web_scrape", "web_get_page"} {
+		for _, pool := range append(slices.Clone(newProxyPools), "nonexistent_pool") {
+			t.Run(tool+" "+pool, func(t *testing.T) {
+				client, err := scrapfly.New("test-key")
+				if err != nil {
+					t.Fatal(err)
+				}
+				transport := &recordingTransport{}
+				client.SetHTTPClient(&http.Client{Transport: transport})
+				set := staticTools(NewScrapflyToolProvider(client, GetDefaultScrapflyClient, log.New(io.Discard, "", 0)))
+				res, err := set[tool].Handler(context.Background(), &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{
+					Name:      tool,
+					Arguments: json.RawMessage(`{"url":"https://example.com","proxy_pool":"` + pool + `"}`),
+				}})
+				if err == nil && (res == nil || !res.IsError) {
+					t.Errorf("proxy_pool=%q was accepted", pool)
+				}
+				if len(transport.queries) != 0 {
+					t.Errorf("proxy_pool=%q reached the API", pool)
+				}
+			})
 		}
 	}
 }
 
-// Only the migration guide explains the deprecated inputs, unblocker, asp and
-// the public_datacenter_pool / public_residential_pool names: model-facing
-// text points to it and says nothing of what they do.
-func TestModelFacingTextLeavesTheDeprecatedInputsToTheGuide(t *testing.T) {
-	const deprecation = "Deprecated: use proxy_pool (unblocker_ultra for the Unblocker)."
-	scrape := schemas.MustRefineScrapingToolInputSchema[ScrapeToolInput]()
-	for _, name := range []string{"unblocker", "asp"} {
-		if got := scrape.Properties[name].Description; got != deprecation {
-			t.Errorf("web_scrape %s description = %q, want %q", name, got, deprecation)
-		}
-	}
-
+// What a model reads names none of the pools the schemas do not offer, nor
+// the error or the page that go with them.
+func TestModelFacingTextNamesNoPoolTheToolsDoNotOffer(t *testing.T) {
 	texts := map[string]string{
 		"instruction prompt": resources.InstructionPromptString,
 		"OpenAPI resource":   resources.WebScrapingApi,
@@ -334,24 +268,21 @@ func TestModelFacingTextLeavesTheDeprecatedInputsToTheGuide(t *testing.T) {
 			for param, spec := range toolProperties(t, name, handled.Tool.InputSchema) {
 				description, _ := spec["description"].(string)
 				texts[label+" tool "+name+" param "+param] = description
+				if values, ok := spec["enum"].([]any); ok {
+					for _, value := range values {
+						pool, _ := value.(string)
+						if param == "proxy_pool" && slices.Contains(newProxyPools, pool) {
+							t.Errorf("%s tool %s offers proxy_pool=%q", label, name, pool)
+						}
+					}
+				}
 			}
 		}
 	}
-	claim := regexp.MustCompile(`(?i)legacy spelling|no change in|never refused|nothing to migrate|keeps? working|still accepted|forever|runs as unblocker ultra|legacy unblocker|legacy toggle|legacy pool name|as it always ha|backward compat`)
+	hidden := regexp.MustCompile("unblocker_ultra|UNBLOCKER_ULTRA_REQUIRED|new-pricing|proxy_pool[=:] ?`?(basic|unblocker|auto)\\b|\"(basic|auto)\"")
 	for name, text := range texts {
-		if found := claim.FindString(text); found != "" {
-			t.Errorf("%s says what a deprecated input does: %q", name, found)
-		}
-	}
-
-	const guide = "https://scrapfly.io/new-pricing#legacy-spellings"
-	for name, text := range map[string]string{
-		"instruction prompt":     resources.InstructionPromptString,
-		"OpenAPI resource":       resources.WebScrapingApi,
-		"proxy_pool description": schemas.MakeProxyPoolSchema().Description,
-	} {
-		if !strings.Contains(text, guide) {
-			t.Errorf("%s does not point to the migration guide", name)
+		if found := hidden.FindString(text); found != "" {
+			t.Errorf("%s names %q", name, found)
 		}
 	}
 }
