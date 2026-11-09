@@ -105,9 +105,9 @@ type LightScrapeResultData struct {
 	CostDetails      []scrapfly.CostDetail          `json:"cost_details,omitempty" jsonschema:"Per-item breakdown of api_cost"`
 }
 
-// ResolveUnblocker settles the two names of the deprecated anti-bot toggle,
-// `unblocker` and its former name `asp`. Both stay declared: the schemas are
-// closed, so dropping either rejects every pinned client still sending it.
+// ResolveUnblocker settles the two names of the anti-bot toggle, `unblocker`
+// and its former name `asp`. Both stay declared: the schemas are closed, so
+// dropping either rejects every pinned client still sending it.
 //
 // Precedence is presence-based and never an OR: an explicitly supplied `asp`
 // wins, `unblocker` answers only when `asp` was absent, and an explicit false
@@ -129,13 +129,13 @@ func ResolveUnblocker(asp, unblocker *bool) bool {
 	return true
 }
 
-// ResolveProxyPool settles proxy_pool against the deprecated toggle and
-// returns the pool and the asp value to send.
+// ResolveProxyPool settles proxy_pool against the toggle and returns the pool
+// and the asp value to send.
 //
-// A new pool (basic, unblocker, unblocker_ultra, auto) sets the Unblocker
-// itself, so it goes out alone, without asp. Any other call, a legacy pool
-// name or none, carries the resolved toggle: asp=true unless `unblocker` or
-// `asp` is sent as false.
+// A pool that sets the Unblocker itself (basic, unblocker, unblocker_ultra,
+// auto, which the schemas do not offer) goes out alone, without asp. Any other
+// call, a public pool or none, carries the resolved toggle: asp=true unless
+// `unblocker` or `asp` is sent as false.
 func ResolveProxyPool(pool scrapfly.ProxyPool, asp, unblocker *bool) (scrapfly.ProxyPool, bool) {
 	if schemas.IsNewProxyPool(string(pool)) {
 		return pool, false
@@ -271,8 +271,8 @@ func ScrapeConfigFromScrapeToolInput(input ScrapeToolInput) (*scrapfly.ScrapeCon
 	}
 
 	if input.ExtractionPrompt != "" || input.ExtractionModel != "" {
-		// A new pool decides the Unblocker alone; forcing asp only means
-		// something beside a legacy pool name or none.
+		// A pool that sets the Unblocker decides it alone; forcing asp only
+		// means something beside a public pool or none.
 		if !schemas.IsNewProxyPool(string(config.ProxyPool)) {
 			config.ASP = true
 		}

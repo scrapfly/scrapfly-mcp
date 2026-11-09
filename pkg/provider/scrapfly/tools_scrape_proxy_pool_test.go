@@ -108,7 +108,7 @@ func TestUnblockerPoolsTakeTheBypassRetryRule(t *testing.T) {
 	}
 }
 
-func TestExtractionForcesTheToggleOnlyOnLegacyRequests(t *testing.T) {
+func TestExtractionForcesTheToggleWithoutAPoolThatSetsIt(t *testing.T) {
 	no := false
 	for _, tc := range []struct {
 		name     string
@@ -118,7 +118,7 @@ func TestExtractionForcesTheToggleOnlyOnLegacyRequests(t *testing.T) {
 	}{
 		{"no pool", ScrapeToolInput{URL: "https://example.com", ExtractionModel: "product"}, "", true},
 		{"unblocker false", ScrapeToolInput{URL: "https://example.com", Unblocker: &no, ExtractionModel: "product"}, "", true},
-		{"legacy pool", ScrapeToolInput{URL: "https://example.com", ProxyPool: "public_datacenter_pool", Unblocker: &no, ExtractionModel: "product"}, "public_datacenter_pool", true},
+		{"public pool", ScrapeToolInput{URL: "https://example.com", ProxyPool: "public_datacenter_pool", Unblocker: &no, ExtractionModel: "product"}, "public_datacenter_pool", true},
 		{"basic", ScrapeToolInput{URL: "https://example.com", ProxyPool: "basic", ExtractionModel: "product"}, "basic", false},
 		{"unblocker_ultra", ScrapeToolInput{URL: "https://example.com", ProxyPool: "unblocker_ultra", ExtractionModel: "product"}, "unblocker_ultra", false},
 		{"auto", ScrapeToolInput{URL: "https://example.com", ProxyPool: "auto", ExtractionModel: "product"}, "auto", false},
@@ -295,13 +295,13 @@ func TestDefaultsKeepTheUnblockerOn(t *testing.T) {
 		t.Fatal(err)
 	}
 	if scrape.ProxyPool != "" || !scrape.ASP {
-		t.Errorf("web_scrape default: pool=%q asp=%v, want the legacy pool=\"\" asp=true", scrape.ProxyPool, scrape.ASP)
+		t.Errorf("web_scrape default: pool=%q asp=%v, want pool=\"\" asp=true", scrape.ProxyPool, scrape.ASP)
 	}
 	page, err := ScrapeConfigFromGetPageToolInput(GetPageToolInput{URL: "https://example.com"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if page.ProxyPool != "" || !page.ASP || !page.RenderJS {
-		t.Errorf("web_get_page default: pool=%q asp=%v render_js=%v, want the legacy pool=\"\" asp=true render_js=true", page.ProxyPool, page.ASP, page.RenderJS)
+		t.Errorf("web_get_page default: pool=%q asp=%v render_js=%v, want pool=\"\" asp=true render_js=true", page.ProxyPool, page.ASP, page.RenderJS)
 	}
 }
