@@ -16,5 +16,11 @@
         "type": "stdio"
       }
     }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.scrapfly.io/mcp"
+    }
   ]
 }
