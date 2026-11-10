@@ -7,7 +7,7 @@ require (
 	github.com/google/jsonschema-go v0.4.3
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/modelcontextprotocol/go-sdk v1.7.0
-	github.com/scrapfly/go-scrapfly v1.5.1-0.20261107082836-ec5bfc6bc938
+	github.com/scrapfly/go-scrapfly v1.7.0
 )
 
 require (
