@@ -11,7 +11,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const ServerVersion = "1.5.2"
+const ServerVersion = "1.5.3"
 
 func init() {
 	log.SetFlags(log.Lmicroseconds | log.Lmsgprefix | log.LstdFlags)

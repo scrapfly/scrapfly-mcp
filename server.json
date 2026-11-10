@@ -6,12 +6,12 @@
     "url": "https://github.com/scrapfly/scrapfly-mcp",
     "source": "github"
   },
-  "version": "1.5.2",
+  "version": "1.5.3",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "scrapfly-mcp",
-      "version": "1.5.2",
+      "version": "1.5.3",
       "transport": {
         "type": "stdio"
       }
