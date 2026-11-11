@@ -458,7 +458,7 @@ func interactionTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "alert_list",
 		Title:       "Scrapfly Alerts — List",
-		Description: "List alert definitions for the caller's account. Optional filters: project_uuid, state (ok|pending|triggered|recovering|no_data|snoozed), metric_id. Returns the full Alert rows so the model can reason about state and notification config.",
+		Description: "List the alert definitions of the API key's project. Optional filters: state (ok|pending|triggered|recovering|no_data|snoozed), metric_id. Returns the full Alert rows so the model can reason about state and notification config.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Alerts — List",
 			DestructiveHint: &falseBool,
@@ -484,7 +484,7 @@ func interactionTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 	tools.MustAddToolToToolset(HandledTools, &mcp.Tool{
 		Name:        "alert_count_active",
 		Title:       "Scrapfly Alerts — Count Active",
-		Description: "Return the count of alerts in actively-firing states (triggered, pending, recovering). Excludes snoozed/ok/no_data. Optional project_uuid narrows to a single project. Backs sidebar badges — sub-millisecond.",
+		Description: "Return the count of alerts in actively-firing states (triggered, pending, recovering). Excludes snoozed/ok/no_data. It counts the API key's project. Backs sidebar badges — sub-millisecond.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Scrapfly Alerts — Count Active",
 			DestructiveHint: &falseBool,
@@ -538,8 +538,8 @@ func interactionTools(provider *ScrapflyToolProvider) tools.HandledToolSet {
 		Title: "Scrapfly Alerts — Create",
 		Description: "Create a new alert. Two-step: call without confirm=true first to see the rendered request body, then re-call with confirm=true to commit. " +
 			"\n\nPROJECT BINDING — IMPORTANT:" +
-			"\n  Leave project_uuid EMPTY unless the user explicitly named a non-default project. " +
-			"The server falls back to the caller's currently-selected project from the api-key. " +
+			"\n  Leave project_uuid EMPTY: the alert binds to the project of the API key, the only project a key creates in. " +
+			"An alert for another project needs that project's API key: naming another project here returns ERR::ALERT::PROJECT_NOT_FOUND. " +
 			"Do NOT pass the value of info_account.account.account_id as project_uuid — that's the account ID, not the project ID, and the server returns ERR::ALERT::PROJECT_NOT_FOUND when they don't match." +
 			"\n\nRECOMMENDED WORKFLOW for picking a data-driven threshold:" +
 			"\n  1. alert_metric_families → pick a valid metric_id whose unit + product match what you measured" +

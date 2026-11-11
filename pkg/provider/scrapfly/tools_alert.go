@@ -56,7 +56,7 @@ func alertJSON(payload any) *mcp.CallToolResult {
 }
 
 type AlertListInput struct {
-	ProjectUUID string `json:"project_uuid,omitempty" jsonschema:"Optional. Scope to a single project UUID."`
+	ProjectUUID string `json:"project_uuid,omitempty" jsonschema:"Optional. The API key's own project: another project lists none."`
 	State       string `json:"state,omitempty"        jsonschema:"Optional. Filter by lifecycle state: ok|pending|triggered|recovering|no_data|snoozed."`
 	MetricID    string `json:"metric_id,omitempty"    jsonschema:"Optional. Filter by metric family ID — see alert_metric_families for valid values."`
 }
@@ -66,7 +66,7 @@ type AlertGetInput struct {
 }
 
 type AlertCountActiveInput struct {
-	ProjectUUID string `json:"project_uuid,omitempty" jsonschema:"Optional. Restrict count to a single project UUID."`
+	ProjectUUID string `json:"project_uuid,omitempty" jsonschema:"Optional. The API key's own project: another project counts none."`
 }
 
 type AlertMetricFamiliesInput struct{}
@@ -81,7 +81,7 @@ type AlertCreateInput struct {
 
 	Name        string `json:"name"                  jsonschema:"Human-readable alert name shown in the dashboard."`
 	Description string `json:"description,omitempty" jsonschema:"Optional longer-form description of what the alert detects."`
-	ProjectUUID string `json:"project_uuid,omitempty" jsonschema:"OPTIONAL. Leave EMPTY (omit the field) to fall back to the caller's currently-selected project. Do NOT pass info_account.account.account_id here — that's the account ID, not a project ID, and the server returns ERR::ALERT::PROJECT_NOT_FOUND."`
+	ProjectUUID string `json:"project_uuid,omitempty" jsonschema:"OPTIONAL. Leave EMPTY (omit the field): the alert binds to the API key's project, the only one a key creates in. Do NOT pass info_account.account.account_id here — that's the account ID, not a project ID, and the server returns ERR::ALERT::PROJECT_NOT_FOUND."`
 
 	MetricID         string          `json:"metric_id"                   jsonschema:"Metric family ID — call alert_metric_families first to discover valid values and allowed_dimensions."`
 	MetricDimensions map[string]string `json:"metric_dimensions,omitempty" jsonschema:"Optional dimension filter, e.g. {\"country\":\"US\"}. Every key must appear in the metric family's allowed_dimensions (see alert_metric_families); unknown keys are rejected server-side."`
@@ -143,7 +143,7 @@ type AlertTestInput struct {
 type AlertPreviewInput struct {
 	MetricID          string            `json:"metric_id"                     jsonschema:"Metric family ID to evaluate — must come from alert_metric_families, never invented."`
 	MetricDimensions  map[string]string `json:"metric_dimensions,omitempty"   jsonschema:"Optional dimension filter, e.g. {\"country\":\"US\"}. Every key must appear in the metric family's allowed_dimensions."`
-	ProjectUUID       string            `json:"project_uuid,omitempty"        jsonschema:"OPTIONAL. Omit to use the caller's currently-selected project. Never pass an account ID here."`
+	ProjectUUID       string            `json:"project_uuid,omitempty"        jsonschema:"OPTIONAL. Omit it: a key previews its own project only. Never pass an account ID here."`
 	Comparator        string            `json:"comparator"                    jsonschema:"Threshold operator: gt|lt|gte|lte|eq|neq."`
 	Threshold         float64           `json:"threshold"                     jsonschema:"Numeric threshold the metric is compared against. Tune this between previews until the fire count looks sane."`
 	SustainedMinutes  int               `json:"sustained_minutes,omitempty"   jsonschema:"How long the breach must persist before the rule would fire (1-1440). Defaults to the metric family's recommended value. Raise it to damp a noisy preview."`
