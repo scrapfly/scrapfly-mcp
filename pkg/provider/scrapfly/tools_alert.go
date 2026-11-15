@@ -83,7 +83,7 @@ type AlertCreateInput struct {
 	Description string `json:"description,omitempty" jsonschema:"Optional longer-form description of what the alert detects."`
 	ProjectUUID string `json:"project_uuid,omitempty" jsonschema:"OPTIONAL. Leave EMPTY (omit the field): the alert binds to the API key's project, the only one a key creates in. Do NOT pass info_account.account.account_id here — that's the account ID, not a project ID, and the server returns ERR::ALERT::PROJECT_NOT_FOUND."`
 
-	MetricID         string          `json:"metric_id"                   jsonschema:"Metric family ID — call alert_metric_families first to discover valid values and allowed_dimensions."`
+	MetricID         string            `json:"metric_id"                   jsonschema:"Metric family ID — call alert_metric_families first to discover valid values and allowed_dimensions."`
 	MetricDimensions map[string]string `json:"metric_dimensions,omitempty" jsonschema:"Optional dimension filter, e.g. {\"country\":\"US\"}. Every key must appear in the metric family's allowed_dimensions (see alert_metric_families); unknown keys are rejected server-side."`
 
 	Comparator         string  `json:"comparator"                     jsonschema:"Threshold operator: gt|lt|gte|lte|eq|neq."`
