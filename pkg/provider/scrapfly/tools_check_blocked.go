@@ -95,7 +95,10 @@ func (p *ScrapflyToolProvider) CheckIfBlocked(
 		return nil, nil, fmt.Errorf("scrapfly client: %w", err)
 	}
 
-	host := os.Getenv(classifyAPIHostEnv)
+	host := p.APIHost
+	if host == "" {
+		host = os.Getenv(classifyAPIHostEnv)
+	}
 	if host == "" {
 		host = classifyDefaultHost
 	}

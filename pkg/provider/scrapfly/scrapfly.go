@@ -33,6 +33,10 @@ type ScrapflyToolProvider struct {
 	// credential. Left off in server-key HTTP mode, where any reachable
 	// client would otherwise read the server's key back.
 	ExposeAPIKeyTool bool
+
+	// APIHost is the API host the binary was started with (-host, else SCRAPFLY_API_HOST). Tools that call the API
+	// outside the SDK client (check_if_blocked's /classify) use it. Empty: SCRAPFLY_API_HOST, then the default host.
+	APIHost string
 }
 
 // sessionOwner derives the Cloud Browser session owner for the caller behind

@@ -186,6 +186,8 @@ func main() {
 	// caller already holds that key — stdio (local client) or per-request HTTP
 	// auth (caller presents their own) — never in server-key HTTP mode.
 	scrapflyToolProvider.ExposeAPIKeyTool = !serverKeyHTTP
+	// check_if_blocked calls /classify outside the SDK client: it takes the same host.
+	scrapflyToolProvider.APIHost = apiHostStr
 
 	toolProvider := provider.NewToolProvider("scrapfly", scrapflyToolProvider)
 

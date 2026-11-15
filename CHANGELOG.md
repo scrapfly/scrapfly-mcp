@@ -3,7 +3,7 @@
 ## 1.5.3
 
 - Built on go-scrapfly v1.8.0, up from v1.7.0, which go-scrapfly retracted.
-  Every tool sends the same requests and returns the same results as in
+  Every other tool sends the same requests and returns the same results as in
   1.5.2, and the tool names, input and output schemas, annotations and server
   capabilities are unchanged.
 - The alert tools' descriptions say which project an API key reaches:
@@ -14,6 +14,8 @@
   descriptions changed.
 - The embedded Web Scraping API reference says that `url` and the `headers`
   values are URL-encoded once, as part of the query string.
+- `check_if_blocked` calls the API host the server was started with (`-host`,
+  else `SCRAPFLY_API_HOST`): it called the default host whatever `-host` said.
 
 ## Earlier releases
 
