@@ -137,7 +137,7 @@ components:
     Url:
       name: "url"
       in: "query"
-      description: "The target URL to scrape. Must be URL-encoded."
+      description: "The target URL to scrape, URL-encoded once as part of the query string: a client that encodes query parameters takes the plain URL."
       required: true
       schema: { type: "string", format: "uri", example: "https://web-scraping.dev/product/1" }
       tags: ["Core"]
@@ -156,7 +156,7 @@ components:
     Headers:
       name: "headers"
       in: "query"
-      description: "Custom headers sent to the target URL. Use the format ` + "`" + `headers[Header-Name]=value` + "`" + `. Values must be URL-encoded."
+      description: "Custom headers sent to the target URL. Use the format ` + "`" + `headers[Header-Name]=value` + "`" + `. Each value is URL-encoded once, as part of the query string: a client that encodes query parameters takes the plain value."
       style: form
       explode: true
       schema:
