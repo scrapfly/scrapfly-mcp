@@ -12,6 +12,6 @@
     "type": "git",
     "url": "git+https://github.com/scrapfly/scrapfly-mcp.git"
   },
-  "license": "ISC",
+  "license": "MIT",
   "author": "scrapfly"
 }
