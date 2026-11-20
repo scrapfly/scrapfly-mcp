@@ -150,7 +150,7 @@ components:
     Country:
       name: "country"
       in: "query"
-      description: "Proxy country location in ISO 3166 alpha-2 format. Supports multiple comma-separated values, weighted randomization (e.g., ` + "`" + `us:5,ca:1` + "`" + `), and exclusion (e.g., ` + "`" + `-gb` + "`" + `)."
+      description: "Proxy country location in ISO 3166 alpha-2 format. Supports multiple comma-separated values and exclusion (e.g., ` + "`" + `-gb` + "`" + `)."
       schema: { type: "string", default: "random", example: "us,ca,-gb" }
       tags: ["Core"]
     Headers:
