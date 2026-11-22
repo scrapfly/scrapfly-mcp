@@ -217,6 +217,9 @@ func (input GetPageToolInput) AsMap() map[string]any {
 }
 
 func ScrapeConfigFromScrapeToolInput(input ScrapeToolInput) (*scrapfly.ScrapeConfig, error) {
+	if len(input.JSScenario) > 0 && !input.RenderJS {
+		return nil, fmt.Errorf("js_scenario requires render_js=true")
+	}
 	if input.Method == "" {
 		input.Method = "GET"
 	}

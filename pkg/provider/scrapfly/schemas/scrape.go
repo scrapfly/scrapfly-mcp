@@ -178,7 +178,7 @@ func MakeRenderJSSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title:       "Render JavaScript",
 		Type:        "boolean",
-		Description: "Enable JavaScript rendering with a headless browser.",
+		Description: "Enable JavaScript rendering with a headless browser. Required for a JavaScript scenario.",
 		Default:     json.RawMessage(`true`),
 	}
 }

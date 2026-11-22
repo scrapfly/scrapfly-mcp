@@ -2,6 +2,7 @@ package scrapflyprovider
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -428,5 +429,62 @@ func assertReachedUpstream(t *testing.T, res *mcp.CallToolResult, transport *cou
 	}
 	if transport.calls.Load() == 0 {
 		t.Fatal("handler short-circuited before calling the API")
+	}
+}
+
+func TestScrapeScenarioUsesRenderingDefaultOrRefuses(t *testing.T) {
+	for _, tc := range []struct {
+		name, args   string
+		wantRefusal  bool
+		wantScenario bool
+	}{
+		{name: "omitted rendering", args: `,"js_scenario":[{"wait":50}]`, wantScenario: true},
+		{name: "rendering enabled", args: `,"js_scenario":[{"wait":50}],"render_js":true`, wantScenario: true},
+		{name: "rendering disabled", args: `,"js_scenario":[{"wait":50}],"render_js":false`, wantRefusal: true},
+		{name: "empty scenario without rendering", args: `,"js_scenario":[],"render_js":false`},
+		{name: "no scenario without rendering", args: `,"render_js":false`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client, err := scrapfly.New("test-key")
+			if err != nil {
+				t.Fatal(err)
+			}
+			transport := &recordingTransport{}
+			client.SetHTTPClient(&http.Client{Transport: transport})
+			provider := NewScrapflyToolProvider(client, GetDefaultScrapflyClient, log.New(io.Discard, "", 0))
+			result, err := staticTools(provider)["web_scrape"].Handler(t.Context(), &mcp.CallToolRequest{
+				Params: &mcp.CallToolParamsRaw{
+					Name:      "web_scrape",
+					Arguments: json.RawMessage(`{"url":"https://web-scraping.dev/products"` + tc.args + `}`),
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result == nil {
+				t.Fatal("missing tool result")
+			}
+			if tc.wantRefusal {
+				if !result.IsError || len(transport.queries) != 0 || len(result.Content) == 0 {
+					t.Fatalf("expected refusal before the API call: error=%v requests=%d", result.IsError, len(transport.queries))
+				}
+				content, ok := result.Content[0].(*mcp.TextContent)
+				if !ok || !strings.Contains(content.Text, "js_scenario requires render_js=true") {
+					t.Fatalf("unexpected refusal: %v", result.Content)
+				}
+				return
+			}
+			if result.IsError || len(transport.queries) != 1 {
+				t.Fatalf("expected API call: error=%v requests=%d", result.IsError, len(transport.queries))
+			}
+			query := transport.queries[0]
+			wantScenario := ""
+			if tc.wantScenario {
+				wantScenario = base64.RawURLEncoding.EncodeToString([]byte(`[{"wait":50}]`))
+			}
+			if query.Get("js_scenario") != wantScenario || (query.Get("render_js") == "true") != tc.wantScenario {
+				t.Fatalf("render_js=%q js_scenario=%q, want scenario %q", query.Get("render_js"), query.Get("js_scenario"), wantScenario)
+			}
+		})
 	}
 }
