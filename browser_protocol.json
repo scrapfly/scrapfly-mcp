@@ -623,7 +623,7 @@
                 },
                 {
                     "id": "Selector",
-                    "description": "Element selector \u2014 a type + query pair.\nThe query format depends on the type:\n  css      \u2014 CSS selector, e.g. \"#btn\", \"input[name='email']\"\n  xpath    \u2014 XPath expression, e.g. \"//div[@id='main']\"\n  axNodeId \u2014 integer AX node ID as string, e.g. \"42\"\n  coord    \u2014 \"x,y\" comma-separated CSS viewport pixels, e.g. \"450,600\"\n  role     \u2014 AX role name (case-insensitive), e.g. \"checkbox\", \"button\"\n  pierce   \u2014 host css >>> css, through shadow roots, e.g. \"my-widget >>> [role=button]\"\n  bottom   \u2014 no query needed (pass \"\"). Only valid for scroll.\nNot all commands support all selector types; see each command's docs.",
+                    "description": "Element selector \u2014 a type + query pair.\nThe query format depends on the type:\n  css      \u2014 CSS selector, e.g. \"#btn\", \"input[name='email']\"\n  xpath    \u2014 XPath expression, e.g. \"//div[@id='main']\"\n  axNodeId \u2014 integer AX node ID of a node backed by an element, as string, e.g. \"42\"\n  coord    \u2014 \"x,y\" comma-separated CSS viewport pixels, e.g. \"450,600\"\n  role     \u2014 AX role name (case-insensitive), e.g. \"checkbox\", \"button\"\n  pierce   \u2014 host css >>> css, through shadow roots, e.g. \"my-widget >>> [role=button]\"\n  bottom   \u2014 no query needed (pass \"\"). Only valid for scroll.\nNot all commands support all selector types; see each command's docs.",
                     "type": "object",
                     "properties": [
                         {
@@ -778,7 +778,7 @@
             "commands": [
                 {
                     "name": "performAction",
-                    "description": "Performs an accessibility action on a node identified by AXNodeId.\nWhen the node is not found yet (an OOPIF's accessibility tree can take\na moment to be ready), keeps looking for about 2 seconds before failing.",
+                    "description": "Performs an accessibility action on a node identified by AXNodeId.\nWhen the node is not found yet (an OOPIF's accessibility tree can take\na moment to be ready), keeps looking for about 2 seconds before failing.\nAntibot.disable sent meanwhile ends it: it answers \"the domain was\ndisabled\" and acts on nothing.",
                     "parameters": [
                         {
                             "name": "axNodeId",
@@ -816,7 +816,7 @@
                 },
                 {
                     "name": "findAndPerformAction",
-                    "description": "Searches the accessibility tree of ALL frames (including OOPIFs)\nfor a node matching the selector, then performs the specified action.\nOnly \"role\" and \"axNodeId\" selector types are supported.\nFor \"role\" type, query is the AX role (e.g. \"checkbox\", \"button\")\nand every frame's accessibility tree is searched. This works for OOPIF\nframes where CDP Accessibility.getFullAXTree cannot reach\ncross-process nodes.\nKeeps looking for about 12 seconds when nothing matches yet.",
+                    "description": "Searches the accessibility tree of every frame (including OOPIFs), or\nof the frames frameUrl or frameIds names, for a node matching the\nselector, then performs the specified action.\nOnly \"role\" and \"axNodeId\" selector types are supported.\nFor \"role\" type, query is the AX role (e.g. \"checkbox\", \"button\")\nand the accessibility tree of each frame searched is read. This works for\nOOPIF frames where CDP Accessibility.getFullAXTree cannot reach\ncross-process nodes.\nKeeps looking every 300 milliseconds while nothing matches, until its\ntimeout. Antibot.disable sent meanwhile ends the search: it answers \"the\ndomain was disabled\" and acts on nothing.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -836,9 +836,24 @@
                         },
                         {
                             "name": "frameUrl",
-                            "description": "Optional frame URL glob pattern to restrict search (e.g. \"*example.com*\").",
+                            "description": "Optional frame URL glob pattern to restrict search (e.g. \"*example.com*\").\nIgnored when frameIds is given.",
                             "optional": true,
                             "type": "string"
+                        },
+                        {
+                            "name": "frameIds",
+                            "description": "The frames to search, as getFrames lists them, in this order: each\nlook searches them all, and the first node found in that order is the\none acted on. A listed frame that is no longer in the page is skipped;\nwhen none of them is, or the list is empty, the command answers at\nonce with an errorMessage that starts with \"No listed frame\". Replaces\nframeUrl. Default: every frame.",
+                            "optional": true,
+                            "type": "array",
+                            "items": {
+                                "$ref": "Page.FrameId"
+                            }
+                        },
+                        {
+                            "name": "timeout",
+                            "description": "How long to keep looking, in milliseconds. Default: 12000.",
+                            "optional": true,
+                            "type": "integer"
                         }
                     ],
                     "returns": [
@@ -868,12 +883,24 @@
                             "description": "The name of the found node.",
                             "optional": true,
                             "type": "string"
+                        },
+                        {
+                            "name": "framesSearched",
+                            "description": "With frameIds: how many of the listed frames the last look searched.",
+                            "optional": true,
+                            "type": "integer"
+                        },
+                        {
+                            "name": "foundFrameId",
+                            "description": "With frameIds: the frame of the node acted upon.",
+                            "optional": true,
+                            "$ref": "Page.FrameId"
                         }
                     ]
                 },
                 {
                     "name": "moveTo",
-                    "description": "Moves mouse to target along a human-like path. A longer move may\ngo slightly past the target, then come back to it.\nSupports all selector types except bottom.",
+                    "description": "Moves mouse to target along a human-like path. A longer move may\ngo slightly past the target, then come back to it.\nOn Android, iPhone and iPad the pointer is a finger, which moves above\nthe screen: the page receives no event for the move. A target out of view\nis first scrolled to with a finger's swipe, whose touch events the page\nreceives.\nSupports all selector types except bottom.\nWhile the page, or a frame the command looks in, is still loading its\ndocument (before its DOMContentLoaded event), a css, xpath, pierce or role\ntarget that is not there yet, or has no box yet, is looked for until it is,\nthose documents have loaded, or about 30 seconds have passed: only then does\nthe command fail with its lookup's error, \"Element not found\",\n\"Element not found in any frame\" once it has looked in the page's frames,\n\"No frames match URL pattern: ...\" when no frame matches frameUrl, or for a\nrole \"No AX node found with role=...\" or \"Element has empty bounds\". A\nselector that does not parse matches nothing, and is looked for the same\nway. Once those documents have loaded, a target that is not there fails the\ncommand at once, and a backendNodeId or axNodeId target is looked up once.\nAntibot.disable sent meanwhile fails it with \"the domain was disabled\".\nActs once the page is displayed and takes input: sent right after a\nnavigation, it waits for that, then pauses briefly as a person would;\nthe wait for the page gives up after about 5 seconds, counted from the\nfirst of the commands waiting for it, and the command then moves all the\nsame; after about 10 seconds for a page whose input the browser does not\nforward yet, for a target out of view that the page would not scroll to\nyet, or with a command waiting with it that the page would not receive\nyet. It fails with \"the page was not displayed in time\", having sent\nnothing, when by then the browser does not yet forward the page's input,\nthe target is out of view and the page would not take the wheel or the\nswipe that scrolls to it, or the browser stops drawing before the page is\ndisplayed and the page stops responding. It fails with\n\"the page navigated before the command acted\" when the page it was sent\nto is replaced before the command acts on it. Commands that wait start\nin the order they are ready to act.\nWhen pointer commands overlap, one whose mouse movement another one\ncuts short fails with \"Another pointer command replaced this one before\nit finished\": send pointer commands one after the other.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -918,7 +945,7 @@
                 },
                 {
                     "name": "clickOn",
-                    "description": "Moves to target then clicks with human-like timing.\nSupports all selector types except bottom.",
+                    "description": "Moves to target then clicks with human-like timing.\nOn Android, iPhone and iPad a finger taps: the page receives the touch\nevents of a touch screen, then the mouse events and the click a tap\ngives. A right click there is a long press, as is a click held for half a\nsecond or more (clickDuration 0.5 or more): it gives a contextmenu event\nand no click. A middle click stays a mouse click.\nSupports all selector types except bottom.\nWhile the page, or a frame the command looks in, is still loading its\ndocument (before its DOMContentLoaded event), a css, xpath, pierce or role\ntarget that is not there yet, or has no box yet, is looked for until it is,\nthose documents have loaded, or about 30 seconds have passed: only then does\nthe command fail with its lookup's error, \"Element not found\",\n\"Element not found in any frame\" once it has looked in the page's frames,\n\"No frames match URL pattern: ...\" when no frame matches frameUrl, or for a\nrole \"No AX node found with role=...\" or \"Element has empty bounds\". A\nselector that does not parse matches nothing, and is looked for the same\nway. Once those documents have loaded, a target that is not there fails the\ncommand at once, and a backendNodeId or axNodeId target is looked up once.\nAntibot.disable sent meanwhile fails it with \"the domain was disabled\".\nActs once the page is displayed and takes input: sent right after a\nnavigation, it waits for that, then pauses briefly as a person would;\nthe wait for the page gives up after about 5 seconds, counted from the\nfirst of the commands waiting for it, and after about 10 seconds for a\npage that would not receive the command's input yet. It fails with \"the\npage was not displayed in time\", having sent nothing, when the page is\nstill not displayed then and would not receive the command's input, or\nwhen the browser stops drawing before the page is displayed and the page\nstops responding. It fails with\n\"the page navigated before the command acted\" when the page it was sent\nto is replaced before the command acts on it. Commands that wait start\nin the order they are ready to act.\nWhen pointer commands overlap, one whose mouse movement another one\ncuts short fails with \"Another pointer command replaced this one before\nit finished\": send pointer commands one after the other.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -937,7 +964,7 @@
                         },
                         {
                             "name": "clickDuration",
-                            "description": "Hold duration in seconds between mousedown and mouseup.\nDefault: random between 0.1 and 0.4 seconds.",
+                            "description": "Hold duration in seconds between mousedown and mouseup (between\ntouchstart and touchend for a tap; on Android, iPhone and iPad half a\nsecond or more is a long press, with no click).\nDefault: random between 0.1 and 0.4 seconds.",
                             "optional": true,
                             "type": "number"
                         },
@@ -968,7 +995,7 @@
                 },
                 {
                     "name": "dragAndDrop",
-                    "description": "Drag from source to destination with human-like movement.\nSupports all selector types except bottom.",
+                    "description": "Drag from source to destination with human-like movement.\nSupports all selector types except bottom.\nWhile the page, or a frame the command looks in, is still loading its\ndocument (before its DOMContentLoaded event), each of its css, xpath, pierce\nor role targets that is not there yet, or has no box yet, is looked for\nuntil it is, those documents have loaded, or about 30 seconds have passed:\nonly then does the command fail with its lookup's error,\n\"Element not found\", \"Element not found in any frame\" once it has looked in\nthe page's frames, or for a role \"No AX node found with role=...\" or\n\"Element has empty bounds\". A selector that does not parse matches nothing,\nand is looked for the same way. Once those documents have loaded, a target\nthat is not there fails the command at once, and a backendNodeId or axNodeId\ntarget is looked up once. Antibot.disable sent meanwhile fails it with\n\"the domain was disabled\".\nActs once the page is displayed and takes input: sent right after a\nnavigation, it waits for that, then pauses briefly as a person would;\nthe wait for the page gives up after about 5 seconds, counted from the\nfirst of the commands waiting for it, and after about 10 seconds for a\npage that would not receive the command's input yet. It fails with \"the\npage was not displayed in time\", having sent nothing, when the page is\nstill not displayed then and would not receive the command's input, or\nwhen the browser stops drawing before the page is displayed and the page\nstops responding. It fails with\n\"the page navigated before the command acted\" when the page it was sent\nto is replaced before the command acts on it. Commands that wait start\nin the order they are ready to act.\nWhen pointer commands overlap, one whose mouse movement another one\ncuts short fails with \"Another pointer command replaced this one before\nit finished\": send pointer commands one after the other.",
                     "parameters": [
                         {
                             "name": "from",
@@ -1005,7 +1032,7 @@
                 },
                 {
                     "name": "clickAndHold",
-                    "description": "Moves to target element, presses mouse down, holds for a minimum time,\nthen releases. For controls that need a long press.\nSupports all selector types except bottom.",
+                    "description": "Moves to target element, presses mouse down, holds for a minimum time,\nthen releases. For controls that need a long press.\nOn Android, iPhone and iPad a finger presses: held for half a second or\nmore, it is a long press, which gives a contextmenu event and no click.\nA right button there is always a long press; a middle button stays a\nmouse press.\nSupports all selector types except bottom.\nWhile the page, or a frame the command looks in, is still loading its\ndocument (before its DOMContentLoaded event), a css, xpath, pierce or role\ntarget that is not there yet, or has no box yet, is looked for until it is,\nthose documents have loaded, or about 30 seconds have passed: only then does\nthe command fail with its lookup's error, \"Element not found\",\n\"Element not found in any frame\" once it has looked in the page's frames,\n\"No frames match URL pattern: ...\" when no frame matches frameUrl, or for a\nrole \"No AX node found with role=...\" or \"Element has empty bounds\". A\nselector that does not parse matches nothing, and is looked for the same\nway. Once those documents have loaded, a target that is not there fails the\ncommand at once, and a backendNodeId or axNodeId target is looked up once.\nAntibot.disable sent meanwhile fails it with \"the domain was disabled\".\nActs once the page is displayed and takes input: sent right after a\nnavigation, it waits for that, then pauses briefly as a person would;\nthe wait for the page gives up after about 5 seconds, counted from the\nfirst of the commands waiting for it, and after about 10 seconds for a\npage that would not receive the command's input yet. It fails with \"the\npage was not displayed in time\", having sent nothing, when the page is\nstill not displayed then and would not receive the command's input, or\nwhen the browser stops drawing before the page is displayed and the page\nstops responding. It fails with\n\"the page navigated before the command acted\" when the page it was sent\nto is replaced before the command acts on it. Commands that wait start\nin the order they are ready to act.\nWhen pointer commands overlap, one whose mouse movement another one\ncuts short fails with \"Another pointer command replaced this one before\nit finished\": send pointer commands one after the other.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1049,7 +1076,7 @@
                 },
                 {
                     "name": "clickAndSlide",
-                    "description": "Moves to target element, presses mouse down, slides the mouse\nto a target position, then releases.\nFor slider controls.\nSupports all selector types except bottom.\n\nTwo modes:\n1. Fixed distance: provide \"distance\" in CSS pixels.\n2. Target selector: provide \"target\" selector. The command slides from\n   the source to the target, landing near it as a human hand would.\nAt least one of \"distance\" or \"target\" must be provided.",
+                    "description": "Moves to target element, presses mouse down, slides the mouse\nto a target position, then releases.\nFor slider controls.\nSupports all selector types except bottom.\nWhile the page, or a frame the command looks in, is still loading its\ndocument (before its DOMContentLoaded event), each of its css, xpath, pierce\nor role targets that is not there yet, or has no box yet, is looked for\nuntil it is, those documents have loaded, or about 30 seconds have passed:\nonly then does the command fail with its lookup's error,\n\"Element not found\", \"Element not found in any frame\" once it has looked in\nthe page's frames, \"No frames match URL pattern: ...\" when no frame matches\nframeUrl, or for a role \"No AX node found with role=...\" or\n\"Element has empty bounds\", after \"Failed to resolve target: \" or\n\"Failed to resolve source: \" when it slides onto a target. A selector that\ndoes not parse matches nothing, and is looked for the same way. Once those\ndocuments have loaded, a target that is not there fails the command at once,\nand a backendNodeId or axNodeId target is looked up once. Antibot.disable\nsent meanwhile fails it with \"the domain was disabled\".\n\nTwo modes:\n1. Fixed distance: provide \"distance\" in CSS pixels.\n2. Target selector: provide \"target\" selector. The command slides from\n   the source to the target, landing near it as a human hand would.\nAt least one of \"distance\" or \"target\" must be provided.\nActs once the page is displayed and takes input: sent right after a\nnavigation, it waits for that, then pauses briefly as a person would;\nthe wait for the page gives up after about 5 seconds, counted from the\nfirst of the commands waiting for it, and after about 10 seconds for a\npage that would not receive the command's input yet. It fails with \"the\npage was not displayed in time\", having sent nothing, when the page is\nstill not displayed then and would not receive the command's input, or\nwhen the browser stops drawing before the page is displayed and the page\nstops responding. It fails with\n\"the page navigated before the command acted\" when the page it was sent\nto is replaced before the command acts on it. Commands that wait start\nin the order they are ready to act.\nWhen pointer commands overlap, one whose mouse movement another one\ncuts short fails with \"Another pointer command replaced this one before\nit finished\": send pointer commands one after the other.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1117,7 +1144,7 @@
                 },
                 {
                     "name": "scroll",
-                    "description": "Human-like scroll. Three modes:\n\n1. Element into view: provide selector (css/xpath/axNodeId/coord/role).\n   Scrolls with mouse wheel steps until the element is near the viewport\n   center. Does nothing if it is already visible near the center.\n\n2. Scroll to bottom: provide selector {type:\"bottom\", query:\"\"}.\n   Scrolls down by part of a viewport height per call: call again until\n   atBottom. Moves the mouse into the viewport first when it is outside.\n   Returns atBottom=true when scrollY is within 5px of the maximum scroll\n   offset.\n\n3. Manual delta: provide delta (no selector). Scrolls by the given pixel\n   offset in several mouse wheel steps.\n\nSupports all selector types including bottom.",
+                    "description": "Human-like scroll. Three modes:\n\n1. Element into view: provide selector (css/xpath/axNodeId/coord/role).\n   Scrolls with mouse wheel steps until the element is near the viewport\n   center. Does nothing if it is already visible near the center.\n\n2. Scroll to bottom: provide selector {type:\"bottom\", query:\"\"}.\n   Scrolls down by part of a viewport height per call: call again until\n   atBottom. Moves the mouse into the viewport first when it is outside.\n   Returns atBottom=true when scrollY is within 5px of the maximum scroll\n   offset.\n\n3. Manual delta: provide delta (no selector). Scrolls by the given pixel\n   offset in several mouse wheel steps.\n\nOn Android, iPhone and iPad a finger swipes instead of the mouse wheel, as\non the device's touch screen: the page receives touch events and no wheel\nevent, a flick carries the page on with the device's momentum, and the\nfinger swipes again while the page, or the target, has further to go, up\nto eight swipes, stopping once a swipe no longer moves it. A scroll the\npage can follow then ends within about 6% of the viewport of the distance\nasked for.\n\nOn a Mac a trackpad's two-finger swipes scroll instead of a mouse wheel:\nthe page receives wheel events at the display's frame rate, in whole\npixels, a swipe for about every 900 pixels, up to eight swipes, which share\na longer distance, so a scroll takes about three seconds at most. It stops\nbefore a swipe when the last one moved nothing it scrolls: the target being\nbrought into view, or the page left where it was at its end.\n\nSupports all selector types including bottom.\nIn the element mode, while the page, or one of its frames, is still loading\nits document (before its DOMContentLoaded event), a css, xpath, pierce or\nrole target that is not there yet, or has no box yet, is looked for until it\nis, those documents have loaded, or about 30 seconds have passed: only then\ndoes the command fail with its lookup's error, \"Element not found\",\n\"Element not found in any frame\" once it has looked in the page's frames, or\nfor a role \"No AX node found with role=...\" or \"Element has empty bounds\". A\nselector that does not parse matches nothing, and is looked for the same\nway. Once those documents have loaded, a target that is not there fails the\ncommand at once, and a backendNodeId or axNodeId target is looked up once.\nAntibot.disable sent meanwhile fails it with \"the domain was disabled\".\nActs once the page is displayed and takes input: sent right after a\nnavigation, it waits for that, then pauses briefly as a person would;\nthe wait for the page gives up after about 5 seconds, counted from the\nfirst of the commands waiting for it, and after about 10 seconds for a\npage that would not receive the command's input yet. It fails with \"the\npage was not displayed in time\", having sent nothing, when the page is\nstill not displayed then and would not receive the command's input, or\nwhen the browser stops drawing before the page is displayed and the page\nstops responding. It fails with\n\"the page navigated before the command acted\" when the page it was sent\nto is replaced before the command acts on it. Commands that wait start\nin the order they are ready to act.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1127,7 +1154,7 @@
                         },
                         {
                             "name": "delta",
-                            "description": "Manual scroll delta in CSS viewport pixels. Follows the DOM\nwindow.scrollBy(x, y) convention: positive y = scroll DOWN\n(toward the bottom of the page), positive x = scroll RIGHT.\nThe same on every platform.",
+                            "description": "Manual scroll delta in CSS viewport pixels. Follows the DOM\nwindow.scrollBy(x, y) convention: positive y = scroll DOWN\n(toward the bottom of the page), positive x = scroll RIGHT.\nThe same on every platform. A delta that is not a finite number, or\nbeyond 33554432 pixels, fails with \"Invalid delta values\".",
                             "optional": true,
                             "$ref": "Coordinate"
                         }
@@ -1152,7 +1179,7 @@
                 },
                 {
                     "name": "typeText",
-                    "description": "Types text character by character with human-like typing speed,\nset in words per minute. Each character is sent with the key codes\nof the browser's keyboard layout.",
+                    "description": "Types text character by character with human-like typing speed,\nset in words per minute. Each character is sent with the key codes\nof the browser's keyboard layout, or on a mobile platform as its\non-screen keyboard enters it.\nActs once the page is displayed and takes input: sent right after a\nnavigation, it waits for that, then pauses briefly as a person would;\nthe wait for the page gives up after about 5 seconds, counted from the\nfirst of the commands waiting for it, and after about 10 seconds for a\npage that would not receive the command's input yet. It fails with \"the\npage was not displayed in time\", having sent nothing, when the page is\nstill not displayed then and would not receive the command's input, or\nwhen the browser stops drawing before the page is displayed and the page\nstops responding. It fails with\n\"the page navigated before the command acted\" when the page it was sent\nto is replaced while it waits. Commands that wait start in the order\nthey are ready to act.",
                     "parameters": [
                         {
                             "name": "text",
@@ -1179,7 +1206,7 @@
                 },
                 {
                     "name": "fill",
-                    "description": "Clicks on element, optionally clears it, then types text with human timing.\nWithout clear, the text goes after the content already in the field.\nSupports all selector types except bottom.",
+                    "description": "Clicks on element, optionally clears it, then types text with human timing.\nOn Android, iPhone and iPad the click is a tap, as for clickOn.\nWithout clear, the text goes after the content already in the field.\nSupports all selector types except bottom.\nWhile the page, or a frame the command looks in, is still loading its\ndocument (before its DOMContentLoaded event), a css, xpath, pierce or role\ntarget that is not there yet, or has no box yet, is looked for until it is,\nthose documents have loaded, or about 30 seconds have passed: only then does\nthe command fail with its lookup's error, \"Element not found\",\n\"Element not found in any frame\" once it has looked in the page's frames, or\nfor a role \"No AX node found with role=...\" or \"Element has empty bounds\". A\nselector that does not parse matches nothing, and is looked for the same\nway. Once those documents have loaded, a target that is not there fails the\ncommand at once, and a backendNodeId or axNodeId target is looked up once.\nAntibot.disable sent meanwhile fails it with \"the domain was disabled\".\nActs once the page is displayed and takes input: sent right after a\nnavigation, it waits for that, then pauses briefly as a person would;\nthe wait for the page gives up after about 5 seconds, counted from the\nfirst of the commands waiting for it, and after about 10 seconds for a\npage that would not receive the command's input yet. It fails with \"the\npage was not displayed in time\", having sent nothing, when the page is\nstill not displayed then and would not receive the command's input, or\nwhen the browser stops drawing before the page is displayed and the page\nstops responding. It fails with\n\"the page navigated before the command acted\" when the page it was sent\nto is replaced before the command acts on it. Commands that wait start\nin the order they are ready to act.\nWithout clear, once it has clicked, it can still fail: with \"the page is\ngone\" when the page navigates away or crashes right after the click, and\nwith \"the page was not displayed in time\" when the browser stops drawing\nbefore the page is displayed and the page stops responding. The click may\nhave reached the page, the text has not. A success does not prove that\nthe page kept the text: read the field to know.\nWhen pointer commands overlap, one whose mouse movement another one\ncuts short fails with \"Another pointer command replaced this one before\nit finished\": send pointer commands one after the other.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1196,7 +1223,7 @@
                         },
                         {
                             "name": "clear",
-                            "description": "Clear existing content first by sending Ctrl+A then Backspace.\nDefault: false.",
+                            "description": "Clear existing content first, as a user does: select all, then\nBackspace. The select-all is the select-all shortcut (Cmd+A on macOS,\nCtrl+A elsewhere), except on Android, iPhone and iPad, where it is the\nfield menu's Select All, which sends no key event; there Backspace is\nthe on-screen keyboard's, or a keyboard's on a field that shows no\non-screen keyboard. A page that cancels the shortcut's keydown, or the\nselect-all's selectstart event, gets no select-all, so Backspace deletes\nonly the character before the caret and the text goes in with the rest\nof the content, as from a user; the command still succeeds, so read the\nfield to know whether it was cleared. The command fails, with an\nerrorMessage, when the shortcut cannot reach the page, or when the page\nis gone before the select-all.\nDefault: false.",
                             "optional": true,
                             "type": "boolean"
                         },
@@ -1208,7 +1235,7 @@
                         },
                         {
                             "name": "paste",
-                            "description": "Paste the text instead of typing it. When true, the text replaces the\nclipboard content and is pasted into the field: the page receives the\npaste and input events of a user paste, with the text in\nclipboardData. Much faster than typing for long strings;\nuseful for passwords, tokens, or pre-filled data.\nDefault: false.",
+                            "description": "Paste the text instead of typing it. When true, the text replaces the\nclipboard content and is pasted into the field with the paste shortcut\n(Cmd+V on macOS, iPhone and iPad, Ctrl+V elsewhere): the page receives\nthe shortcut's key events and the paste, beforeinput and input events\nof a user paste, with the text in clipboardData while the paste event\nis dispatched. On Android, iPhone and iPad, in a field that shows the\non-screen keyboard, the text is pasted from the field's menu instead,\nas users of these devices paste, a moment after the click: the page\nreceives the same paste, beforeinput and input events and no key\nevent. On Android the menu opens as a user opens it, with a long\npress on an empty field or a tap on the caret's handle in a field that\nholds text, so the page first receives that gesture's contextmenu\nevent, and the long press's touch and pointer events. A page that\ncancels that contextmenu event, or does not dispatch it within about a\nsecond, gets no menu: the text then goes in as the on-screen\nkeyboard's clipboard suggestion enters it, as one insertText input\nbetween key events of key code 229, with no paste event, and the\nclipboard is left as it was. On iPhone and iPad the text's events\ncome as long after the paste event as the device takes to read its\nclipboard, each read of the paste event's clipboardData taking its\nshare. A field with inputmode=\"none\" shows no on-screen keyboard and\ntakes the paste shortcut. A page that cancels the shortcut's keydown,\nor the paste event, gets no paste, as from a user; the command still\nsucceeds, so read the field to know whether the page took it. The\ncommand fails, with an errorMessage, when the page is gone, lost focus\nbefore the shortcut, did not receive it, or did not answer it within\n15 seconds; on macOS, iPhone and iPad also when the page lost focus\nbefore it answered the shortcut, or did not finish the paste within 5\nseconds of its answer.\nA paste from the field's menu fails when the page is gone, lost focus\nbefore the paste, or did not finish it within 5 seconds. On Android,\nAntibot.disable or another paste of the same session, sent before the\npaste presses the menu's Paste, or the keyboard's clipboard suggestion\non a page that kept the menu shut, ends the paste with its\nerrorMessage, as does another pointer command sent while the long\npress that opens the menu is down.\nAfter a failure the page may still receive the paste, so read the field\nbefore retrying. The clipboard is the browser's, shared by all its\npages: a paste waits while a paste, or a pressKey copy, cut or paste,\nof another page, in any tab or frame, is still in progress. Each one\nahead of it takes up to 15 seconds for its page to answer the\nshortcut; on macOS, iPhone and iPad up to 5 seconds more for a paste,\nor 15 more for a copy or cut, for the page to finish it; up to 7\nseconds for a paste from the field's menu; and up to 1 second more\nafter a copy or cut. Much faster than typing for long strings; useful\nfor passwords, tokens, or pre-filled data.\nDefault: false.",
                             "optional": true,
                             "type": "boolean"
                         }
@@ -1231,7 +1258,7 @@
                     "parameters": [
                         {
                             "name": "keepHistory",
-                            "description": "When true, the cursor trail retains its FULL movement history at\nconstant opacity instead of the default rolling ~60-point fading\ntrail. This makes a single screenshot show the entire path the\ncursor took, not just its current position. Default: false.",
+                            "description": "When true, the cursor trail retains its FULL movement history at\nconstant opacity instead of the default rolling fading trail of about\nthe last second of movement. This makes a single screenshot show the\nentire path the cursor took, not just its current position.\nDefault: false.",
                             "optional": true,
                             "type": "boolean"
                         }
@@ -1250,7 +1277,7 @@
                 },
                 {
                     "name": "highlightTarget",
-                    "description": "Highlights a target element on the debug cursor overlay: four corner\nbrackets painted around the element's bounding box in a kind-specific\ncolor, auto-expiring after ttlMs. Use it to show what is ABOUT to be\ninteracted with, so a screencast shows the intent, not just the outcome.\n\nNo-op when showCursor hasn't been called for this session: the\nbrackets are drawn only while the cursor overlay is enabled.\n\nRuns no script in the page and does not change the DOM. Elements out\nof the viewport or hidden are still bracketed when their layout box is\nnot empty, so the brackets may then sit off-screen, where the element is.\n\nSelector types: same set as moveTo (every type except bottom). For\nbackendNodeId, the query is the integer BackendNodeId as a decimal\nstring.",
+                    "description": "Highlights a target element on the debug cursor overlay: four corner\nbrackets painted around the element's bounding box in a kind-specific\ncolor, auto-expiring after ttlMs. Use it to show what is ABOUT to be\ninteracted with, so a screencast shows the intent, not just the outcome.\n\nNo-op when showCursor hasn't been called for this session: the\nbrackets are drawn only while the cursor overlay is enabled.\n\nRuns no script in the page and does not change the DOM. Elements out\nof the viewport or hidden are still bracketed when their layout box is\nnot empty, so the brackets may then sit off-screen, where the element is.\n\nSelector types: same set as moveTo (every type except bottom). For\nbackendNodeId, the query is the integer BackendNodeId as a decimal\nstring.\n\nWith the overlay on, while the page, or one of its frames, is still loading\nits document (before its DOMContentLoaded event), a css, xpath, pierce or\nrole target that is not there yet, or has no box yet, is looked for until it\nis, those documents have loaded, or about 30 seconds have passed, as the\ncommand it shows looks for it: only then does the command fail with its\nlookup's error, \"Element not found\", \"Element not found in any frame\" once\nit has looked in the page's frames, or for a role\n\"No AX node found with role=...\" or \"Element has empty bounds\". It fails\nwith \"the page navigated before the command acted\" when the page loads\nanother document meanwhile, and with \"the domain was disabled\" when\nAntibot.disable comes meanwhile.\n\nWith the overlay on, it fails with \"the page was not displayed in time\"\nwhen the browser stops drawing before the page is displayed and the page\ndoes not answer within about 5 seconds.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1283,7 +1310,7 @@
                 },
                 {
                     "name": "previewMousePath",
-                    "description": "Paints a \"going there next\" preview line on the cursor overlay: a\nthin semi-transparent straight segment from the current tracked\ncursor position to the target element's center. Use just before\na click or move to show WHERE the cursor is about to travel before\nany motion begins.\n\nThe line shows the destination only: the move itself follows its\nown path.\n\nNo-op when showCursor isn't enabled. It can be sent alongside the\nclick or move without waiting for its response.",
+                    "description": "Paints a \"going there next\" preview line on the cursor overlay: a\nthin semi-transparent straight segment from the current tracked\ncursor position to the target element's center. Use just before\na click or move to show WHERE the cursor is about to travel before\nany motion begins.\n\nThe line shows the destination only: the move itself follows its\nown path.\n\nNo-op when showCursor isn't enabled. It can be sent alongside the\nclick or move without waiting for its response. With the overlay on, it\nfails with \"the page was not displayed in time\" when the browser stops\ndrawing before the page is displayed and the page does not answer within\nabout 5 seconds.\n\nWith the overlay on, while the page, or one of its frames, is still loading\nits document (before its DOMContentLoaded event), a css, xpath, pierce or\nrole target that is not there yet, or has no box yet, is looked for until it\nis, those documents have loaded, or about 30 seconds have passed, as the\ncommand it shows looks for it: only then does the command fail with its\nlookup's error, \"Element not found\", \"Element not found in any frame\" once\nit has looked in the page's frames, or for a role\n\"No AX node found with role=...\" or \"Element has empty bounds\". It fails\nwith \"the page navigated before the command acted\" when the page loads\nanother document meanwhile, and with \"the domain was disabled\" when\nAntibot.disable comes meanwhile.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1323,7 +1350,7 @@
                 },
                 {
                     "name": "locateElement",
-                    "description": "Locates an element in a specific frame and returns its bounding box\nin main-frame viewport coordinates (CSS pixels). This allows clicking\non elements inside OOPIFs with correct screen-space coordinates.\nOnly \"css\", \"xpath\", and \"axNodeId\" selector types are supported.",
+                    "description": "Locates an element in a specific frame and returns its bounding box\nin main-frame viewport coordinates (CSS pixels). This allows clicking\non elements inside OOPIFs with correct screen-space coordinates.\nOnly \"css\", \"xpath\", and \"axNodeId\" selector types are supported.\nWhile the frame is still loading its document (before its DOMContentLoaded\nevent), a css, xpath or pierce target that is not there yet, or has no box\nyet, is looked for until it is, the document has loaded, or about 30 seconds\nhave passed: only then does the command fail with \"Element not found\". A\nselector that does not parse matches nothing, and is looked for the same\nway. Once the document has loaded, a target that is not there fails the\ncommand at once, and an axNodeId target is looked up once. It fails with\n\"Frame not found: <frameId>\" when the frame is removed meanwhile, with\n\"the page navigated before the command acted\" when the frame loads another\ndocument meanwhile, and with \"the domain was disabled\" when Antibot.disable\ncomes meanwhile.\nIt fails with \"the page was not displayed in time\" when the browser stops\ndrawing before the page is displayed and the page does not answer within\nabout 5 seconds.",
                     "parameters": [
                         {
                             "name": "frameId",
@@ -1386,7 +1413,7 @@
                 },
                 {
                     "name": "locateElementAcrossFrames",
-                    "description": "Locates an element across ALL frames (main + iframes/OOPIFs).\nTries main frame first, then walks child frames until found.\nReturns bounding box in main-frame CSS viewport coordinates.\nSupports css, xpath, axNodeId, coord, and role selector types (not bottom).",
+                    "description": "Locates an element across ALL frames (main + iframes/OOPIFs).\nTries main frame first, then walks child frames until found.\nReturns bounding box in main-frame CSS viewport coordinates.\nSupports css, xpath, axNodeId, coord, and role selector types (not bottom).\nWhile the page, or one of its frames, is still loading its document (before\nits DOMContentLoaded event), a css, xpath or role target that is not in any\nframe yet, or has no box yet, is looked for until it is, those documents\nhave loaded, or about 30 seconds have passed: only then does the command\nfail with its lookup's error, \"Element not found\",\n\"Element not found in any frame\" once it has looked in the page's frames, or\nfor a role \"No AX node found with role=...\" or \"Element has empty bounds\". A\nselector that does not parse matches nothing, and is looked for the same\nway. Once those documents have loaded, a target that is not there fails the\ncommand at once, and an axNodeId target is looked up once. It fails with\n\"the page navigated before the command acted\" when the page loads another\ndocument meanwhile, and with \"the domain was disabled\" when Antibot.disable\ncomes meanwhile.\nIt fails with \"the page was not displayed in time\" when the browser stops\ndrawing before the page is displayed and the page does not answer within\nabout 5 seconds.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1443,7 +1470,7 @@
                 },
                 {
                     "name": "waitForElement",
-                    "description": "Waits for a selector to appear in any frame (main + iframes/OOPIFs), or to\nstop matching with hidden. Checks repeatedly until the timeout and runs no\nscript in the page. Searches main frame first, then child frames each time.\nA frame removed while it is asked, and a css selector that does not parse,\nmatch nothing.\nSupports css, xpath, axNodeId, backendNodeId, coord, role and pierce\nselector types (not bottom).",
+                    "description": "Waits for a selector to appear in any frame (main + iframes/OOPIFs), or to\nstop matching with hidden. Checks repeatedly until the timeout and runs no\nscript in the page. At the timeout it answers success false with\n\"Timeout waiting for element\", also when the page is busy or held by a\ndialog and has not answered a check. Searches main frame first, then child\nframes each time.\nA frame removed while it is asked, and a css selector that does not parse,\nmatch nothing. It fails with \"the page was not displayed in time\" when the\nbrowser stops drawing before the page is displayed and the page does not\nanswer within about 5 seconds, which says nothing of the element.\nWith hidden, while the page, or a frame it searches, is still loading its\ndocument (before its DOMContentLoaded event), a css, xpath, pierce or role\nselector that has not matched yet does not count as hidden: the wait goes on\nuntil it has matched and stopped matching, or those documents have loaded.\nSupports css, xpath, axNodeId, backendNodeId, coord, role and pierce\nselector types (not bottom).",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1494,7 +1521,7 @@
                 },
                 {
                     "name": "waitForCookie",
-                    "description": "Waits for a cookie to be written: answers once a cookie of that name the jar\nsends to url holds a value other than previousValue (any value when it is\nomitted), written by a script (document.cookie, CookieStore) or by a\nresponse's Set-Cookie. Unpartitioned cookies only. Read from the page's\ncookie jar: nothing runs in the page, which sees nothing of the wait.\n\nNo write is missed, whatever its order against the command: a write made\nbefore the command is found in the jar (alreadyWritten), and one made after\nit is reported as it happens. A timeout is an answer, written false, not an\nerror.",
+                    "description": "Waits for a cookie to be written: answers once a cookie of that name the jar\nsends to url holds a value other than previousValue (any value when it is\nomitted), written by a script (document.cookie, CookieStore) or by a\nresponse's Set-Cookie. The cookies are those whose domain, path and Secure\nattribute match url, whatever their SameSite attribute and the browser's\ncookie settings: the unpartitioned ones and, set with the Partitioned\nattribute, those of the partition a request of the frame the command was\nsent to would send to url from, as that frame is when the command arrives.\nRead from the page's cookie jar: nothing runs in the page, which sees\nnothing of the wait.\n\nNo write is missed, whatever its order against the command: a write made\nbefore the command is found in the jar (alreadyWritten), and one made after\nit is reported as it happens. A timeout is an answer, written false, not an\nerror.",
                     "parameters": [
                         {
                             "name": "name",
@@ -1503,7 +1530,7 @@
                         },
                         {
                             "name": "url",
-                            "description": "The URL the cookie is sent to: its domain, path and scheme pick the\ncookies as for a request to it (a secure one needs https).",
+                            "description": "The URL the cookie is sent to: its domain, path and scheme pick the\ncookies as for a request to it (a secure one needs https, or a URL the\nbrowser treats as secure, such as localhost).",
                             "type": "string"
                         },
                         {
@@ -1541,7 +1568,7 @@
                 },
                 {
                     "name": "getMousePosition",
-                    "description": "Returns the current tracked mouse position in CSS viewport pixels.",
+                    "description": "Returns the current tracked mouse position in CSS viewport pixels. In a\ntab where no command has moved the mouse yet, the point its first move\nstarts from: where the mouse pointer of the browser's display rests, moved\ninside the viewport when it is outside, or, with no pointer (a headless\nbrowser, or on Android, iPhone and iPad), a point in the middle of the\nviewport.",
                     "returns": [
                         {
                             "name": "x",
@@ -1576,7 +1603,7 @@
                         },
                         {
                             "name": "reason",
-                            "description": "Human-readable reason when not visible (e.g. \"zero size\", \"off viewport\");\n\"selector did not parse\" for a css selector that does not parse.",
+                            "description": "Human-readable reason when not visible (e.g. \"zero size\", \"off viewport\");\n\"selector did not parse\" for a css selector that does not parse; \"the page\nis gone\" when the page went before it answered.",
                             "optional": true,
                             "type": "string"
                         }
@@ -1600,7 +1627,7 @@
                         },
                         {
                             "name": "reason",
-                            "description": "Human-readable reason when not focused (e.g. \"no active element\",\n\"focused element does not match selector\").",
+                            "description": "Human-readable reason when not focused (e.g. \"no active element\",\n\"focused element does not match selector\"; \"the page is gone\" when the page\nwent before it answered).",
                             "optional": true,
                             "type": "string"
                         }
@@ -1608,7 +1635,7 @@
                 },
                 {
                     "name": "pressKey",
-                    "description": "Sends a single key press with human-like timing (keyDown, then keyUp\na short moment later).\n\nSpecial key names (case-insensitive):\n  \"Enter\", \"Tab\", \"Escape\" (or \"Esc\"), \"Backspace\", \"Delete\",\n  \"Space\", \"Home\", \"End\", \"PageUp\", \"PageDown\",\n  \"ArrowUp\" (or \"Up\"), \"ArrowDown\" (or \"Down\"),\n  \"ArrowLeft\" (or \"Left\"), \"ArrowRight\" (or \"Right\")\n\nSingle characters: any single character (e.g. \"a\", \"A\", \"1\", \"@\").\nShift is applied automatically when the character requires it.\n\nModifier combos: prefix with \"Ctrl+\", \"Shift+\", \"Alt+\", or \"Meta+\"\n(case-insensitive). One modifier prefix per call.\nExamples: \"Ctrl+a\", \"Ctrl+c\", \"Ctrl+v\", \"Shift+Tab\", \"Alt+F4\"",
+                    "description": "Sends a single key press with human-like timing (keyDown, then keyUp\na short moment later).\n\nSpecial key names (case-insensitive):\n  \"Enter\", \"Tab\", \"Escape\" (or \"Esc\"), \"Backspace\", \"Delete\",\n  \"Space\", \"Home\", \"End\", \"PageUp\", \"PageDown\",\n  \"ArrowUp\" (or \"Up\"), \"ArrowDown\" (or \"Down\"),\n  \"ArrowLeft\" (or \"Left\"), \"ArrowRight\" (or \"Right\")\n\nSingle characters: any single character (e.g. \"a\", \"A\", \"1\", \"@\").\nShift, and AltGr, are applied automatically when the character requires\nthem on the profile's keyboard layout.\n\nModifier combos: prefix with \"Ctrl+\", \"Shift+\", \"Alt+\", or \"Meta+\"\n(case-insensitive). One modifier prefix per call. The modifier key is\npressed a moment before the key and released after it, as a user does.\n\"Shift+\" types the key's shifted character (\"Shift+a\" types \"A\"). A\nmodifier other than Shift with a character that needs AltGr fails. On\nAndroid, a \"Meta+\" combo sends no key event: the platform keeps it for\nits own shortcuts.\nOn macOS, iPhone and iPad, \"Meta+a\", \"Meta+c\", \"Meta+x\", \"Meta+v\" and\n\"Meta+z\" select all, copy, cut, paste and undo, and \"Meta+Z\" redoes, as\nthe Edit menu does; the command fails, with an errorMessage, when the\nshortcut cannot reach the page.\nThe copy, cut and paste shortcuts use the browser's clipboard, shared by\nall its pages: \"Ctrl+c\" (copy), \"Ctrl+x\" and \"Shift+Delete\" (cut),\n\"Ctrl+v\" and \"Ctrl+V\" (paste, and paste matching the style), and on\nmacOS, iPhone and iPad also \"Meta+c\", \"Meta+x\" and \"Meta+v\". The key\nwaits, with the modifier held, while a paste or another such shortcut of\na page, in any tab or frame, is still in progress. Each one ahead of it\ntakes up to 15 seconds for its page to answer the shortcut; on macOS,\niPhone and iPad up to 5 seconds more for a paste, or 15 more for a copy\nor cut, for the page to finish it; and up to 1 second more after a copy\nor cut. On macOS, iPhone and iPad, \"Meta+v\" also fails when the page did\nnot finish the paste within 5 seconds of its answer, and \"Meta+c\" and\n\"Meta+x\" when it did not finish the copy or cut within 15 seconds of it.\nExamples: \"Ctrl+a\", \"Ctrl+c\", \"Ctrl+v\", \"Shift+Tab\", \"Meta+a\"\nActs once the page is displayed and takes input: sent right after a\nnavigation, it waits for that, then pauses briefly as a person would;\nthe wait for the page gives up after about 5 seconds, counted from the\nfirst of the commands waiting for it, and after about 10 seconds for a\npage that would not receive the command's input yet. It fails with \"the\npage was not displayed in time\", having sent nothing, when the page is\nstill not displayed then and would not receive the command's input, or\nwhen the browser stops drawing before the page is displayed and the page\nstops responding. It fails with\n\"the page navigated before the command acted\" when the page it was sent\nto is replaced while it waits. Commands that wait start in the order\nthey are ready to act.",
                     "parameters": [
                         {
                             "name": "key",
@@ -1630,7 +1657,7 @@
                 },
                 {
                     "name": "hover",
-                    "description": "Moves mouse to element with human-like trajectory and pauses\nbriefly to trigger hover states (CSS :hover, tooltips, menus).\nSupports all selector types except bottom.",
+                    "description": "Moves mouse to element with human-like trajectory and pauses\nbriefly to trigger hover states (CSS :hover, tooltips, menus).\nOn Android, iPhone and iPad there is no pointer to hover with: the\nfinger moves above the screen and the page receives no event for the move.\nA target out of view is first scrolled to with a finger's swipe, whose\ntouch events the page receives.\nSupports all selector types except bottom.\nWhile the page, or a frame the command looks in, is still loading its\ndocument (before its DOMContentLoaded event), a css, xpath, pierce or role\ntarget that is not there yet, or has no box yet, is looked for until it is,\nthose documents have loaded, or about 30 seconds have passed: only then does\nthe command fail with its lookup's error, \"Element not found\",\n\"Element not found in any frame\" once it has looked in the page's frames, or\nfor a role \"No AX node found with role=...\" or \"Element has empty bounds\". A\nselector that does not parse matches nothing, and is looked for the same\nway. Once those documents have loaded, a target that is not there fails the\ncommand at once, and a backendNodeId or axNodeId target is looked up once.\nAntibot.disable sent meanwhile fails it with \"the domain was disabled\".\nActs once the page is displayed and takes input: sent right after a\nnavigation, it waits for that, then pauses briefly as a person would;\nthe wait for the page gives up after about 5 seconds, counted from the\nfirst of the commands waiting for it, and the command then moves all the\nsame; after about 10 seconds for a page whose input the browser does not\nforward yet, for a target out of view that the page would not scroll to\nyet, or with a command waiting with it that the page would not receive\nyet. It fails with \"the page was not displayed in time\", having sent\nnothing, when by then the browser does not yet forward the page's input,\nthe target is out of view and the page would not take the wheel or the\nswipe that scrolls to it, or the browser stops drawing before the page is\ndisplayed and the page stops responding. It fails with\n\"the page navigated before the command acted\" when the page it was sent\nto is replaced before the command acts on it. Commands that wait start\nin the order they are ready to act.\nWhen pointer commands overlap, one whose mouse movement another one\ncuts short fails with \"Another pointer command replaced this one before\nit finished\": send pointer commands one after the other.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1662,7 +1689,7 @@
                 },
                 {
                     "name": "selectOption",
-                    "description": "Selects an option in a <select> or custom dropdown.\nOnly \"css\" and \"xpath\" selector types are supported.\n\nFor native <select>: clicks the element, then selects the option\nvia the browser's native popup. Fires change/input events.\n\nFor custom dropdowns (Bootstrap, React Select, MUI, etc.): provide\noptionSelector \u2014 the command will click the trigger to open the dropdown,\nfind the matching option element, and click it.\n\nMatching: provide exactly one of value, text, or index.\nFor native <select>:\n  - \"value\" matches the <option> value attribute\n  - \"text\" matches the <option> text content (whitespace-stripped)\n  - \"index\" matches by 0-based position\nFor custom dropdowns with optionSelector:\n  - \"text\" matches against option element's textContent\n  - \"index\" matches by 0-based position among matched elements\n  - If optionSelector already includes an attribute filter\n    (e.g. \".dropdown-item[data-value='US']\"), the first match is clicked",
+                    "description": "Selects an option in a <select> or custom dropdown.\nOnly \"css\" and \"xpath\" selector types are supported. The selector is\nlooked for in the page's frames as clickOn looks for it, the main frame\nfirst.\n\nFor native <select>: the option is found in that select by exact\ncomparison, and nothing is clicked when the select or the option is not\nfound (\"Element not found\", \"Element is not a <select>\", \"Option not\nfound\"). A dropdown is clicked open, then the option is clicked in the\nlist it opens. A list box (a <select> with a size above 1, or multiple)\nshows its options in the page: the option is clicked where the list\nshows it, after scrolling the list to it with the mouse wheel (a finger's\nswipe on Android, iPhone and iPad) when it is\nout of the list's view, and the list box gets no other click (\"the\noption is not displayed\" for a hidden option, \"the option could not be\nscrolled into view\" when the wheel does not bring it into view). A\ndropdown that opens no list on its click, or whose list cannot be aimed\nat (more than 20 options, which it scrolls), gets no other click: the\nlist is closed and the option selected without one. Fires change/input\nevents.\n\nWhile the page, or one of its frames, is still loading its document (before\nits DOMContentLoaded event), the element the selector names, or the option\nof a <select>, that is not there yet, or has no box yet, is looked for until\nit is, those documents have loaded, or about 30 seconds have passed: only\nthen does the command fail with \"Element not found\" or \"Option not found\". A\nselector that does not parse matches nothing, and is looked for the same\nway. Once those documents have loaded, a select or an option that is not\nthere fails the command at once. Antibot.disable sent meanwhile fails it\nwith \"the domain was disabled\".\n\nFor custom dropdowns (Bootstrap, React Select, MUI, etc.): provide\noptionSelector \u2014 the command will click the trigger to open the dropdown,\nfind the matching option element, and click it.\n\nMatching: provide exactly one of value, text, or index.\nFor native <select>:\n  - \"value\" matches the <option> value attribute\n  - \"text\" matches the <option> text content (whitespace-stripped)\n  - \"index\" matches by 0-based position among the select's options,\n    hidden ones included\nFor custom dropdowns with optionSelector (the trigger is not a <select>),\namong the elements matching optionSelector that have a box and are not\nvisibility:hidden:\n  - \"text\" matches the first whose textContent (whitespace-stripped)\n    equals it\n  - \"index\" matches by 0-based position among them, in document order\n  The match is clicked only where a click at its position reaches it (no\n  other element over it, not clipped by its list, inside its frame's\n  viewport); otherwise it counts as not found.\n  - With neither, the first element matching optionSelector is clicked,\n    for a selector that already includes an attribute filter\n    (e.g. \".dropdown-item[data-value='US']\"); \"value\" is ignored there\nActs once the page is displayed and takes input: sent right after a\nnavigation, it waits for that, then pauses briefly as a person would;\nthe wait for the page gives up after about 5 seconds, counted from the\nfirst of the commands waiting for it, and after about 10 seconds for a\npage that would not receive the command's input yet. It fails with \"the\npage was not displayed in time\", having sent nothing, when the page is\nstill not displayed then and would not receive the command's input, or\nwhen the browser stops drawing before the page is displayed and the page\nstops responding. It fails with\n\"the page navigated before the command acted\" when the page it was sent\nto is replaced before the command acts on it. Commands that wait start\nin the order they are ready to act.\nOnce its pointer has moved or pressed, it can still fail with \"the page\nwas not displayed in time\" when the browser stops drawing before the\npage is displayed and the page stops responding: its presses may have\nreached the page and selected an option, so read the page to know which\noption is selected.\nWhen pointer commands overlap, one whose mouse movement another one\ncuts short fails with \"Another pointer command replaced this one before\nit finished\": send pointer commands one after the other.",
                     "parameters": [
                         {
                             "name": "selector",
@@ -1671,7 +1698,7 @@
                         },
                         {
                             "name": "value",
-                            "description": "Select by option value attribute. Native <select> only.",
+                            "description": "Select by option value attribute, compared exactly. Native <select>\nonly.",
                             "optional": true,
                             "type": "string"
                         },
@@ -1689,7 +1716,7 @@
                         },
                         {
                             "name": "optionSelector",
-                            "description": "CSS selector for option elements in a custom dropdown.\nWhen provided, triggers click-based selection flow:\n1. Click the trigger element (selector) to open the dropdown\n2. Wait for elements matching optionSelector to appear in the DOM\n3. Find the option matching text/index, or click the first match\n   if the selector already includes an attribute filter\n4. Click the matching option element\nExamples: \".dropdown-item\", \"[role=option]\", \"li[data-value='US']\"",
+                            "description": "CSS selector for option elements in a custom dropdown. With value,\ntext or index, it is used when the selector names an element that is\nnot a <select>; without them, whatever the selector names. An empty\none is ignored.\nWhen provided, triggers click-based selection flow:\n1. Click the trigger element (selector) to open the dropdown\n2. Wait for elements matching optionSelector to appear in the DOM\n   (\"Option not found in dropdown\" after about 2 seconds)\n3. Find the option matching text/index as described above, or click\n   the first match if the selector already includes an attribute\n   filter\n4. Click the matching option element\nExamples: \".dropdown-item\", \"[role=option]\", \"li[data-value='US']\"",
                             "optional": true,
                             "type": "string"
                         }
@@ -3157,7 +3184,8 @@
                         "FormModelContextMissingToolName",
                         "FormModelContextMissingToolDescription",
                         "FormModelContextRequiredParameterMissingName",
-                        "FormModelContextParameterMissingName"
+                        "FormModelContextParameterMissingName",
+                        "GeolocationPromptWithoutUserGesture"
                     ]
                 },
                 {
@@ -4256,7 +4284,7 @@
             "commands": [
                 {
                     "name": "trigger",
-                    "description": "Trigger autofill on a form identified by the fieldId.\nIf the field and related form cannot be autofilled, returns an error.",
+                    "description": "Trigger autofill on a form identified by the fieldId.\nIf the field and related form cannot be autofilled, returns an error.\nReturns once the values have been applied to the form fields.",
                     "parameters": [
                         {
                             "name": "fieldId",
@@ -5482,7 +5510,7 @@
                     "parameters": [
                         {
                             "name": "deviceId",
-                            "description": "Required non-empty identifier for the mock camera. This is mapped to an\ninternal virtual-device identifier and is not the MediaDeviceInfo.deviceId\nexposed to the page.",
+                            "description": "Required non-empty identifier for the mock camera within the current\nDevTools session. Different sessions can use the same identifier\nwithout replacing each other's cameras. This is not the\nMediaDeviceInfo.deviceId exposed to the page.",
                             "type": "string"
                         }
                     ]
@@ -7558,6 +7586,23 @@
                             "name": "forced",
                             "description": "Boolean indicating if this is on or off.",
                             "type": "boolean"
+                        }
+                    ]
+                },
+                {
+                    "name": "forcePositionTryOption",
+                    "description": "Forces a position-try option for the given node.",
+                    "parameters": [
+                        {
+                            "name": "nodeId",
+                            "description": "The element id for which to force the position-try option.",
+                            "$ref": "DOM.NodeId"
+                        },
+                        {
+                            "name": "index",
+                            "description": "The 1-based index of the position-try fallback option, 0 for base position (no fallback),\nor omitted to clear the forced state.",
+                            "optional": true,
+                            "type": "integer"
                         }
                     ]
                 },
@@ -14735,17 +14780,47 @@
                             "description": "Alternative way of specifying response headers as a \\0-separated\nseries of name: value pairs. Prefer the above method unless you\nneed to represent some non-UTF8 values that can't be transmitted\nover the protocol as text.",
                             "optional": true,
                             "type": "binary"
+                        },
+                        {
+                            "name": "streamBodyCopy",
+                            "description": "Continue the response as it is and also return a stream with a copy of\nits body, read with IO.read as the page receives it. The page gets the\nbody as it arrives and is never slowed by the reader. Only for a\nresponse paused in the Response stage whose body was not read or\ntaken, and with no other parameter than maxBodySize.\n[Scrapfly extension]",
+                            "experimental": true,
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "maxBodySize",
+                            "description": "With streamBodyCopy: end the copy with an error as soon as the body is\nlarger than this many bytes. The page still gets the whole body.\n[Scrapfly extension]",
+                            "experimental": true,
+                            "optional": true,
+                            "type": "integer"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "stream",
+                            "description": "With streamBodyCopy: the stream of the body's copy. The copy moves at\nthe page's pace, so IO.read waits while the page has not read the body.\nIO.read answers end of file only once the whole body has arrived and the\nload succeeded. It answers an error instead when the load fails, when\nthe page stops reading the body, when the body passes maxBodySize, when\nthe reader falls more than 8388608 bytes behind the page, or when the\nunread copies of all responses together pass 134217728 bytes. A body\nthe page decodes itself cannot be copied: the command then answers an\nerror and leaves the response paused. [Scrapfly extension]",
+                            "experimental": true,
+                            "optional": true,
+                            "$ref": "IO.StreamHandle"
                         }
                     ]
                 },
                 {
                     "name": "getResponseBody",
-                    "description": "Causes the body of the response to be received from the server and\nreturned as a single string. May only be issued for a request that\nis paused in the Response stage and is mutually exclusive with\ntakeResponseBodyForInterceptionAsStream. Calling other methods that\naffect the request or disabling fetch domain before body is received\nresults in an undefined behavior.\nNote that the response body is not available for redirects. Requests\npaused in the _redirect received_ state may be differentiated by\n`responseCode` and presence of `location` response header, see\ncomments to `requestPaused` for details.",
+                    "description": "Causes the body of the response to be received from the server and\nreturned as a single string. May only be issued for a request that\nis paused in the Response stage and is mutually exclusive with\ntakeResponseBodyForInterceptionAsStream. Calling other methods that\naffect the request or disabling fetch domain before body is received\nresults in an undefined behavior.\nNote that the response body is not available for redirects. Requests\npaused in the _redirect received_ state may be differentiated by\n`responseCode` and presence of `location` response header, see\ncomments to `requestPaused` for details.\nA body larger than 268435456 bytes, or past what is left of the 1073741824\nbytes all held response bodies share, is not kept: the command answers an\nerror and the request fails once continued. So does a compressed body that\ncannot be decoded.",
                     "parameters": [
                         {
                             "name": "requestId",
                             "description": "Identifier for the intercepted request to get body for.",
                             "$ref": "RequestId"
+                        },
+                        {
+                            "name": "maxBodySize",
+                            "description": "Answer an error instead of the body as soon as the body is larger than\nthis many bytes. The request can still be continued as is, and the page\ngets the whole body. [Scrapfly extension]",
+                            "experimental": true,
+                            "optional": true,
+                            "type": "integer"
                         }
                     ],
                     "returns": [
@@ -14763,7 +14838,7 @@
                 },
                 {
                     "name": "takeResponseBodyAsStream",
-                    "description": "Returns a handle to the stream representing the response body.\nThe request must be paused in the HeadersReceived stage.\nNote that after this command the request can't be continued\nas is -- client either needs to cancel it or to provide the\nresponse body.\nThe stream only supports sequential read, IO.read will fail if the position\nis specified.\nThis method is mutually exclusive with getResponseBody.\nCalling other methods that affect the request or disabling fetch\ndomain before body is received results in an undefined behavior.",
+                    "description": "Returns a handle to the stream representing the response body.\nThe request must be paused in the HeadersReceived stage.\nNote that after this command the request can't be continued\nas is -- client either needs to cancel it or to provide the\nresponse body.\nThe stream only supports sequential read, IO.read will fail if the position\nis specified.\nThis method is mutually exclusive with getResponseBody.\nCalling other methods that affect the request before body is received\nresults in an undefined behavior.\nIO.read answers end of file only once the whole body has arrived and the\nload succeeded. It answers an error instead when the load fails, or when a\ncompressed body cannot be decoded. A request still paused when Fetch is\ndisabled fails with a network error once its whole body has been delivered\nto the stream. A large body is delivered only as the stream is read, so read\nthe stream to its end or close it with IO.close. A request still paused when\nthe client detaches fails with a network error. [Scrapfly extension]",
                     "parameters": [
                         {
                             "name": "requestId",
@@ -15192,6 +15267,7 @@
                 {
                     "name": "resolveBlob",
                     "description": "Return UUID of Blob object specified by a remote object id.",
+                    "deprecated": true,
                     "parameters": [
                         {
                             "name": "objectId",
@@ -16190,7 +16266,7 @@
                 },
                 {
                     "name": "dispatchTouchEvent",
-                    "description": "Dispatches a touch event to the page.",
+                    "description": "Dispatches a touch event to the page.\nOn Android, iPhone and iPad the touches are a finger's, with the gestures\na touch screen gives the page: a touch held for half a second or more is\na long press, which gives a contextmenu event and no click. On a page laid\nout for a phone, a second tap on the same spot within 300 ms of the first\none's lift is a double tap: a click of detail 2, then a dblclick. On a\npage that is not (one with no width=device-width viewport, a page scale\nthat can change and content wider than the screen), a tap's click comes\n300 ms after the touch went down, and a second tap that goes down before\nthen zooms the page and gives no click.",
                     "parameters": [
                         {
                             "name": "type",
@@ -19968,7 +20044,8 @@
                         "PreProvisionedKeyAccessNotGranted",
                         "PreProvisionedKeyNotFound",
                         "AttestationCertificationError",
-                        "AttestationSigningError"
+                        "AttestationSigningError",
+                        "FederatedRegistrationRedirected"
                     ]
                 },
                 {
@@ -20046,7 +20123,8 @@
                                 "SigningQuotaExceeded",
                                 "RefreshedAsWaiter",
                                 "TransientSigningError",
-                                "InScopeRefreshNotYetNeeded"
+                                "InScopeRefreshNotYetNeeded",
+                                "Canceled"
                             ]
                         },
                         {
@@ -20874,6 +20952,18 @@
                     ]
                 },
                 {
+                    "name": "stopStreamingResourceContent",
+                    "description": "Stops the streaming that streamResourceContent enabled for the given requestId:\nlater dataReceived events carry no data. A request that is not streamed is\nleft as it is. [Scrapfly extension]",
+                    "experimental": true,
+                    "parameters": [
+                        {
+                            "name": "requestId",
+                            "description": "Identifier of the request to stop streaming.",
+                            "$ref": "RequestId"
+                        }
+                    ]
+                },
+                {
                     "name": "getSecurityIsolationStatus",
                     "description": "Returns information about the COEP/COOP isolation status.",
                     "experimental": true,
@@ -21146,6 +21236,13 @@
                         {
                             "name": "encodedDataLength",
                             "description": "Total number of bytes received for this request.",
+                            "type": "number"
+                        },
+                        {
+                            "name": "encodedBodyLength",
+                            "description": "Size of the response body before removing content encodings.\nIncludes cached bodies, but excludes headers and transfer framing.",
+                            "experimental": true,
+                            "optional": true,
                             "type": "number"
                         }
                     ]
@@ -21678,6 +21775,13 @@
                         },
                         {
                             "name": "IPAddress",
+                            "description": "Multicast group address.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sourceAddress",
+                            "description": "Source address of a source-specific multicast (SSM) membership. Absent\nfor any-source multicast (ASM) memberships.",
+                            "optional": true,
                             "type": "string"
                         }
                     ]
@@ -21692,6 +21796,13 @@
                         },
                         {
                             "name": "IPAddress",
+                            "description": "Multicast group address.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sourceAddress",
+                            "description": "Source address of a source-specific multicast (SSM) membership. Absent\nfor any-source multicast (ASM) memberships.",
+                            "optional": true,
                             "type": "string"
                         }
                     ]
@@ -23828,8 +23939,6 @@
                         "rewriter",
                         "screen-wake-lock",
                         "serial",
-                        "shared-storage",
-                        "shared-storage-select-url",
                         "smart-card",
                         "speaker-selection",
                         "storage-access",
@@ -23838,6 +23947,7 @@
                         "sync-xhr",
                         "tools",
                         "translator",
+                        "unbounded-element",
                         "unload",
                         "usb",
                         "usb-unrestricted",
@@ -25088,6 +25198,73 @@
                     ]
                 },
                 {
+                    "id": "DocumentResponseSource",
+                    "description": "Where the response of a document came from: the network; the browser's\nHTTP cache (cache), whether or not the browser first asked the server to\nrevalidate it and was answered 304, and including a response a link\nrel=prefetch put there; a prefetch the browser made before the navigation,\nfor the page's speculation rules (prefetch); the page's service worker\n(serviceWorker); or a client of this protocol, with Fetch.fulfillRequest,\nwith or without a body (client).",
+                    "experimental": true,
+                    "type": "string",
+                    "enum": [
+                        "network",
+                        "cache",
+                        "prefetch",
+                        "serviceWorker",
+                        "client"
+                    ]
+                },
+                {
+                    "id": "DocumentResponse",
+                    "description": "The response a main-frame document was made from, as the browser uses it.",
+                    "experimental": true,
+                    "type": "object",
+                    "properties": [
+                        {
+                            "name": "loaderId",
+                            "description": "Loader of the document: the loaderId Page.frameNavigated reports for\nthe frame that shows it, and the loaderId of the Network events of the\nrequest it was loaded with. A page restored from the back/forward cache\nkeeps the loader it was first loaded with.",
+                            "$ref": "Network.LoaderId"
+                        },
+                        {
+                            "name": "url",
+                            "description": "URL of the response: the one the document was loaded from, after the\nredirects its request followed. A same-document navigation of the page\n(history.pushState, a fragment) does not change it.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "statusCode",
+                            "description": "HTTP status code of the response, never a redirect hop's. A response\nthe browser revalidated with the server reads the status of the\nresponse it kept, not the 304.",
+                            "type": "integer"
+                        },
+                        {
+                            "name": "headers",
+                            "description": "Response headers, a header sent more than once as its values joined by\nnewlines, as Network.Response.headers carries them.",
+                            "type": "object"
+                        },
+                        {
+                            "name": "mimeType",
+                            "description": "MIME type of the response as the browser reads it: the type its\nContent-Type names, or the type the browser sniffed from the body when\nit named none or one the browser sniffs (unknown/unknown,\napplication/unknown, */*, an XML type whose body is a feed). The\ndocument made from the response has this type: document.contentType\nreads it.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "charset",
+                            "description": "Charset the response's Content-Type names, empty when it names none.\nThe document can be decoded in another encoding: characterSet says\nwhich.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "characterSet",
+                            "description": "Character encoding the document is decoded with, as\ndocument.characterSet reads it: the charset the response names, unless\na byte order mark overrides it, else the one a meta element declares or\nthe browser detects. Only Page.getNavigationResponse reports it, once\nthe document has been parsed (its DOMContentLoaded event): until then\nthe browser may still change it. Absent for an error page, which is not\ndecoded from the response.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "source",
+                            "description": "Where the response came from.",
+                            "$ref": "DocumentResponseSource"
+                        },
+                        {
+                            "name": "isErrorPage",
+                            "description": "True when the browser shows its own error page instead of a document\nmade from this response (an error status with an empty body).",
+                            "type": "boolean"
+                        }
+                    ]
+                },
+                {
                     "id": "FetchRedirectEntry",
                     "description": "A single redirect entry in a fetch redirect chain.",
                     "experimental": true,
@@ -25497,6 +25674,71 @@
                     ]
                 },
                 {
+                    "name": "captureScreenshotIO",
+                    "description": "Same as captureScreenshot, but the encoded image bytes come back over a CDP IO stream handle\ninstead of inline, so a large screenshot is never held whole in one CDP message. Read the handle\nwith IO.read (base64) and close it with IO.close.",
+                    "experimental": true,
+                    "parameters": [
+                        {
+                            "name": "format",
+                            "description": "Image compression format (defaults to png).",
+                            "optional": true,
+                            "type": "string",
+                            "enum": [
+                                "jpeg",
+                                "png",
+                                "webp"
+                            ]
+                        },
+                        {
+                            "name": "quality",
+                            "description": "Compression quality from range [0..100] (jpeg only).",
+                            "optional": true,
+                            "type": "integer"
+                        },
+                        {
+                            "name": "clip",
+                            "description": "Capture the screenshot of a given region only.",
+                            "optional": true,
+                            "$ref": "Viewport"
+                        },
+                        {
+                            "name": "fromSurface",
+                            "description": "Capture the screenshot from the surface, rather than the view. Defaults to true.",
+                            "experimental": true,
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "captureBeyondViewport",
+                            "description": "Capture the screenshot beyond the viewport. Defaults to false.",
+                            "experimental": true,
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "optimizeForSpeed",
+                            "description": "Optimize image encoding for speed, not for resulting size (defaults to false)",
+                            "experimental": true,
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "keepCaptureState",
+                            "description": "Leave the page set up for the next capture beyond the viewport, which a capture without it\nundoes. Defaults to false.",
+                            "experimental": true,
+                            "optional": true,
+                            "type": "boolean"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "stream",
+                            "description": "A handle of the stream that holds the encoded image bytes, read as base64.",
+                            "$ref": "IO.StreamHandle"
+                        }
+                    ]
+                },
+                {
                     "name": "captureSnapshot",
                     "description": "Returns a snapshot of the page as a string. For MHTML format, the serialization includes\niframes, shadow DOM, external resources, and element-inline styles.",
                     "experimental": true,
@@ -25759,6 +26001,26 @@
                     ]
                 },
                 {
+                    "name": "getSpellCheckCustomDictionary",
+                    "description": "Returns the words that the frame's document added to its spell check custom\ndictionary with `document.spellCheckCustomDictionary.addWords()`, sorted.\nPage script cannot read the dictionary back; this lets developers inspect\nit.",
+                    "experimental": true,
+                    "parameters": [
+                        {
+                            "name": "frameId",
+                            "$ref": "FrameId"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "words",
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    ]
+                },
+                {
                     "name": "getFrameTree",
                     "description": "Returns present frame tree structure.",
                     "returns": [
@@ -25771,7 +26033,7 @@
                 },
                 {
                     "name": "getRenderedContent",
-                    "description": "Returns the full rendered content of the page.\nFor text-serializable types (HTML, XML, JSON, etc.), returns rendered HTML\nwith iframe content inlined. For binary types (PDF, images, etc.), returns\nthe raw body bytes as base64.\n\nThe command blocks until the page's document is ready, `timeout` at most:\na navigation of the page in progress has committed, and the committed\ndocument is parsed (DOMContentLoaded). The load event, and the images,\nscripts and frames it waits for, are not waited for. The command fails at\nonce, with the network error (`net::ERR_...`), when the navigation fails\nor when the document's own load fails (its connection reset, closed or\nlost while the body loads). A document whose load was stopped\n(window.stop(), Page.stopLoading) is returned at once, as far as it got.\nAt the timeout it returns the document the page shows, with `ready`\nfalse: the one before a navigation that has not committed, or a document\nstill being parsed, as far as the parser got.",
+                    "description": "Returns the full rendered content of the page.\nFor text-serializable types (HTML, XML, JSON, etc.), returns rendered HTML\nwith iframe content inlined. For binary types (PDF, images, etc.), returns\nthe raw body bytes as base64.\n\nWith `timeout`, the command blocks until the page's document is ready,\n`timeout` at most: a navigation of the page in progress has committed,\nand the committed document is parsed (DOMContentLoaded). The load event,\nand the images, scripts and frames it waits for, are not waited for. The\ncommand fails at once, with the network error (`net::ERR_...`), when the\nnavigation fails or when the document's own load fails (its connection\nreset, closed or lost while the body loads). A document whose load was\nstopped (window.stop(), Page.stopLoading) is returned at once, as far as\nit got. At the timeout it returns the document the page shows, with\n`ready` false: the one before a navigation that has not committed, or a\ndocument still being parsed, as far as the parser got.\n\nWithout `timeout`, the command returns the document the page shows at\nonce, as it is, and does not fail on it: the browser's error page of a\nnavigation that failed, a document as far as its load or its parser got,\nnothing when the page's renderer is gone. `ready` says whether it was a\nready document.",
                     "experimental": true,
                     "parameters": [
                         {
@@ -25788,7 +26050,7 @@
                         },
                         {
                             "name": "timeout",
-                            "description": "How long the command waits for the document to be ready, in\nmilliseconds. Default 30000. 0 reads the document as it is now.",
+                            "description": "How long the command waits for the document to be ready, in\nmilliseconds. 0 reads the document as it is now, and fails on a failed\nnavigation or load as a longer wait does. Without it, the command\nneither waits nor fails on the document.",
                             "optional": true,
                             "type": "integer"
                         }
@@ -25806,19 +26068,61 @@
                         },
                         {
                             "name": "ready",
-                            "description": "False when the content was not read from a ready document: the timeout\nended the wait before the document was ready, the page did not answer\nin time, or its renderer went away. The content may then be empty or\nstale and is not the page.",
+                            "description": "False when the content was not read from a ready document: the\ndocument was not ready yet (at the timeout, or at once without one),\nits navigation or its load failed (read without `timeout`), the page\ndid not answer in time, or its renderer went away. The content may\nthen be empty or stale and is not the page.",
+                            "type": "boolean"
+                        }
+                    ]
+                },
+                {
+                    "name": "getRenderedContentIO",
+                    "description": "Same as getRenderedContent, but the content is returned as an IO stream\ninstead of one string: the caller reads it with IO.read and closes it with\nIO.close. For a large page this keeps the whole content from being held in\none message. For text types the stream reads as UTF-8 text; for binary\ntypes IO.read returns base64.",
+                    "experimental": true,
+                    "parameters": [
+                        {
+                            "name": "renderIframe",
+                            "description": "When false, skip rendering iframe content (faster). Default true.",
+                            "optional": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "format",
+                            "description": "Output format for text content: \"html\" (default) or \"markdown\".\n\"markdown\" converts the rendered HTML to GitHub-flavored Markdown.\nRelative URLs in links and images are resolved against the main frame\nURL.\nIgnored for binary content types.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "timeout",
+                            "description": "How long the command waits for the document to be ready, in\nmilliseconds. 0 reads the document as it is now, and fails on a failed\nnavigation or load as a longer wait does. Without it, the command\nneither waits nor fails on the document.",
+                            "optional": true,
+                            "type": "integer"
+                        }
+                    ],
+                    "returns": [
+                        {
+                            "name": "stream",
+                            "description": "A handle of the stream that holds the page content. For text types the\nstream is rendered HTML (or markdown if format=\"markdown\") with iframes\ninlined; for binary types it is the raw body bytes, read as base64.",
+                            "$ref": "IO.StreamHandle"
+                        },
+                        {
+                            "name": "type",
+                            "description": "\"text\" for HTML, \"markdown\" for converted Markdown, \"binary\" for non-text.",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ready",
+                            "description": "False when the content was not read from a ready document: the\ndocument was not ready yet (at the timeout, or at once without one),\nits navigation or its load failed (read without `timeout`), the page\ndid not answer in time, or its renderer went away. The stream may\nthen be empty or stale and is not the page.",
                             "type": "boolean"
                         }
                     ]
                 },
                 {
                     "name": "getNavigationResponse",
-                    "description": "Returns the navigation response chain for the current page, including\nall redirect hops and the final response with status codes and headers.",
+                    "description": "Returns the navigation response chain for the current page, including\nall redirect hops and the final response with status codes and headers,\nand the response of the document the main frame shows, as the browser uses\nit.",
                     "experimental": true,
                     "returns": [
                         {
                             "name": "entries",
-                            "description": "Array of navigation response entries (redirects + final response).",
+                            "description": "Array of navigation response entries (redirects + final response). The\nchain starts at the last Page.navigate or Page.reload: a document the\npage moved to by itself (a script, a reload it started) adds the\ndocument it left and its redirect hops before its own. The last entry\nis not always the response of the document the frame shows: an error\npage adds no entry, so the chain then ends at the response before it,\nand the URL of the last entry follows the page's same-document\nnavigations (history.pushState, a fragment). document has neither\nlimit.",
                             "type": "array",
                             "items": {
                                 "$ref": "NavigationResponseEntry"
@@ -25826,42 +26130,49 @@
                         },
                         {
                             "name": "isErrorPage",
-                            "description": "True when the committed document is an error page, that is the\nnavigation failed. A failed navigation and one still in flight both\nreturn a chain with no final response: this field tells them apart.",
+                            "description": "True when the committed document is an error page, that is the\nnavigation failed. A failed navigation and one still in flight both\nreturn a chain with no final response: this field tells them apart.\nIt is false while a navigation is about to commit, before its document\nreplaces the one shown: document.isErrorPage says whether the document\nthe frame shows is an error page.",
                             "type": "boolean"
+                        },
+                        {
+                            "name": "document",
+                            "description": "The response the document the main frame shows was made from, as the\nbrowser uses it. Absent while the frame shows a document no response\nmade (the first about:blank of a tab, an error page for a request that\nreceived no response), and for a document that committed before this\nsession attached to the page, unless the page is later restored from\nthe back/forward cache or shown from a prerender: it then reports the\nresponse the page was first loaded with, its source never client. A\nnavigation that has not\ncommitted yet does not change it: until it commits, the frame shows the\ndocument it had. For an error page the browser shows in place of a\nresponse it received (an error status with an empty body), it is that\nresponse, with isErrorPage true.",
+                            "experimental": true,
+                            "optional": true,
+                            "$ref": "DocumentResponse"
                         }
                     ]
                 },
                 {
                     "name": "fetch",
-                    "description": "Makes an HTTP request from the browser, outside the page, with the page's\ncookies and network settings. Follows redirects by default and returns the\nfull redirect chain alongside the final response.",
+                    "description": "Makes an HTTP request from the browser, outside the page, with the page's\ncookies and network settings. The request is sent in the fetch API's default\nmode: Sec-Fetch-Mode cors, a fetch()'s priority, and Origin where a cors\nfetch() of the page sends it, on the request and on each redirect hop. It\ncarries Accept */* and the client hints the page's document sends to the URL\nunless headers or Network.setExtraHTTPHeaders give them. Like the page's own\nrequests, it carries the headers Network.setExtraHTTPHeaders gave the page's\nsessions, the User-Agent and Accept-Language the page's requests take from\nEmulation.setUserAgentOverride, and, to Google's hosts, the headers Chrome\nadds to a page's requests there. Unlike the page's own fetch(), no CORS\npreflight is sent, and the response is returned whatever its CORS or\nCross-Origin-Resource-Policy headers say. An http(s) request waits for the\npage to name its client hints. If the page navigates before the request is\nsent, the command fails with \"The page navigated before the request was\nsent\". If the page cannot answer (it crashed, is frozen or shows a dialog)\nor has not answered within 5 seconds, the request's only client hints are\nSec-CH-UA, Sec-CH-UA-Mobile and Sec-CH-UA-Platform, where the page's\npermissions policy allows them. On iPhone and iPad the request carries no\nclient hint, not even one headers or Network.setExtraHTTPHeaders give, as\nChrome for iOS sends none. Calls a session makes at once each run to\ntheir own answer, up to 16 unanswered at a time: a call past that fails with\n\"Too many Page.fetch calls in flight\". A call whose response has not fully\narrived 150 seconds after its request left ends there: with statusCode 0\nwhen no response came, else with the response's status and headers and no\ncontent. The browser holds the responses of a session's unanswered calls up\nto 64 MiB in all: a call whose response would pass that fails with \"The\nPage.fetch responses in flight exceed 64 MiB\". Follows redirects by default\nand returns the full redirect chain alongside the final response. The\nrequest is keyed as the document's own requests are (its top-level site and\nits frame): it carries the cookies a site partitioned under them, and it\nshares the document's connections. A call made before the frame's document\ncommits is keyed on its own URL.",
                     "experimental": true,
                     "parameters": [
                         {
                             "name": "url",
-                            "description": "URL to fetch.",
+                            "description": "URL to fetch. A URL longer than 2,097,152 characters is an error.",
                             "type": "string"
                         },
                         {
                             "name": "method",
-                            "description": "HTTP method (GET, POST, etc.). Default: GET.",
+                            "description": "HTTP method (GET, POST, etc.). Default: GET. DELETE, GET, HEAD, OPTIONS, POST and PUT are sent upper-cased, as a\npage's fetch() sends them. A method that is not an HTTP token, or CONNECT, TRACE or TRACK, is an error.",
                             "optional": true,
                             "type": "string"
                         },
                         {
                             "name": "headers",
-                            "description": "Request headers as key-value pairs.",
+                            "description": "Request headers as key-value pairs. They go out in the order a page's own fetch() sends the same headers,\nwhatever their order here. User-Agent, the client hints and the headers a page can set go before Origin,\nSec-Fetch-*, Referer, Accept-Encoding and Cookie, which follow where the browser adds them. An Accept of */* and\nan Accept-Language equal to the browser's own go where the browser adds its own. The browser adds Accept and the\nclient hints only for a name neither headers nor Network.setExtraHTTPHeaders gives, and Origin only when headers\ngive none. A header given here also wins over one of its name from Network.setExtraHTTPHeaders, except Referer:\na Referer here is not sent (see referrer), while one from Network.setExtraHTTPHeaders becomes the referrer. It\nalso wins over a user-agent override's User-Agent and Accept-Language. Of Network.setExtraHTTPHeaders, a Sec-*\nheader that a page's request may not carry is left out, and a Sec-CH-* value is cut to 1,024 characters. To\nGoogle's hosts, the headers Chrome adds there replace one of the same name given here, as they do in a page's\nfetch(). An Origin given here is not recomputed per hop: it goes as null after a redirect to another origin, and\nis dropped when a redirect changes the method to GET. A header name or value that is not valid HTTP, or a value\nthat is not a string, is an error.",
                             "optional": true,
                             "type": "object"
                         },
                         {
                             "name": "body",
-                            "description": "Request body for POST/PUT requests.",
+                            "description": "Request body. Without a Content-Type in headers it is sent as text/plain;charset=UTF-8, as a page's fetch()\nsends a string, and an empty string as an empty body of that type. A GET or HEAD request takes none: a\nnon-empty body with either is an error, and an empty one is not sent.",
                             "optional": true,
                             "type": "string"
                         },
                         {
                             "name": "followRedirects",
-                            "description": "Whether to follow redirects. Default: true.",
+                            "description": "Whether to follow redirects. Default: true. When false, the first redirect a server sends is the response: its\nstatus code, its headers (Location among them) and the URL that answered it, with no content, and the request\ngoes no further. A redirect the browser makes itself, such as an HSTS upgrade to https, is followed. Either\nway, a redirect whose Location is not a valid URL ends the call as a network error, with statusCode 0.",
                             "optional": true,
                             "type": "boolean"
                         },
@@ -25875,6 +26186,18 @@
                                 "same-origin",
                                 "omit"
                             ]
+                        },
+                        {
+                            "name": "referrer",
+                            "description": "The referrer of the request, reduced by referrerPolicy for the URL fetched. When not given, the page's URL, as\nthe page's own fetch sends it, and none from an error page or a sandboxed document. An empty string sends none.\nA Referer in headers is not sent: this sets it. When neither this nor referrerPolicy is given, a Referer from\nNetwork.setExtraHTTPHeaders is the referrer, under the unsafe-url policy, as for the page's own requests.",
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "referrerPolicy",
+                            "description": "The referrer policy applied to referrer, here and on each redirect: the page's referrer policy when not given.",
+                            "optional": true,
+                            "$ref": "ReferrerPolicy"
                         }
                     ],
                     "returns": [
@@ -26100,6 +26423,13 @@
                             "experimental": true,
                             "optional": true,
                             "$ref": "ReferrerPolicy"
+                        },
+                        {
+                            "name": "headers",
+                            "description": "Headers for the request of the document this navigation loads, as header names to string values. They are sent\non that request and on each redirect it follows within the site of its URL: the same registrable domain (the\nsame host when it has none), whatever the scheme or port. The first redirect to another site drops them for the\nrest of the navigation, so they never reach another site. No other request carries them: not the document's\nsubresources, frames or workers, and not a later navigation, reload or history navigation of the page. They go\nout where the browser sends the headers Network.setExtraHTTPHeaders gives a navigation, whatever their order\nhere. A header given here wins over one of its name from Network.setExtraHTTPHeaders, which is sent again after\na redirect to another site. An Origin given here goes as null after a redirect to another origin of the same\nsite. A header name or value that is not valid HTTP, a value that is not a string, and a header the browser\nwrites itself or that frames the request are an error, and nothing is navigated: Accept, Accept-Encoding,\nAccept-Language, Connection, Content-Length, Cookie, Expect, Host, Keep-Alive, Priority, Referer, TE,\nTransfer-Encoding, Upgrade, Upgrade-Insecure-Requests, User-Agent, and every name that starts with Proxy- or Sec-.\nThe referrer goes in referrer, the cookies through Network.setCookies, and the User-Agent and Accept-Language\nthrough Emulation.setUserAgentOverride.",
+                            "experimental": true,
+                            "optional": true,
+                            "type": "object"
                         }
                     ],
                     "returns": [
@@ -26947,6 +27277,19 @@
                             "type": "binary"
                         }
                     ]
+                },
+                {
+                    "name": "setInputVisualization",
+                    "description": "Configures input visualization on the page.",
+                    "experimental": true,
+                    "parameters": [
+                        {
+                            "name": "clicks",
+                            "description": "Whether to enable click visualization.",
+                            "optional": true,
+                            "type": "boolean"
+                        }
+                    ]
                 }
             ],
             "events": [
@@ -27123,7 +27466,7 @@
                 },
                 {
                     "name": "navigationResponseReceived",
-                    "description": "Fired when the main-frame navigation commits a non-redirect response (the\nfinal document). Redirect hops do not fire this event, so a navigation that\nis still going through redirects, or held at a redirect target, does not\nemit it yet. Requires Page.enable. `loaderId` lets the consumer\ncorrelate the committed response with the navigation request it\nalready tracks (and reconstruct the redirect chain from that request).\n`timestamp` is in the same monotonic domain as CDP Network response\ntimestamps, so it can be ordered against a received Network response to\ndecide whether a newer navigation response is still pending.",
+                    "description": "Fired when the main-frame navigation commits a non-redirect response (the\nfinal document). Redirect hops do not fire this event, so a navigation that\nis still going through redirects, or held at a redirect target, does not\nemit it yet. Requires Page.enable. `loaderId` lets the consumer\ncorrelate the committed response with the navigation request it\nalready tracks (and reconstruct the redirect chain from that request).\n`timestamp` is in the same monotonic domain as CDP Network response\ntimestamps, so it can be ordered against a received Network response to\ndecide whether a newer navigation response is still pending.\nIt is fired once the browser is ready to commit the document, before\nPage.frameNavigated of that document: a page restored from the\nback/forward cache or a prerendered page the frame shows fires it with the\nresponse it was first loaded with, and so does an error page the browser\nshows in place of a response it received (isErrorPage). A navigation that\ncommits nothing (a download, a 204) does not fire it, nor does an error\npage for a request that received no response. The document can still not\ncommit after it (the frame or its renderer went away). Only the sessions of\nthe target whose main frame commits the document receive it, not those of\na prerendered page's or an iframe's target of the same tab.",
                     "experimental": true,
                     "parameters": [
                         {
@@ -27133,7 +27476,7 @@
                         },
                         {
                             "name": "loaderId",
-                            "description": "Loader identifier of the committed navigation (correlates with the\nnavigation request's Network requestId/loaderId on the consumer side).",
+                            "description": "Loader identifier of the committed navigation (correlates with the\nnavigation request's Network requestId/loaderId on the consumer side).\nIt is the loaderId Page.frameNavigated reports for the document: a page\nrestored from the back/forward cache or a prerendered page keeps the\nloader it was first loaded with.",
                             "$ref": "Network.LoaderId"
                         },
                         {
@@ -27155,6 +27498,34 @@
                             "name": "timestamp",
                             "description": "Reception time, monotonic seconds (CDP Network MonotonicTime domain).",
                             "type": "number"
+                        },
+                        {
+                            "name": "mimeType",
+                            "description": "MIME type of the response as the browser reads it, after sniffing:\nsee DocumentResponse.mimeType.",
+                            "experimental": true,
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "charset",
+                            "description": "Charset the response's Content-Type names, empty when it names none.\nThe encoding the document is decoded with can differ:\nPage.getNavigationResponse reports it once the document is parsed.",
+                            "experimental": true,
+                            "optional": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "source",
+                            "description": "Where the response came from.",
+                            "experimental": true,
+                            "optional": true,
+                            "$ref": "DocumentResponseSource"
+                        },
+                        {
+                            "name": "isErrorPage",
+                            "description": "True when the browser shows its own error page instead of a document\nmade from this response (an error status with an empty body).",
+                            "experimental": true,
+                            "optional": true,
+                            "type": "boolean"
                         }
                     ]
                 },
@@ -29012,7 +29383,8 @@
                         "BrowsingDataRemoved",
                         "PrerenderHostReused",
                         "FormSubmitWhenPrerendering",
-                        "CrossDocumentRestart"
+                        "CrossDocumentRestart",
+                        "PrefetchFailedCrossOriginSubframe"
                     ]
                 },
                 {
@@ -34588,11 +34960,15 @@
                             "$ref": "Location"
                         },
                         {
-                            "name": "empty",
-                            "description": "True if the scope does not declare any variables.\nOnly present if true.\nEmpty scopes are retained in the scope chain because\nthey can be targeted via `evaluateOnCallFrame` (using `scopeNumber`) or\nmatched against scopes in source maps.",
+                            "name": "emptyReason",
+                            "description": "Present if the scope has no variable values to show. Absent means that\nthe scope declares at least one variable with an available value.\nEmpty scopes are retained in the scope chain because\nthey can be targeted via `evaluateOnCallFrame` (using `scopeNumber`) or\nmatched against scopes in source maps.",
                             "experimental": true,
                             "optional": true,
-                            "type": "boolean"
+                            "type": "string",
+                            "enum": [
+                                "no-variables",
+                                "all-unavailable"
+                            ]
                         }
                     ]
                 },
@@ -35504,6 +35880,16 @@
                         {
                             "name": "skipList",
                             "description": "The skipList specifies location ranges that should be skipped on step over.",
+                            "experimental": true,
+                            "optional": true,
+                            "type": "array",
+                            "items": {
+                                "$ref": "LocationRange"
+                            }
+                        },
+                        {
+                            "name": "enterRanges",
+                            "description": "Functions whose source range lies within one of the enterRanges are\nentered as if by stepInto, even when they are called (directly or\nindirectly) from a call that is stepped over.",
                             "experimental": true,
                             "optional": true,
                             "type": "array",

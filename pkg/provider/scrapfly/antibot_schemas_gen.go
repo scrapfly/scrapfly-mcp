@@ -4,16 +4,16 @@ package scrapflyprovider
 
 // selectorSchema is the JSON Schema for the Antibot Selector type.
 var selectorSchema = map[string]any{
-	"type":        "object",
+	"type": "object",
 	"description": "Element selector. Use {type:\"axNodeId\", query:\"<id>\"} with the id from cloud_browser_snapshot (preferred). Also supports css, xpath, role, coord.",
 	"properties": map[string]any{
 		"type": map[string]any{
-			"type":        "string",
-			"enum":        []string{"axNodeId", "css", "xpath", "role", "coord"},
+			"type": "string",
+			"enum": []string{"axNodeId", "css", "xpath", "role", "coord"},
 			"description": "Selector type. Use axNodeId with id from snapshot (most reliable).",
 		},
 		"query": map[string]any{
-			"type":        "string",
+			"type": "string",
 			"description": "For axNodeId: the id from snapshot (e.g. 28). For css: CSS selector. For xpath: XPath. For coord: x,y.",
 		},
 	},
@@ -41,75 +41,75 @@ func withDesc(schema map[string]any, desc string) map[string]any {
 // Generated from the Antibot domain in browser_protocol.json.
 var antibotToolSchemas = map[string]antibotToolOverride{
 	"moveTo": {
-		description: "Moves mouse to target along a human-like path. A longer move may go slightly past the target, then come back to it. Supports all selector types except bottom. Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Moves mouse to target along a human-like path. A longer move may go slightly past the target, then come back to it. On Android, iPhone and iPad the pointer is a finger, which moves above the screen... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector":         selectorSchema,
+				"selector": selectorSchema,
 				"relativePosition": coordinateSchema,
-				"absoluteOffset":   map[string]any{"type": "boolean", "description": "For \"coord\" selector type only: if true, treat the query coordinates as an offset from the current mouse position r..."},
-				"steady":           map[string]any{"type": "boolean", "description": "If true, moves along a straighter path and never goes past the target. Use for small or precise targets where accurac..."},
-				"frameUrl":         map[string]any{"type": "string", "description": "URL glob of the frames to look the element up in (e.g. \"*checkout.example.com*\"): an element of the page or of anot..."},
+				"absoluteOffset": map[string]any{"type": "boolean", "description": "For \"coord\" selector type only: if true, treat the query coordinates as an offset from the current mouse position r..."},
+				"steady": map[string]any{"type": "boolean", "description": "If true, moves along a straighter path and never goes past the target. Use for small or precise targets where accurac..."},
+				"frameUrl": map[string]any{"type": "string", "description": "URL glob of the frames to look the element up in (e.g. \"*checkout.example.com*\"): an element of the page or of anot..."},
 			},
 			"required": []string{"selector"},
 		},
 	},
 	"clickOn": {
-		description: "Moves to target then clicks with human-like timing. Supports all selector types except bottom. Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Moves to target then clicks with human-like timing. On Android, iPhone and iPad a finger taps: the page receives the touch events of a touch screen, then the mouse events and the click a tap gives.... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector":         selectorSchema,
+				"selector": selectorSchema,
 				"relativePosition": coordinateSchema,
-				"button":           map[string]any{"type": "string", "description": "Mouse button: \"left\", \"right\", or \"middle\". Default: \"left\"."},
-				"clickDuration":    map[string]any{"type": "number", "description": "Hold duration in seconds between mousedown and mouseup. Default: random between 0.1 and 0.4 seconds."},
-				"clickCount":       map[string]any{"type": "integer", "description": "Number of clicks (e.g. 2 for double-click). Default: 1."},
-				"frameUrl":         map[string]any{"type": "string", "description": "URL glob of the frames to look the element up in, as for moveTo: the click lands on the element of a matching frame. ..."},
+				"button": map[string]any{"type": "string", "description": "Mouse button: \"left\", \"right\", or \"middle\". Default: \"left\"."},
+				"clickDuration": map[string]any{"type": "number", "description": "Hold duration in seconds between mousedown and mouseup (between touchstart and touchend for a tap; on Android, iPhone..."},
+				"clickCount": map[string]any{"type": "integer", "description": "Number of clicks (e.g. 2 for double-click). Default: 1."},
+				"frameUrl": map[string]any{"type": "string", "description": "URL glob of the frames to look the element up in, as for moveTo: the click lands on the element of a matching frame. ..."},
 			},
 			"required": []string{"selector"},
 		},
 	},
 	"dragAndDrop": {
-		description: "Drag from source to destination with human-like movement. Supports all selector types except bottom. Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Drag from source to destination with human-like movement. Supports all selector types except bottom. While the page, or a frame the command looks in, is still loading its document (before its DOMCo... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"from":                 selectorSchema,
-				"to":                   selectorSchema,
+				"from": selectorSchema,
+				"to": selectorSchema,
 				"fromRelativePosition": coordinateSchema,
-				"toRelativePosition":   coordinateSchema,
+				"toRelativePosition": coordinateSchema,
 			},
 			"required": []string{"from", "to"},
 		},
 	},
 	"clickAndHold": {
-		description: "Moves to target element, presses mouse down, holds for a minimum time, then releases. For controls that need a long press. Supports all selector types except bottom. Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Moves to target element, presses mouse down, holds for a minimum time, then releases. For controls that need a long press. On Android, iPhone and iPad a finger presses: held for half a second or mo... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector":         selectorSchema,
+				"selector": selectorSchema,
 				"relativePosition": coordinateSchema,
-				"holdTime":         map[string]any{"type": "number", "description": "Minimum hold duration in seconds. Default: random between 1.0 and 3.0."},
-				"button":           map[string]any{"type": "string", "description": "Mouse button: \"left\", \"right\", or \"middle\". Default: \"left\"."},
-				"frameUrl":         map[string]any{"type": "string", "description": "Frame URL glob pattern to restrict element search to matching frames. Uses shell-style wildcards (e.g. \"*example.com..."},
+				"holdTime": map[string]any{"type": "number", "description": "Minimum hold duration in seconds. Default: random between 1.0 and 3.0."},
+				"button": map[string]any{"type": "string", "description": "Mouse button: \"left\", \"right\", or \"middle\". Default: \"left\"."},
+				"frameUrl": map[string]any{"type": "string", "description": "Frame URL glob pattern to restrict element search to matching frames. Uses shell-style wildcards (e.g. \"*example.com..."},
 			},
 			"required": []string{"selector"},
 		},
 	},
 	"clickAndSlide": {
-		description: "Moves to target element, presses mouse down, slides the mouse to a target position, then releases. For slider controls. Supports all selector types except bottom.  Two modes: 1. Fixed distance: pro... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Moves to target element, presses mouse down, slides the mouse to a target position, then releases. For slider controls. Supports all selector types except bottom. While the page, or a frame the com... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector":               selectorSchema,
-				"relativePosition":       coordinateSchema,
-				"distance":               map[string]any{"type": "number", "description": "Horizontal slide distance in CSS pixels (positive = right, negative = left)."},
-				"target":                 selectorSchema,
+				"selector": selectorSchema,
+				"relativePosition": coordinateSchema,
+				"distance": map[string]any{"type": "number", "description": "Horizontal slide distance in CSS pixels (positive = right, negative = left)."},
+				"target": selectorSchema,
 				"targetRelativePosition": coordinateSchema,
-				"verticalOffset":         map[string]any{"type": "number", "description": "Vertical slide offset in CSS pixels. Default: 0 (horizontal only)."},
-				"button":                 map[string]any{"type": "string", "description": "Mouse button: \"left\", \"right\", or \"middle\". Default: \"left\"."},
-				"frameUrl":               map[string]any{"type": "string", "description": "Frame URL glob pattern to restrict element search to matching frames. Uses shell-style wildcards (e.g. \"*example.com..."},
-				"overshoot":              map[string]any{"type": "boolean", "description": "If true, goes a few pixels past the destination on the X axis, then comes back to it, as a hand dragging past a slide..."},
+				"verticalOffset": map[string]any{"type": "number", "description": "Vertical slide offset in CSS pixels. Default: 0 (horizontal only)."},
+				"button": map[string]any{"type": "string", "description": "Mouse button: \"left\", \"right\", or \"middle\". Default: \"left\"."},
+				"frameUrl": map[string]any{"type": "string", "description": "Frame URL glob pattern to restrict element search to matching frames. Uses shell-style wildcards (e.g. \"*example.com..."},
+				"overshoot": map[string]any{"type": "boolean", "description": "If true, goes a few pixels past the destination on the X axis, then comes back to it, as a hand dragging past a slide..."},
 			},
 			"required": []string{"selector"},
 		},
@@ -120,32 +120,32 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 			"type": "object",
 			"properties": map[string]any{
 				"selector": selectorSchema,
-				"delta":    coordinateSchema,
+				"delta": coordinateSchema,
 			},
 		},
 	},
 	"typeText": {
-		description: "Types text character by character with human-like typing speed, set in words per minute. Each character is sent with the key codes of the browser's keyboard layout.",
+		description: "Types text character by character with human-like typing speed, set in words per minute. Each character is sent with the key codes of the browser's keyboard layout, or on a mobile platform as its o...",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"text": map[string]any{"type": "string"},
-				"wpm":  map[string]any{"type": "number", "description": "Words per minute, a word being five characters. Default: 60. Typical human range: 30-80. Higher is faster."},
+				"wpm": map[string]any{"type": "number", "description": "Words per minute, a word being five characters. Default: 60. Typical human range: 30-80. Higher is faster."},
 			},
 			"required": []string{"text"},
 		},
 	},
 	"fill": {
-		description: "Clicks on element, optionally clears it, then types text with human timing. Without clear, the text goes after the content already in the field. Supports all selector types except bottom. Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Clicks on element, optionally clears it, then types text with human timing. On Android, iPhone and iPad the click is a tap, as for clickOn. Without clear, the text goes after the content already in... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector":         selectorSchema,
-				"text":             map[string]any{"type": "string"},
+				"selector": selectorSchema,
+				"text": map[string]any{"type": "string"},
 				"relativePosition": coordinateSchema,
-				"clear":            map[string]any{"type": "boolean", "description": "Clear existing content first by sending Ctrl+A then Backspace. Default: false."},
-				"wpm":              map[string]any{"type": "number", "description": "Words per minute for typing. Default: 60. See typeText."},
-				"paste":            map[string]any{"type": "boolean", "description": "Paste the text instead of typing it. When true, the text replaces the clipboard content and is pasted into the field:..."},
+				"clear": map[string]any{"type": "boolean", "description": "Clear existing content first, as a user does: select all, then Backspace. The select-all is the select-all shortcut (..."},
+				"wpm": map[string]any{"type": "number", "description": "Words per minute for typing. Default: 60. See typeText."},
+				"paste": map[string]any{"type": "boolean", "description": "Paste the text instead of typing it. When true, the text replaces the clipboard content and is pasted into the field ..."},
 			},
 			"required": []string{"selector", "text"},
 		},
@@ -155,21 +155,21 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"keepHistory": map[string]any{"type": "boolean", "description": "When true, the cursor trail retains its FULL movement history at constant opacity instead of the default rolling ~60-..."},
+				"keepHistory": map[string]any{"type": "boolean", "description": "When true, the cursor trail retains its FULL movement history at constant opacity instead of the default rolling fadi..."},
 			},
 		},
 	},
 	"getFrames": {
 		description: "Returns all frames including OOPIFs with their metadata: every frame in the page, cross-origin out-of-process iframes included.",
-		schema:      map[string]any{"type": "object", "properties": map[string]any{}},
+		schema: map[string]any{"type": "object", "properties": map[string]any{}},
 	},
 	"locateElement": {
 		description: "Locates an element in a specific frame and returns its bounding box in main-frame viewport coordinates (CSS pixels). This allows clicking on elements inside OOPIFs with correct screen-space coordin... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"frameId":          map[string]any{"type": "string"},
-				"selector":         selectorSchema,
+				"frameId": map[string]any{"type": "string"},
+				"selector": selectorSchema,
 				"relativePosition": coordinateSchema,
 			},
 			"required": []string{"frameId", "selector"},
@@ -180,29 +180,29 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector":         selectorSchema,
+				"selector": selectorSchema,
 				"relativePosition": coordinateSchema,
 			},
 			"required": []string{"selector"},
 		},
 	},
 	"waitForElement": {
-		description: "Waits for a selector to appear in any frame (main + iframes/OOPIFs), or to stop matching with hidden. Checks repeatedly until the timeout and runs no script in the page. Searches main frame first, ... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Waits for a selector to appear in any frame (main + iframes/OOPIFs), or to stop matching with hidden. Checks repeatedly until the timeout and runs no script in the page. At the timeout it answers s... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"selector": selectorSchema,
-				"timeout":  map[string]any{"type": "integer", "description": "Timeout in milliseconds. Default: 10000 (10s)."},
-				"visible":  map[string]any{"type": "boolean", "description": "If true, also checks that the element has non-zero bounding box dimensions (width > 0 and height > 0). Note: does NOT..."},
+				"timeout": map[string]any{"type": "integer", "description": "Timeout in milliseconds. Default: 10000 (10s)."},
+				"visible": map[string]any{"type": "boolean", "description": "If true, also checks that the element has non-zero bounding box dimensions (width > 0 and height > 0). Note: does NOT..."},
 				"frameUrl": map[string]any{"type": "string", "description": "URL glob of the frames to search, e.g. \"*checkout.example.com*\". Applies to css, xpath, backendNodeId and pierce: a..."},
-				"hidden":   map[string]any{"type": "boolean", "description": "If true, answers once the selector stops matching (with visible, once the match has no box) instead of once it matche..."},
+				"hidden": map[string]any{"type": "boolean", "description": "If true, answers once the selector stops matching (with visible, once the match has no box) instead of once it matche..."},
 			},
 			"required": []string{"selector"},
 		},
 	},
 	"getMousePosition": {
-		description: "Returns the current tracked mouse position in CSS viewport pixels.",
-		schema:      map[string]any{"type": "object", "properties": map[string]any{}},
+		description: "Returns the current tracked mouse position in CSS viewport pixels. In a tab where no command has moved the mouse yet, the point its first move starts from: where the mouse pointer of the browser's ...",
+		schema: map[string]any{"type": "object", "properties": map[string]any{}},
 	},
 	"isElementVisible": {
 		description: "Checks whether an element is visible in the viewport. Only \"css\" and \"xpath\" selector types are supported. Searches main frame first, then child frames (iframes/OOPIFs). Visibility checks displ... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
@@ -225,27 +225,27 @@ var antibotToolSchemas = map[string]antibotToolOverride{
 		},
 	},
 	"hover": {
-		description: "Moves mouse to element with human-like trajectory and pauses briefly to trigger hover states (CSS :hover, tooltips, menus). Supports all selector types except bottom. Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Moves mouse to element with human-like trajectory and pauses briefly to trigger hover states (CSS :hover, tooltips, menus). On Android, iPhone and iPad there is no pointer to hover with: the finger... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector":         selectorSchema,
+				"selector": selectorSchema,
 				"relativePosition": coordinateSchema,
-				"holdTime":         map[string]any{"type": "integer", "description": "How long to hold the hover position in milliseconds. Default: random between 500 and 1500ms."},
+				"holdTime": map[string]any{"type": "integer", "description": "How long to hold the hover position in milliseconds. Default: random between 500 and 1500ms."},
 			},
 			"required": []string{"selector"},
 		},
 	},
 	"selectOption": {
-		description: "Selects an option in a <select> or custom dropdown. Only \"css\" and \"xpath\" selector types are supported.  For native <select>: clicks the element, then selects the option via the browser's nati... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
+		description: "Selects an option in a <select> or custom dropdown. Only \"css\" and \"xpath\" selector types are supported. The selector is looked for in the page's frames as clickOn looks for it, the main frame ... Use cloud_browser_snapshot to find elements, then target with {type: axNodeId, query: <id>}.",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"selector":       selectorSchema,
-				"value":          map[string]any{"type": "string", "description": "Select by option value attribute. Native <select> only."},
-				"text":           map[string]any{"type": "string", "description": "Select by visible text content (whitespace-stripped comparison)."},
-				"index":          map[string]any{"type": "integer", "description": "Select by 0-based index among options."},
-				"optionSelector": map[string]any{"type": "string", "description": "CSS selector for option elements in a custom dropdown. When provided, triggers click-based selection flow: 1. Click t..."},
+				"selector": selectorSchema,
+				"value": map[string]any{"type": "string", "description": "Select by option value attribute, compared exactly. Native <select> only."},
+				"text": map[string]any{"type": "string", "description": "Select by visible text content (whitespace-stripped comparison)."},
+				"index": map[string]any{"type": "integer", "description": "Select by 0-based index among options."},
+				"optionSelector": map[string]any{"type": "string", "description": "CSS selector for option elements in a custom dropdown. With value, text or index, it is used when the selector names ..."},
 			},
 			"required": []string{"selector"},
 		},
