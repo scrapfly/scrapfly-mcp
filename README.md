@@ -29,7 +29,41 @@
 | **Authentication** | OAuth2 sign-in on the remote server, or a Scrapfly API key (`SCRAPFLY_API_KEY`, `Authorization: Bearer <key>`) |
 | **Tools** | **62**: web scraping (5), account (2), Cloud Browser sessions (9), page interaction (17), WebMCP (2), credential vaults (15), alerts (12). Full list under Available Tools below. |
 
-Add it to any MCP client:
+### Add it with your agent CLI
+
+**Claude Code**
+```bash
+claude mcp add --transport http scrapfly https://mcp.scrapfly.io/mcp
+```
+
+**Codex**
+```bash
+codex mcp add scrapfly --url https://mcp.scrapfly.io/mcp
+```
+
+**Gemini CLI**
+```bash
+gemini mcp add --transport http scrapfly https://mcp.scrapfly.io/mcp
+```
+
+**Antigravity**
+```bash
+agy mcp add scrapfly https://mcp.scrapfly.io/mcp
+```
+
+**OpenCode**
+```bash
+opencode mcp add scrapfly --url https://mcp.scrapfly.io/mcp
+```
+
+**VS Code**
+```bash
+code --add-mcp '{"name":"scrapfly","type":"http","url":"https://mcp.scrapfly.io/mcp"}'
+```
+
+Complete the sign-in flow for your client (Codex: `codex mcp login scrapfly`). Every command uses the same server name, `scrapfly`.
+
+Or add it to any MCP client with JSON:
 
 ```json
 {
@@ -73,10 +107,10 @@ Built on **battle-tested infrastructure** used by thousands of developers:
 
 Click one of the buttons below to install the MCP server in your preferred IDE:
 
-[![Install in VS Code](https://img.shields.io/badge/Install_in-VS_Code-0098FF?style=for-the-badge&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=scrapfly-cloud-mcp&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.scrapfly.io%2Fmcp%22%7D)
-[![Install in VS Code Insiders](https://img.shields.io/badge/Install_in-VS_Code_Insiders-24bfa5?style=for-the-badge&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=scrapfly-cloud-mcp&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.scrapfly.io%2Fmcp%22%7D&quality=insiders)
+[![Install in VS Code](https://img.shields.io/badge/Install_in-VS_Code-0098FF?style=for-the-badge&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=scrapfly&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.scrapfly.io%2Fmcp%22%7D)
+[![Install in VS Code Insiders](https://img.shields.io/badge/Install_in-VS_Code_Insiders-24bfa5?style=for-the-badge&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=scrapfly&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.scrapfly.io%2Fmcp%22%7D&quality=insiders)
 [![Install in Visual Studio](https://img.shields.io/badge/Install_in-Visual_Studio-C16FDE?style=for-the-badge&logo=visualstudio&logoColor=white)](https://vs-open.link/mcp-install?%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.scrapfly.io%2Fmcp%22%7D)
-[![Install in Cursor](https://img.shields.io/badge/Install_in-Cursor-000000?style=for-the-badge&logoColor=white)](https://cursor.com/en/install-mcp?name=scrapfly-cloud-mcp&config=eyJuYW1lIjoic2NyYXBmbHktY2xvdWQtbWNwIiwidHlwZSI6Imh0dHAiLCJ1cmwiOiJodHRwczovL21jcC5zY3JhcGZseS5pby9tY3AifQ==)
+[![Install in Cursor](https://img.shields.io/badge/Install_in-Cursor-000000?style=for-the-badge&logoColor=white)](https://cursor.com/en/install-mcp?name=scrapfly&config=eyJuYW1lIjoic2NyYXBmbHkiLCJ0eXBlIjoiaHR0cCIsInVybCI6Imh0dHBzOi8vbWNwLnNjcmFwZmx5LmlvL21jcCJ9)
 
 ---
 
@@ -89,7 +123,7 @@ Works with most MCP-compatible tools:
 ```json
 {
   "servers": {
-    "scrapfly-cloud-mcp": {
+    "scrapfly": {
       "type": "http",
       "url": "https://mcp.scrapfly.io/mcp"
     }
@@ -124,14 +158,14 @@ For tools that require a local process:
 
 ### One-Click Install
 
-[![Install in VS Code](https://img.shields.io/badge/Install_in-VS_Code-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=scrapfly-cloud-mcp&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.scrapfly.io%2Fmcp%22%7D)
+[![Install in VS Code](https://img.shields.io/badge/Install_in-VS_Code-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=scrapfly&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.scrapfly.io%2Fmcp%22%7D)
 
 ### Manual Install
 
 Follow the [VS Code MCP guide](https://code.visualstudio.com/docs/copilot/chat/mcp-servers#_add-an-mcp-server) or use the CLI:
 
 ```bash
-code --add-mcp '{"name":"scrapfly-cloud-mcp","type":"http","url":"https://mcp.scrapfly.io/mcp"}'
+code --add-mcp '{"name":"scrapfly","type":"http","url":"https://mcp.scrapfly.io/mcp"}'
 ```
 
 After installation, Scrapfly tools will be available in GitHub Copilot Chat.
@@ -144,12 +178,12 @@ After installation, Scrapfly tools will be available in GitHub Copilot Chat.
 
 ### One-Click Install
 
-[![Install in VS Code Insiders](https://img.shields.io/badge/Install_in-VS_Code_Insiders-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=scrapfly-cloud-mcp&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.scrapfly.io%2Fmcp%22%7D&quality=insiders)
+[![Install in VS Code Insiders](https://img.shields.io/badge/Install_in-VS_Code_Insiders-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=scrapfly&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.scrapfly.io%2Fmcp%22%7D&quality=insiders)
 
 ### Manual Install
 
 ```bash
-code-insiders --add-mcp '{"name":"scrapfly-cloud-mcp","type":"http","url":"https://mcp.scrapfly.io/mcp"}'
+code-insiders --add-mcp '{"name":"scrapfly","type":"http","url":"https://mcp.scrapfly.io/mcp"}'
 ```
 
 > 📖 **Full guide**: [VS Code Integration](https://scrapfly.io/docs/mcp/integrations/vscode)
@@ -169,7 +203,7 @@ code-insiders --add-mcp '{"name":"scrapfly-cloud-mcp","type":"http","url":"https
 3. Click the tools icon (🛠️) in the chat toolbar
 4. Click **+ Add Server** to open the configuration dialog
 5. Configure:
-   - **Server ID**: `scrapfly-cloud-mcp`
+   - **Server ID**: `scrapfly`
    - **Type**: `http/sse`
    - **URL**: `https://mcp.scrapfly.io/mcp`
 6. Click **Save**
@@ -182,7 +216,7 @@ code-insiders --add-mcp '{"name":"scrapfly-cloud-mcp","type":"http","url":"https
 
 ### One-Click Install
 
-[![Install in Cursor](https://img.shields.io/badge/Install_in-Cursor-000000?style=flat-square&logoColor=white)](https://cursor.com/en/install-mcp?name=scrapfly-cloud-mcp&config=eyJuYW1lIjoic2NyYXBmbHktY2xvdWQtbWNwIiwidHlwZSI6Imh0dHAiLCJ1cmwiOiJodHRwczovL21jcC5zY3JhcGZseS5pby9tY3AifQ==)
+[![Install in Cursor](https://img.shields.io/badge/Install_in-Cursor-000000?style=flat-square&logoColor=white)](https://cursor.com/en/install-mcp?name=scrapfly&config=eyJuYW1lIjoic2NyYXBmbHkiLCJ0eXBlIjoiaHR0cCIsInVybCI6Imh0dHBzOi8vbWNwLnNjcmFwZmx5LmlvL21jcCJ9)
 
 ### Manual Install
 
@@ -199,7 +233,7 @@ code-insiders --add-mcp '{"name":"scrapfly-cloud-mcp","type":"http","url":"https
 Use the Claude Code CLI:
 
 ```bash
-claude mcp add scrapfly-cloud-mcp --url https://mcp.scrapfly.io/mcp
+claude mcp add --transport http scrapfly https://mcp.scrapfly.io/mcp
 ```
 
 > 📖 **Full guide**: [Claude Code Integration](https://scrapfly.io/docs/mcp/integrations/claude-code)
@@ -234,7 +268,7 @@ Add to your Cline MCP settings:
 
 ```json
 {
-  "scrapfly-cloud-mcp": {
+  "scrapfly": {
     "type": "http",
     "url": "https://mcp.scrapfly.io/mcp"
   }
@@ -260,7 +294,7 @@ Add to your Zed settings:
 ```json
 {
   "context_servers": {
-    "scrapfly-cloud-mcp": {
+    "scrapfly": {
       "type": "http",
       "url": "https://mcp.scrapfly.io/mcp"
     }
@@ -274,41 +308,56 @@ Add to your Zed settings:
 <details>
 <summary><strong>OpenAI Codex</strong></summary>
 
-Create or edit `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.scrapfly-cloud-mcp]
-url = "https://mcp.scrapfly.io/mcp"
+```bash
+codex mcp add scrapfly --url https://mcp.scrapfly.io/mcp
+codex mcp login scrapfly
 ```
 
-> 📖 **More info**: [Codex MCP documentation](https://github.com/openai/codex/blob/main/codex-rs/config.md#mcp_servers)
+> 📖 **Full guide**: [Codex Integration](https://scrapfly.io/docs/mcp/integrations/codex)
 </details>
 
 <details>
 <summary><strong>Gemini CLI</strong></summary>
 
-Follow the [Gemini CLI MCP guide](https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md) using the standard configuration.
+```bash
+gemini mcp add --transport http scrapfly https://mcp.scrapfly.io/mcp
+```
+
+> 📖 **Full guide**: [Gemini CLI Integration](https://scrapfly.io/docs/mcp/integrations/gemini-cli)
+</details>
+
+<details>
+<summary><strong>Antigravity</strong></summary>
+
+```bash
+agy mcp add scrapfly https://mcp.scrapfly.io/mcp
+```
+
+> 📖 **Full guide**: [Antigravity Integration](https://scrapfly.io/docs/mcp/integrations/antigravity)
 </details>
 
 <details>
 <summary><strong>OpenCode</strong></summary>
 
-Add to `~/.config/opencode/opencode.json`:
+```bash
+opencode mcp add scrapfly --url https://mcp.scrapfly.io/mcp
+```
+
+Or add to `~/.config/opencode/opencode.json`:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "scrapfly-cloud-mcp": {
-      "type": "http",
-      "url": "https://mcp.scrapfly.io/mcp",
-      "enabled": true
+    "scrapfly": {
+      "type": "remote",
+      "url": "https://mcp.scrapfly.io/mcp"
     }
   }
 }
 ```
 
-> 📖 **More info**: [OpenCode MCP documentation](https://opencode.ai/docs/mcp-servers/)
+> 📖 **Full guide**: [OpenCode Integration](https://scrapfly.io/docs/mcp/integrations/opencode)
 </details>
 
 ---
@@ -423,7 +472,7 @@ Scrapfly MCP supports multiple authentication methods:
 
 | Setting | Value |
 |---------|-------|
-| **Server Name** | `scrapfly-cloud-mcp` |
+| **Server Name** | `scrapfly` |
 | **Type** | Remote HTTP Server |
 | **URL** | `https://mcp.scrapfly.io/mcp` |
 | **Protocol** | MCP over HTTP/SSE |
