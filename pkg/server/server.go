@@ -6,12 +6,13 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/scrapfly/scrapfly-mcp/pkg/mcpskills"
 	"github.com/scrapfly/scrapfly-mcp/pkg/provider"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const ServerVersion = "1.5.4"
+const ServerVersion = "1.6.0"
 
 func init() {
 	log.SetFlags(log.Lmicroseconds | log.Lmsgprefix | log.LstdFlags)
@@ -145,6 +146,7 @@ func newServer(toolProviders ...provider.ToolProvider) *mcp.Server {
 		Version: ServerVersion,
 	},
 		&mcp.ServerOptions{
+			Capabilities: mcpskills.Capabilities(),
 			// Injected verbatim into the client's system context: describe the
 			// server, do not instruct the model.
 			Instructions: "Scrapfly web-scraping tools: fetch and render pages behind anti-bot protection, screenshot them, and drive a cloud browser. `scraping_instruction_enhanced` returns a cheat-sheet of the scraping options when the right ones are unclear.",
@@ -160,5 +162,8 @@ func newServer(toolProviders ...provider.ToolProvider) *mcp.Server {
 		}
 	}
 
+	if err := mcpskills.Register(server); err != nil {
+		log.Fatalf("[SCRAPFLY-MCP] Could not register skills: %v\n", err)
+	}
 	return server
 }

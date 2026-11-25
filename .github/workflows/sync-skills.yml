@@ -1,0 +1,71 @@
+name: Sync skills
+
+on:
+  schedule:
+    - cron: "43 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/sync-skills.py"
+      - "scripts/tests/test_sync_skills.py"
+      - ".github/workflows/sync-skills.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-skills
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: mcp
+      - uses: actions/checkout@v5
+        with:
+          repository: scrapfly/skills
+          path: skills-source
+          persist-credentials: false
+      - name: Test the sync
+        working-directory: mcp
+        run: python3 -m unittest discover -s scripts/tests -t scripts/tests
+      - name: Sync from the golden source
+        working-directory: mcp
+        run: python3 scripts/sync-skills.py --skills ../skills-source/skills --out pkg/mcpskills/skills
+      - name: Stage synchronized files
+        working-directory: mcp
+        run: |
+          git add -u -- pkg/mcpskills/skills
+          git add -- pkg/mcpskills/skills
+      - name: Guard against internal references
+        working-directory: mcp
+        run: scripts/check-internal-refs.sh --staged
+      - id: changes
+        name: Check for changes
+        working-directory: mcp
+        run: |
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-go@v5
+        if: steps.changes.outputs.changed == 'true'
+        with:
+          go-version: "1.27.0"
+      - name: Test the synchronized catalog
+        if: steps.changes.outputs.changed == 'true'
+        working-directory: mcp
+        run: go test ./pkg/mcpskills ./pkg/server
+      - name: Publish the synchronized skills
+        if: steps.changes.outputs.changed == 'true'
+        working-directory: mcp
+        run: |
+          git -c user.name="github-actions[bot]" -c user.email="41898583+github-actions[bot]@users.noreply.github.com" commit -q -m "update skills"
+          git push origin HEAD:main

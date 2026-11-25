@@ -362,6 +362,20 @@ Or add to `~/.config/opencode/opencode.json`:
 
 ---
 
+## Agent Skills over MCP
+
+The remote and self-hosted servers publish the Scrapfly product skills through the [Skills over MCP extension](https://modelcontextprotocol.io/extensions/overview#skills-over-mcp) (beta). Supported clients can discover them with `skills/list` and `skills/get`; every skill file is also available through the standard `resources/read` method. Clients without extension support see ordinary MCP resources.
+
+For example, the scraping skill's manifest URI is `skill://scrapfly-scraper/SKILL.md`. Entries include the complete YAML frontmatter and every file's byte size and SHA-256 digest. `resources/directory/read` lists supporting files and subdirectories.
+
+The [`scrapfly/skills`](https://github.com/scrapfly/skills) repository is the golden source. The hourly sync workflow updates the embedded copy in `pkg/mcpskills/skills`; to run it manually from a checkout next to `scrapfly-mcp`:
+
+```bash
+python3 scripts/sync-skills.py --skills ../skills/skills --out pkg/mcpskills/skills
+```
+
+---
+
 ## 🛠️ Available Tools
 
 The Scrapfly MCP Server exposes **62 tools** in seven groups. Most tasks need only the first group.
