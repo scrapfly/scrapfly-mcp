@@ -72,7 +72,7 @@ from scrapfly import (
 | `country` | str | None | Proxy country selection (ISO code) |
 | `webhook_name` | str | None | Name of webhook configured in dashboard |
 | `webhook_events` | list[str] | None | Events to subscribe to (e.g., `crawler_started`, `crawler_url_visited`, `crawler_finished`) |
-| `max_api_credit` | int | None | Maximum API credits to spend on this crawl |
+| `max_api_credit` | int | None | Maximum API credits to spend on this crawl. A crawl that reaches it ends successfully (`state.stop_reason` is `max_api_credit`) and keeps the pages it visited |
 
 ### Crawl pace and page retries
 
@@ -91,9 +91,9 @@ The retry limit counts earlier retries for the same URL across failure types. Th
 - `"crawler_url_skipped"` - URLs were skipped
 - `"crawler_url_discovered"` - New URLs were discovered
 - `"crawler_url_failed"` - A URL failed to crawl
-- `"crawler_stopped"` - Crawler stopped due to failure or limits
+- `"crawler_stopped"` - Crawler ended without succeeding (no page visited, an archive that could not be saved, an unusable `remote_url_list`, a crawl that could not start), or was paused: a graceful restart of its worker (`state.stop_reason` `worker_interrupted`) or an internal error (`internal_error`) paused it. The payload does not say whether the crawl is finished, its status does (`links.status`, `GET /crawl/{uuid}/status`): `is_finished` is false for a pause, and the crawl resumes by itself and sends `crawler_finished` or `crawler_stopped` again when it ends
 - `"crawler_cancelled"` - Crawl was manually cancelled
-- `"crawler_finished"` - Crawler completed successfully
+- `"crawler_finished"` - Crawler ended successfully, a stop on a limit (`page_limit`, `max_duration_reached`, `max_api_credit`) included: `state.stop_reason` says why it stopped
 
 ## Examples
 
