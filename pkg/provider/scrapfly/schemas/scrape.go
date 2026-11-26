@@ -209,12 +209,27 @@ func MakeHeadersSchema() *jsonschema.Schema {
 	return schema
 }
 
+// countryPattern is the country selection the Web Scraping and Screenshot APIs take: empty, or comma-separated
+// entries, each an ISO 3166-1 alpha-2 code, an exclusion (-us) or a weighted code (us:1 to us:127, us:+2, us:01).
+const countryPattern = `^$|^(-?[a-zA-Z]{2}|[a-zA-Z]{2}:\+?0*(12[0-7]|1[01][0-9]|[1-9][0-9]?))(,(-?[a-zA-Z]{2}|[a-zA-Z]{2}:\+?0*(12[0-7]|1[01][0-9]|[1-9][0-9]?)))*$`
+
 func MakeCountrySchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title:       "Proxy Country",
 		Type:        "string",
+		Description: "The proxy country: an ISO 3166-1 alpha-2 code (us), a comma-separated list to draw from (us,ca), or exclusions (-us: any country of the pool but those).",
+		Pattern:     countryPattern,
+		Default:     json.RawMessage(`""`),
+	}
+}
+
+// MakeCloudBrowserCountrySchema is the proxy country of a Cloud Browser session: one ISO 3166-1 alpha-2 code.
+func MakeCloudBrowserCountrySchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title:       "Proxy Country",
+		Type:        "string",
 		Format:      "iso-3166-1-alpha-2",
-		Description: "The country to use for the proxy. Supports ISO 3166-1 alpha-2 country codes.",
+		Description: "The proxy country of the session: one ISO 3166-1 alpha-2 code (us). A session takes a single country, never a list or an exclusion.",
 		Pattern:     "^([a-zA-Z]{2}|)$",
 		Default:     json.RawMessage(`""`),
 	}
@@ -396,11 +411,14 @@ func MustRefineScrapingToolInputSchema[T any]() *jsonschema.Schema {
 }
 
 // MustRefineCloudBrowserToolInputSchema refines like the scraping tools, then
-// puts proxy_pool back on the Cloud Browser pool names.
+// puts proxy_pool back on the Cloud Browser pool names and country on one code.
 func MustRefineCloudBrowserToolInputSchema[T any]() *jsonschema.Schema {
 	schema := MustRefineScrapingToolInputSchema[T]()
 	if _, ok := schema.Properties["proxy_pool"]; ok {
 		schema.Properties["proxy_pool"] = MakeCloudBrowserProxyPoolSchema()
+	}
+	if _, ok := schema.Properties["country"]; ok {
+		schema.Properties["country"] = MakeCloudBrowserCountrySchema()
 	}
 	return schema
 }

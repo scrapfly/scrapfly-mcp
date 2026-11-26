@@ -68,7 +68,7 @@ type ScrapeToolInput struct {
 	Method           scrapfly.HttpMethod       `json:"method,omitempty" jsonschema:"HTTP method (GET, POST, etc.)."`
 	Body             string                    `json:"body,omitempty" jsonschema:"Request body for POST/PUT/PATCH requests."`
 	Headers          map[string]string         `json:"headers,omitempty" jsonschema:"HTTP headers to send."`
-	Country          string                    `json:"country,omitempty" jsonschema:"ISO 3166-1 alpha-2 country code for proxy geolocation."`
+	Country          string                    `json:"country,omitempty" jsonschema:"Proxy country: an ISO 3166-1 alpha-2 code (us), a comma-separated list (us,ca), or exclusions (-us: any country of the pool but those)."`
 	ProxyPool        scrapfly.ProxyPool        `json:"proxy_pool,omitempty" jsonschema:"Proxy pool to use (e.g., 'public_residential_pool', default: 'public_datacenter_pool')."`
 	RenderJS         bool                      `json:"render_js,omitempty" jsonschema:"Enable JavaScript rendering with a headless browser."`
 	RenderingWait    int                       `json:"rendering_wait,omitempty" jsonschema:"Wait for this number of milliseconds before returning the response."`

@@ -44,7 +44,7 @@ client = ScrapflyClient(key=os.environ["SCRAPFLY_API_KEY"])
 | `format` | str or `Format` | `"jpg"` | Image format: `"jpg"`, `"png"`, `"webp"`, `"gif"` ([`Format` enum](https://raw.githubusercontent.com/scrapfly/python-scrapfly/master/scrapfly/screenshot_config.py)) |
 | `capture` | str | `"viewport"` | Capture scope: `"viewport"`, `"fullpage"`, or a CSS selector/XPath |
 | `resolution` | str | None | Screen dimensions, e.g. `"1920x1080"`, `"375x812"` |
-| `country` | str | None | Proxy country (ISO 3166-1 alpha-2, e.g. `"us"`, `"de"`) |
+| `country` | str | None | Proxy country: an ISO 3166-1 alpha-2 code (`"us"`), a comma-separated list (`"us,ca"`) or exclusions (`"-us"`: any country of the pool but those) |
 | `timeout` | int | None | Total request timeout in milliseconds |
 | `rendering_wait` | int | 1000 | Wait time in ms after page load before capture |
 | `wait_for_selector` | str | None | Wait until this CSS/XPath selector is visible before capture |

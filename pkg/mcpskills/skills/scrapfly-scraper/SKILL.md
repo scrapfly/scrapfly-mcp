@@ -53,7 +53,7 @@ client = ScrapflyClient(key=os.environ["SCRAPFLY_API_KEY"])
 | `data` | dict | None | Form/JSON data for POST/PUT/PATCH; encoded according to `Content-Type` when `body` is not provided |
 | `timeout` | int | None | Request timeout in ms (default ~150,000ms) |
 | `retry` | bool | True | Auto-retry on network failures |
-| `country` | str | None | Proxy country (ISO 3166-1 alpha-2, e.g. `"us"`, `"de"`) |
+| `country` | str | None | Proxy country: an ISO 3166-1 alpha-2 code (`"us"`), a comma-separated list (`"us,ca"`) or exclusions (`"-us"`: any country of the pool but those) |
 | `proxy_pool` | str | `"public_datacenter_pool"` | Proxy pool: `"public_datacenter_pool"` or `"public_residential_pool"` |
 | `session` | str | None | Session ID to persist cookies/fingerprint across requests |
 | `session_sticky_proxy` | bool | None (API default `true` when `session` is set) | Keep the same proxy IP for a given `session`. The SDK omits the parameter unless explicitly set |

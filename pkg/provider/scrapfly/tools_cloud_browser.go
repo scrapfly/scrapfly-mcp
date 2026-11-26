@@ -48,7 +48,7 @@ type antibotToolOverride struct {
 
 type CloudBrowserOpenInput struct {
 	URL               string `json:"url" jsonschema:"Target URL to open in the cloud browser."`
-	Country           string `json:"country,omitempty" jsonschema:"Proxy country. ISO 3166-1 alpha-2: 'US', 'DE'. Comma-separated for multiple: 'fr,us,es,de'. Prefix '-' to exclude: '-ru'."`
+	Country           string `json:"country,omitempty" jsonschema:"Proxy country: one ISO 3166-1 alpha-2 code ('us', 'de'). A session takes a single country, never a list or an exclusion."`
 	ProxyPool         string `json:"proxy_pool,omitempty" jsonschema:"Proxy pool: datacenter or residential."`
 	Timeout           int    `json:"timeout,omitempty" jsonschema:"Session timeout in seconds (default 900, max 1800)."`
 	BlockImages       bool   `json:"block_images,omitempty" jsonschema:"Stub image requests with empty responses."`
