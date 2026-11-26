@@ -27,7 +27,7 @@
 | **Self-hosted** | Go binary (stdio or `-http`) or the Docker image of this repo, see Self-Hosted below |
 | **stdio-only clients** | `npx mcp-remote https://mcp.scrapfly.io/mcp` |
 | **Authentication** | OAuth2 sign-in on the remote server, or a Scrapfly API key (`SCRAPFLY_API_KEY`, `Authorization: Bearer <key>`) |
-| **Tools** | **62**: web scraping (5), account (2), Cloud Browser sessions (9), page interaction (17), WebMCP (2), credential vaults (15), alerts (12). Full list under Available Tools below. |
+| **Hosted tools** | **65**: web scraping, account, Cloud Browser sessions, page interaction, WebMCP, credential vaults, alerts, monitoring, and documentation search. See the [MCP Cloud tool catalog](https://scrapfly.io/.well-known/mcp.json). |
 
 ### Add it with your agent CLI
 
@@ -378,7 +378,7 @@ python3 scripts/sync-skills.py --skills ../skills/skills --out pkg/mcpskills/ski
 
 ## 🛠️ Available Tools
 
-The Scrapfly MCP Server exposes **62 tools** in seven groups. Most tasks need only the first group.
+The list below describes the self-hosted server. For the 65 customer tools available on MCP Cloud, see the [hosted tool catalog](https://scrapfly.io/.well-known/mcp.json). Most scraping tasks need only tools from the first group.
 
 ### Web scraping (5)
 
