@@ -718,7 +718,7 @@
                         "datadome",
                         "recaptcha",
                         "geetest",
-                        "hcaptcha_click",
+                        "puzzle_click",
                         "perimeterx_hold",
                         "aws_waf",
                         "cs_captcha_rotation",
@@ -1829,7 +1829,7 @@
                         },
                         {
                             "name": "siteKey",
-                            "description": "Site key (Turnstile, reCAPTCHA, hCaptcha) or Arkose public key.",
+                            "description": "Site key (Turnstile, reCAPTCHA, Puzzle Click) or Arkose public key.",
                             "optional": true,
                             "type": "string"
                         },
