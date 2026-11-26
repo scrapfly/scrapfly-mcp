@@ -142,7 +142,7 @@ scrapfly alert create \
   --name "Scrape Success Rate Low" \
   --metric scrape.success_rate --comparator lt --threshold 95 \
   --sustained-minutes 10 \
-  --channel email:ops@example.com \
+  --channel email:ops@web-scraping.dev \
   --channel webhook:https://httpbin.dev/post
 ```
 

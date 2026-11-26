@@ -162,7 +162,7 @@ components:
       schema:
         type: "object"
         additionalProperties: { type: "string" }
-      example: { "User-Agent": "MyScraper/1.0", "Referer": "https://google.com" }
+      example: { "User-Agent": "MyScraper/1.0", "Referer": "https://web-scraping.dev" }
       tags: ["Core"]
     Lang:
       name: "lang"

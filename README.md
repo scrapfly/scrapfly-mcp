@@ -451,9 +451,9 @@ omitted; `web_get_page` always runs with it.
 ### Example: Scrape a Page
 
 ```
-User: "What are the top posts on Hacker News right now?"
+User: "Which products does web-scraping.dev list right now?"
 
-AI: Uses web_get_page to fetch https://news.ycombinator.com and returns current top stories
+AI: Uses web_get_page to fetch https://web-scraping.dev/products and returns the products with their prices
 ```
 
 ### Example: Extract Structured Data

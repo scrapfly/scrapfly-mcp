@@ -55,7 +55,7 @@ func normalizeServerKeyBind(addr string, allowRemote bool) (string, error) {
 
 // deriveBrowserHostFromAPI returns the Cloud Browser host implied by an
 // API host override, on the convention that the two share the same root
-// domain with different sub-domains (api.example.com → browser.example.com).
+// domain with different sub-domains (api.scrapfly.io → browser.scrapfly.io).
 // Returns "" when the substitution cannot be made unambiguously, so the
 // caller can fall back to the SDK default.
 func deriveBrowserHostFromAPI(apiHost string) string {

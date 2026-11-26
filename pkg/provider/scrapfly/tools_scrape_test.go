@@ -187,16 +187,16 @@ func TestScrapeConfigCarriesResolvedUnblocker(t *testing.T) {
 		wantASP  bool
 		wantPool scrapfly.ProxyPool
 	}{
-		{"omitted keeps the Unblocker on", ScrapeToolInput{URL: "https://example.com"}, true, ""},
-		{"unblocker false", ScrapeToolInput{URL: "https://example.com", Unblocker: &no}, false, ""},
-		{"unblocker true alone", ScrapeToolInput{URL: "https://example.com", Unblocker: &yes}, true, ""},
-		{"asp false beats unblocker true", ScrapeToolInput{URL: "https://example.com", ASP: &no, Unblocker: &yes}, false, ""},
-		{"asp true beats unblocker false", ScrapeToolInput{URL: "https://example.com", ASP: &yes, Unblocker: &no}, true, ""},
-		{"public pool alone keeps the toggle on", ScrapeToolInput{URL: "https://example.com", ProxyPool: "public_residential_pool"}, true, "public_residential_pool"},
-		{"new pool wins over unblocker false", ScrapeToolInput{URL: "https://example.com", ProxyPool: "unblocker", Unblocker: &no}, false, "unblocker"},
-		{"new pool wins over asp true", ScrapeToolInput{URL: "https://example.com", ProxyPool: "basic", ASP: &yes}, false, "basic"},
-		{"unblocker_ultra", ScrapeToolInput{URL: "https://example.com", ProxyPool: "unblocker_ultra"}, false, "unblocker_ultra"},
-		{"auto wins over unblocker true", ScrapeToolInput{URL: "https://example.com", ProxyPool: "auto", Unblocker: &yes}, false, "auto"},
+		{"omitted keeps the Unblocker on", ScrapeToolInput{URL: "https://web-scraping.dev"}, true, ""},
+		{"unblocker false", ScrapeToolInput{URL: "https://web-scraping.dev", Unblocker: &no}, false, ""},
+		{"unblocker true alone", ScrapeToolInput{URL: "https://web-scraping.dev", Unblocker: &yes}, true, ""},
+		{"asp false beats unblocker true", ScrapeToolInput{URL: "https://web-scraping.dev", ASP: &no, Unblocker: &yes}, false, ""},
+		{"asp true beats unblocker false", ScrapeToolInput{URL: "https://web-scraping.dev", ASP: &yes, Unblocker: &no}, true, ""},
+		{"public pool alone keeps the toggle on", ScrapeToolInput{URL: "https://web-scraping.dev", ProxyPool: "public_residential_pool"}, true, "public_residential_pool"},
+		{"new pool wins over unblocker false", ScrapeToolInput{URL: "https://web-scraping.dev", ProxyPool: "unblocker", Unblocker: &no}, false, "unblocker"},
+		{"new pool wins over asp true", ScrapeToolInput{URL: "https://web-scraping.dev", ProxyPool: "basic", ASP: &yes}, false, "basic"},
+		{"unblocker_ultra", ScrapeToolInput{URL: "https://web-scraping.dev", ProxyPool: "unblocker_ultra"}, false, "unblocker_ultra"},
+		{"auto wins over unblocker true", ScrapeToolInput{URL: "https://web-scraping.dev", ProxyPool: "auto", Unblocker: &yes}, false, "auto"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config, err := ScrapeConfigFromScrapeToolInput(tc.input)
@@ -234,13 +234,13 @@ func TestSchemaDefaultsDoNotForgeUnblockerPresence(t *testing.T) {
 		args string
 		want bool
 	}{
-		{"neither name sent keeps the Unblocker on", `{"url":"https://example.com"}`, true},
+		{"neither name sent keeps the Unblocker on", `{"url":"https://web-scraping.dev"}`, true},
 		// A proxy_pool schema default would let that pool decide and drop this toggle.
-		{"unblocker true", `{"url":"https://example.com","unblocker":true}`, true},
-		{"unblocker false", `{"url":"https://example.com","unblocker":false}`, false},
-		{"asp false", `{"url":"https://example.com","asp":false}`, false},
-		{"asp true beats unblocker false", `{"url":"https://example.com","asp":true,"unblocker":false}`, true},
-		{"asp false beats unblocker true", `{"url":"https://example.com","asp":false,"unblocker":true}`, false},
+		{"unblocker true", `{"url":"https://web-scraping.dev","unblocker":true}`, true},
+		{"unblocker false", `{"url":"https://web-scraping.dev","unblocker":false}`, false},
+		{"asp false", `{"url":"https://web-scraping.dev","asp":false}`, false},
+		{"asp true beats unblocker false", `{"url":"https://web-scraping.dev","asp":true,"unblocker":false}`, true},
+		{"asp false beats unblocker true", `{"url":"https://web-scraping.dev","asp":false,"unblocker":true}`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var raw any
@@ -331,13 +331,13 @@ func TestScrapingHandlersRunWithoutAttestation(t *testing.T) {
 	t.Run("web_scrape", func(t *testing.T) {
 		p, transport := testProvider(t)
 		res, _, _ := ScrapingHandlerFor[ScrapeToolInput](p)(
-			context.Background(), newCallToolRequest(), ScrapeToolInput{URL: "https://example.com"})
+			context.Background(), newCallToolRequest(), ScrapeToolInput{URL: "https://web-scraping.dev"})
 		assertReachedUpstream(t, res, transport)
 	})
 	t.Run("web_get_page", func(t *testing.T) {
 		p, transport := testProvider(t)
 		res, _, _ := ScrapingHandlerFor[GetPageToolInput](p)(
-			context.Background(), newCallToolRequest(), GetPageToolInput{URL: "https://example.com"})
+			context.Background(), newCallToolRequest(), GetPageToolInput{URL: "https://web-scraping.dev"})
 		assertReachedUpstream(t, res, transport)
 	})
 }
@@ -356,7 +356,7 @@ func (t cannedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 const billedScrapeBody = `{
 	"uuid": "00000000-0000-0000-0000-000000000000",
-	"config": {"url": "https://example.com"},
+	"config": {"url": "https://web-scraping.dev"},
 	"context": {"cost": {"total": 26, "details": [
 		{"amount": 1, "code": "BASE", "description": "Scrape request"},
 		{"amount": 25, "code": "UNBLOCKER", "description": "Anti-bot bypass"}
@@ -380,7 +380,7 @@ func TestScrapingToolsReportAPICost(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res, err := set[name].Handler(context.Background(), &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{
 				Name:      name,
-				Arguments: json.RawMessage(`{"url":"https://example.com"}`),
+				Arguments: json.RawMessage(`{"url":"https://web-scraping.dev"}`),
 			}})
 			if err != nil {
 				t.Fatalf("handler: %v", err)

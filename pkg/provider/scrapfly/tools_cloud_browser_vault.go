@@ -219,7 +219,7 @@ type VaultItemCreateInput struct {
 	VaultKey string         `json:"vault_key"          jsonschema:"Base64 32-byte vault key. Required: the secret is sealed under it and the server verifies it before writing anything."`
 	Type     string         `json:"type"               jsonschema:"Item type: password, passkey, cookie, totp or blob. Decides which fields secret must carry."`
 	Label    string         `json:"label"              jsonschema:"Human label for the item, shown in the dashboard and used to reference it from an agent run."`
-	Origin   string         `json:"origin"             jsonschema:"Origin the credential is injected on, for example https://example.com/login. Required by the API for every type."`
+	Origin   string         `json:"origin"             jsonschema:"Origin the credential is injected on, for example https://web-scraping.dev/login. Required by the API for every type."`
 	Username string         `json:"username,omitempty" jsonschema:"Account identifier for password and passkey items. Not a secret."`
 	Secret   map[string]any `json:"secret"             jsonschema:"Secret payload for the chosen type. password: {password}. passkey: {credentialId, privateKey, userHandle, signCount}. cookie: {name, value, domain, path, secure, httpOnly, sameSite, expires}. totp: {seed, issuer, account, algorithm, digits, period}. blob: {data, content_type}."`
 	Metadata map[string]any `json:"metadata,omitempty" jsonschema:"Optional non-secret JSON stored alongside the item."`

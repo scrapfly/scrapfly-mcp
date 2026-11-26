@@ -42,7 +42,7 @@ func TestScrapingSchemasOfferThePublicPools(t *testing.T) {
 			t.Fatalf("resolve %s: %v", tool, err)
 		}
 		for _, value := range append(slices.Clone(publicPools), torPool) {
-			if err := resolved.Validate(map[string]any{"url": "https://example.com", "proxy_pool": value}); err != nil {
+			if err := resolved.Validate(map[string]any{"url": "https://web-scraping.dev", "proxy_pool": value}); err != nil {
 				t.Errorf("%s rejects proxy_pool=%q: %v", tool, value, err)
 			}
 			if !strings.Contains(pool.Description, value) {
@@ -50,7 +50,7 @@ func TestScrapingSchemasOfferThePublicPools(t *testing.T) {
 			}
 		}
 		for _, value := range append(slices.Clone(newProxyPools), "nonexistent_pool") {
-			if err := resolved.Validate(map[string]any{"url": "https://example.com", "proxy_pool": value}); err == nil {
+			if err := resolved.Validate(map[string]any{"url": "https://web-scraping.dev", "proxy_pool": value}); err == nil {
 				t.Errorf("%s accepts proxy_pool=%q", tool, value)
 			}
 		}
@@ -66,12 +66,12 @@ func TestCloudBrowserOpenKeepsItsPoolNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, value := range append([]string{"datacenter", "residential", torPool}, publicPools...) {
-		if err := resolved.Validate(map[string]any{"url": "https://example.com", "proxy_pool": value}); err != nil {
+		if err := resolved.Validate(map[string]any{"url": "https://web-scraping.dev", "proxy_pool": value}); err != nil {
 			t.Errorf("cloud_browser_open rejects proxy_pool=%q: %v", value, err)
 		}
 	}
 	for _, name := range newProxyPools {
-		if err := resolved.Validate(map[string]any{"url": "https://example.com", "proxy_pool": name}); err == nil {
+		if err := resolved.Validate(map[string]any{"url": "https://web-scraping.dev", "proxy_pool": name}); err == nil {
 			t.Errorf("cloud_browser_open accepts proxy_pool=%q", name)
 		}
 	}
@@ -98,7 +98,7 @@ func TestUnblockerPoolsTakeTheBypassRetryRule(t *testing.T) {
 		{"unblocker_ultra", true, 0},
 		{"auto", true, 0},
 	} {
-		config, err := ScrapeConfigFromScrapeToolInput(ScrapeToolInput{URL: "https://example.com", ProxyPool: tc.pool, Timeout: 30000})
+		config, err := ScrapeConfigFromScrapeToolInput(ScrapeToolInput{URL: "https://web-scraping.dev", ProxyPool: tc.pool, Timeout: 30000})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -116,12 +116,12 @@ func TestExtractionForcesTheToggleWithoutAPoolThatSetsIt(t *testing.T) {
 		wantPool scrapfly.ProxyPool
 		wantASP  bool
 	}{
-		{"no pool", ScrapeToolInput{URL: "https://example.com", ExtractionModel: "product"}, "", true},
-		{"unblocker false", ScrapeToolInput{URL: "https://example.com", Unblocker: &no, ExtractionModel: "product"}, "", true},
-		{"public pool", ScrapeToolInput{URL: "https://example.com", ProxyPool: "public_datacenter_pool", Unblocker: &no, ExtractionModel: "product"}, "public_datacenter_pool", true},
-		{"basic", ScrapeToolInput{URL: "https://example.com", ProxyPool: "basic", ExtractionModel: "product"}, "basic", false},
-		{"unblocker_ultra", ScrapeToolInput{URL: "https://example.com", ProxyPool: "unblocker_ultra", ExtractionModel: "product"}, "unblocker_ultra", false},
-		{"auto", ScrapeToolInput{URL: "https://example.com", ProxyPool: "auto", ExtractionModel: "product"}, "auto", false},
+		{"no pool", ScrapeToolInput{URL: "https://web-scraping.dev", ExtractionModel: "product"}, "", true},
+		{"unblocker false", ScrapeToolInput{URL: "https://web-scraping.dev", Unblocker: &no, ExtractionModel: "product"}, "", true},
+		{"public pool", ScrapeToolInput{URL: "https://web-scraping.dev", ProxyPool: "public_datacenter_pool", Unblocker: &no, ExtractionModel: "product"}, "public_datacenter_pool", true},
+		{"basic", ScrapeToolInput{URL: "https://web-scraping.dev", ProxyPool: "basic", ExtractionModel: "product"}, "basic", false},
+		{"unblocker_ultra", ScrapeToolInput{URL: "https://web-scraping.dev", ProxyPool: "unblocker_ultra", ExtractionModel: "product"}, "unblocker_ultra", false},
+		{"auto", ScrapeToolInput{URL: "https://web-scraping.dev", ProxyPool: "auto", ExtractionModel: "product"}, "auto", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config, err := ScrapeConfigFromScrapeToolInput(tc.input)
@@ -150,7 +150,7 @@ func TestGetPageKeepsTheUnblockerWithoutANewPool(t *testing.T) {
 		{"unblocker_ultra", "unblocker_ultra", false},
 		{"auto", "auto", false},
 	} {
-		config, err := ScrapeConfigFromGetPageToolInput(GetPageToolInput{URL: "https://example.com", ProxyPool: tc.pool})
+		config, err := ScrapeConfigFromGetPageToolInput(GetPageToolInput{URL: "https://web-scraping.dev", ProxyPool: tc.pool})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -190,11 +190,11 @@ func TestScrapingToolsSendTheResolvedPool(t *testing.T) {
 		wantASP  string
 	}{
 		// Naming nothing sends what v1.4.0 sent: no pool, asp=true.
-		{"web_scrape", `{"url":"https://example.com"}`, "", "true"},
-		{"web_scrape", `{"url":"https://example.com","unblocker":true}`, "", "true"},
-		{"web_scrape", `{"url":"https://example.com","unblocker":false}`, "", ""},
-		{"web_scrape", `{"url":"https://example.com","proxy_pool":"public_residential_pool","asp":true}`, "public_residential_pool", "true"},
-		{"web_get_page", `{"url":"https://example.com"}`, "", "true"},
+		{"web_scrape", `{"url":"https://web-scraping.dev"}`, "", "true"},
+		{"web_scrape", `{"url":"https://web-scraping.dev","unblocker":true}`, "", "true"},
+		{"web_scrape", `{"url":"https://web-scraping.dev","unblocker":false}`, "", ""},
+		{"web_scrape", `{"url":"https://web-scraping.dev","proxy_pool":"public_residential_pool","asp":true}`, "public_residential_pool", "true"},
+		{"web_get_page", `{"url":"https://web-scraping.dev"}`, "", "true"},
 	} {
 		t.Run(tc.tool+" "+tc.args, func(t *testing.T) {
 			client, err := scrapfly.New("test-key")
@@ -242,7 +242,7 @@ func TestScrapingToolsRejectAPoolTheyDoNotOffer(t *testing.T) {
 				set := staticTools(NewScrapflyToolProvider(client, GetDefaultScrapflyClient, log.New(io.Discard, "", 0)))
 				res, err := set[tool].Handler(context.Background(), &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{
 					Name:      tool,
-					Arguments: json.RawMessage(`{"url":"https://example.com","proxy_pool":"` + pool + `"}`),
+					Arguments: json.RawMessage(`{"url":"https://web-scraping.dev","proxy_pool":"` + pool + `"}`),
 				}})
 				if err == nil && (res == nil || !res.IsError) {
 					t.Errorf("proxy_pool=%q was accepted", pool)
@@ -290,14 +290,14 @@ func TestModelFacingTextNamesNoPoolTheToolsDoNotOffer(t *testing.T) {
 // No date switch: a call that names no pool keeps the request v1.4.0 sent,
 // no pool and asp=true.
 func TestDefaultsKeepTheUnblockerOn(t *testing.T) {
-	scrape, err := ScrapeConfigFromScrapeToolInput(ScrapeToolInput{URL: "https://example.com"})
+	scrape, err := ScrapeConfigFromScrapeToolInput(ScrapeToolInput{URL: "https://web-scraping.dev"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if scrape.ProxyPool != "" || !scrape.ASP {
 		t.Errorf("web_scrape default: pool=%q asp=%v, want pool=\"\" asp=true", scrape.ProxyPool, scrape.ASP)
 	}
-	page, err := ScrapeConfigFromGetPageToolInput(GetPageToolInput{URL: "https://example.com"})
+	page, err := ScrapeConfigFromGetPageToolInput(GetPageToolInput{URL: "https://web-scraping.dev"})
 	if err != nil {
 		t.Fatal(err)
 	}
